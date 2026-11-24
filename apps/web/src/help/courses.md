@@ -51,6 +51,15 @@ and nothing else — the pool and its questions stay where they are. A pool
 that is not linked to any course is still yours, it is simply not offered
 when you fill an evaluation.
 
+## Documents
+
+The **Documents** tab holds the course's PDF and Markdown files: datasheets,
+extracts of a standard, formula sheets. **Add a document** takes one file or
+several. Any member of the staff adds and renames a document; its uploader
+or a teacher of the course deletes it. The course's documents share a quota,
+shown above the list; an administrator sets it. A Markdown file shows no
+image. Upload only what you may hand out to your students.
+
 ## Evaluation templates
 
 A template is an evaluation kept by the course rather than by one classroom:

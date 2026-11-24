@@ -265,6 +265,7 @@ allievo, professore, insegnante, feedback, sottomettere, and
 | Lobby | lobby | salle d'attente | Warteraum | sala d'attesa | salle, anneau |
 | Notepad | notepad | bloc-notes | Notizblock | blocco note | calepin |
 | Calculator | calculator | calculatrice | Taschenrechner | calcolatrice | — |
+| Document of a course's library (a PDF or Markdown file its staff upload, ADR-144) | document; the tab *Documents* | document; the tab *Documents* | Dokument; the tab *Dokumente* | documento; the tab *Documenti* | pièce jointe, annexe |
 | Template (evaluation) | template | modèle | Vorlage | modello | gabarit |
 | Code template, starter | starter | code de départ | Startcode | codice di partenza | modèle, template |
 | LLM, model, AI | AI | IA | KI | IA | LLM, modèle, modèle de langage |

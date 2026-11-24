@@ -49,6 +49,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["courseKey", keys.courseKey("c1"), ["course", "c1"]],
     ["courseTemplatesKey", keys.courseTemplatesKey("c1"), ["course", "c1", "templates"]],
     ["courseConditionsKey", keys.courseConditionsKey("c1"), ["course", "c1", "conditions"]],
+    ["courseLibraryKey", keys.courseLibraryKey("c1"), ["course", "c1", "documents"]],
     ["courseStaffCandidatesKey", keys.courseStaffCandidatesKey("c1"), ["course", "c1", "staff-candidates"]],
     ["classroomKey", keys.classroomKey("r1"), ["classroom", "r1"]],
     ["classroomKey (not loaded)", keys.classroomKey(null), ["classroom", null]],

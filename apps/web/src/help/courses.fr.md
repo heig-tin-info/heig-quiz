@@ -52,6 +52,16 @@ le lien et rien d'autre — la banque et ses questions restent en place. Une
 banque liée à aucun cours reste la vôtre, elle n'est simplement pas proposée
 au moment de remplir une évaluation.
 
+## Documents
+
+L'onglet **Documents** réunit les fichiers PDF et Markdown du cours :
+fiches techniques, extraits d'une norme, formulaires. **Ajouter un document**
+prend un fichier ou plusieurs. Tout membre de l'équipe ajoute et renomme un
+document ; la personne qui l'a déposé ou un enseignant du cours le
+supprime. Les documents du cours partagent un quota, affiché au-dessus de la
+liste ; l'administration le fixe. Un fichier Markdown n'affiche aucune
+image. Déposez uniquement ce que vous pouvez distribuer à vos étudiants.
+
 ## Modèles d'évaluation
 
 Un modèle est une évaluation gardée par le cours plutôt que par une classe :

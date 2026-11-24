@@ -207,14 +207,17 @@ export function formatMs(ms: number, t: TFunction): string {
 
 /**
  * A size in bytes, decimal units, in the notation of `locale`: "940 B",
- * "4.1 GB", "4,1 Go". One decimal under ten units, none above.
+ * "4.1 GB", "4,1 Go". One decimal under ten units, none above. `binary`
+ * counts in steps of 1024, as a quota set in MiB is (ADR-144): 100 MiB
+ * reads "100 MB", not "105 MB".
  */
-export function formatBytes(bytes: number, locale: Locale): string {
+export function formatBytes(bytes: number, locale: Locale, { binary = false }: { binary?: boolean } = {}): string {
   const units = ["byte", "kilobyte", "megabyte", "gigabyte", "terabyte"];
+  const step = binary ? 1024 : 1000;
   let n = Math.max(0, bytes);
   let i = 0;
-  while (n >= 1000 && i < units.length - 1) {
-    n /= 1000;
+  while (n >= step && i < units.length - 1) {
+    n /= step;
     i++;
   }
   return new Intl.NumberFormat(intlTag(locale), {

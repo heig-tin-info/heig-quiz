@@ -292,6 +292,20 @@ export async function updateCourse(
 }
 
 /**
+ * The course's quota of documents (F-ADMIN-10, ADR-144): the one writer of
+ * `courses.documents_quota_bytes`, an administrator's route alone. Answers
+ * the quota as stored.
+ */
+export async function setDocumentsQuota(db: Db, courseId: string, quotaBytes: number, now: Date): Promise<number> {
+  const [row] = await db
+    .update(courses)
+    .set({ documentsQuotaBytes: quotaBytes, updatedAt: now })
+    .where(eq(courses.id, courseId))
+    .returning({ quotaBytes: courses.documentsQuotaBytes });
+  return row!.quotaBytes;
+}
+
+/**
  * ADR-141: a classroom or a course holding students' work is never deleted,
  * by any role — `409 holds_student_work`, its body naming what blocks
  * (`StudentWork`), the archive of the classrooms being the way out. In the

@@ -88,7 +88,7 @@ client over the contracts, `src/i18n/` the dictionaries, `src/mock/` the
 in-browser API used by `pnpm dev:mock`. Feature directories (`activities`,
 `assist`, `attempt`, `calculator`, `changelog`, `coach`, `concepts`,
 `course`, `discover`, `drill`, `evaluation`, `github`, `gradebook`,
-`grading`, `group`, `help`, `journal`, `kiosk`, `live`, `markdown`,
+`grading`, `group`, `help`, `journal`, `kiosk`, `library`, `live`, `markdown`,
 `notepad`, `notifications`, `oauth`, `pair`, `poll`, `pool`, `preview`,
 `project`, `question`, `realtime`, `results`, `runner`, `student`) hold the
 screens and their tests;
@@ -187,6 +187,11 @@ A module never imports another module's `routes.ts`; it calls its
 the demo world through the services, so every row it writes is one the
 application would have written.
 
+A module may own files as well as tables: `library` owns
+`course_documents` and the content-addressed store
+`ASSETS_DIR/documents/<sha[0:2]>/<sha256>` (ADR-144), which only its
+daily sweep unlinks; `paper` owns the scans under `ASSETS_DIR/paper/`.
+
 A module may own no table at all: `privacy` composes the student views of
 the other modules into the personal data export
 ([ADR-112](../adr/ADR-112-export-des-donnees-personnelles.md)), through
@@ -204,7 +209,7 @@ API-side client of the runner (`http.ts`) and the stub that stands in for it
 The Drizzle schema is split by module under `apps/api/src/db/` (`assist.ts`,
 `auth.ts`, `changelog.ts`, `codespace.ts`, `concept.ts`, `drill.ts`,
 `evaluation.ts`, `github.ts`, `gradebook.ts`, `grading.ts`, `group.ts`,
-`journal.ts`, `kiosk.ts`, `live.ts`, `llm.ts`,
+`journal.ts`, `kiosk.ts`, `library.ts`, `live.ts`, `llm.ts`,
 `notifications.ts`, `org.ts`, `poll.ts`, `pool.ts`, `project.ts`,
 `review.ts`, `system.ts`) and re-exported by `db/schema.ts`; `columns.ts`
 holds shared column types and `client.ts` the connection. A table belongs to

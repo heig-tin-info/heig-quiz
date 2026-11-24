@@ -18,7 +18,8 @@
 # can only read (`/srv/staging-inbox`, owner srv, group srvstg, mode 2750):
 #
 #   quiz.dump    a pg_dump -Fc of a pseudonymized copy, taken now
-#   assets.tar   the question images (content-addressed)
+#   assets.tar   the question images (content-addressed), without the
+#                courses' documents (`documents/`, ADR-144)
 #
 # The pseudonymization happens HERE, on production's side: the database is
 # copied into a scratch database of production's own PostgreSQL
@@ -102,8 +103,10 @@ chmod 640 "$INBOX/.quiz.dump.part"
 mv "$INBOX/.quiz.dump.part" "$INBOX/quiz.dump"
 
 # The images belong to the containers' `node` (a sub-uid on the host): read
-# through a container, streamed out as the calling user.
-docker run --rm -v "$PWD/assets:/from:ro" alpine tar -C /from -cf - . > "$INBOX/.assets.tar.part"
+# through a container, streamed out as the calling user. The courses'
+# documents (`documents/`, ADR-144 §9) stay on production: staging holds
+# their rows without their files, and says so on each.
+docker run --rm -v "$PWD/assets:/from:ro" alpine tar -C /from --exclude=./documents -cf - . > "$INBOX/.assets.tar.part"
 chmod 640 "$INBOX/.assets.tar.part"
 mv "$INBOX/.assets.tar.part" "$INBOX/assets.tar"
 

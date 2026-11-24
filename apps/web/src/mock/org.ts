@@ -615,7 +615,7 @@ export const templateCount = { of: (_courseId: string): number => 0 };
  * The reader's role on a course: their seat's, or an owner's for anyone
  * without one (the admin persona, as under Super Powers).
  */
-const myRoleOn = (courseId: string | null | undefined): CourseRole =>
+export const myRoleOn = (courseId: string | null | undefined): CourseRole =>
   courses.find((c) => c.id === courseId)?.staff.find((s) => s.userId === ME_TEACHER.userId)?.role ??
   "owner";
 

@@ -8,6 +8,8 @@ Amended 2026-10-09: §2 records the `uuid` v4 identifiers the code generates (`r
 
 Amended 2026-11-05 by [ADR-117](ADR-117-pseudonymisation-d-un-compte-sur-demande.md) (accepted that day, product owner, issue #681), scope §5 only: account pseudonymization is a Quiz requirement (N-DATA-08), and it leaves the audit log untouched; the audit log gets a retention of three years (N-SEC-09), ruled on the product owner's delegation — §5's *Amendment of 2026-11-05*.
 
+Amended 2026-11-24 by [ADR-144](ADR-144-documents-fournis.md) §9 (accepted that day), scope §1 only: the stateful scope is PostgreSQL and the content-addressed file store under `ASSETS_DIR` (true since the pool's images and the paper scans), which the off-site borg copy and the VM backup cover, not the on-VM database dumps.
+
 ## Context
 
 The platform is the source of truth for accounts, roster, assignment configuration, API

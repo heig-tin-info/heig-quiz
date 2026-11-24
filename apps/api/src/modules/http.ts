@@ -19,6 +19,8 @@
  * Below them, `studentRoute`/`teacherRoute`: the guarded-route preamble
  * (clock, params, body, loader, error tail) written once.
  */
+import { createReadStream } from "node:fs";
+
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { z } from "zod";
 
@@ -107,6 +109,76 @@ export function sendAttachment(reply: FastifyReply, type: string, filename: stri
     .header("content-disposition", `attachment; filename="${filename}"`)
     .header("cache-control", "no-store")
     .send(body);
+}
+
+/** One byte range of a file, both ends included. */
+export interface ByteRange {
+  start: number;
+  end: number;
+}
+
+/**
+ * The one range a `Range` header asks of a file of `size` bytes (RFC 9110
+ * §14): `bytes=0-99`, `bytes=100-` or `bytes=-100`, its end clipped to the
+ * file. `null` — send the whole file — for no header, a malformed one, a
+ * unit other than bytes, or several ranges (a multipart reply is more than a
+ * viewer needs); `"unsatisfiable"` — a `416` — for a range that starts past
+ * the end or a suffix of zero bytes.
+ */
+export function parseRange(header: string | undefined, size: number): ByteRange | "unsatisfiable" | null {
+  if (header === undefined) return null;
+  const spec = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!spec) return null;
+  const [, from = "", to = ""] = spec;
+  if (from === "" && to === "") return null;
+  if (from === "") {
+    const suffix = Number(to);
+    if (suffix === 0 || size === 0) return "unsatisfiable";
+    return { start: Math.max(0, size - suffix), end: size - 1 };
+  }
+  const start = Number(from);
+  const end = to === "" ? Infinity : Number(to);
+  if (end < start) return null;
+  if (start >= size) return "unsatisfiable";
+  return { start, end: Math.min(end, size - 1) };
+}
+
+/** A file name for `content-disposition`: a quoted ASCII fallback, and the exact name as `filename*`. */
+export function dispositionOf(kind: "attachment" | "inline", filename: string): string {
+  const ascii = filename.replace(/[^\x20-\x7e]|["\\]/g, "_");
+  // RFC 8187's attr-char: `encodeURIComponent` leaves `'()*` as they are.
+  const exact = encodeURIComponent(filename).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `${kind}; filename="${ascii}"; filename*=UTF-8''${exact}`;
+}
+
+/**
+ * A file from disk, streamed, honouring one `Range` ({@link parseRange}):
+ * `206` with its `content-range`, `416` for a range past the end, `200` with
+ * the whole file otherwise; always `accept-ranges` and `content-length`.
+ * Inert, whoever reads it: an attachment, never sniffed, never cached, and
+ * a sandboxed document with no source of its own were a browser to render it.
+ * `size` is the file's, as `stat` read it: the stream never reads past it.
+ */
+export function sendRanged(
+  req: FastifyRequest,
+  reply: FastifyReply,
+  file: { path: string; size: number; type: string; filename: string },
+) {
+  reply
+    .type(file.type)
+    .header("accept-ranges", "bytes")
+    .header("content-disposition", dispositionOf("attachment", file.filename))
+    .header("x-content-type-options", "nosniff")
+    .header("cache-control", "no-store")
+    .header("content-security-policy", "default-src 'none'; sandbox");
+  const range = parseRange(req.headers.range, file.size);
+  if (range === "unsatisfiable") {
+    return reply.code(416).header("content-range", `bytes */${file.size}`).header("content-length", 0).send();
+  }
+  if (file.size === 0) return reply.header("content-length", 0).send("");
+  const { start, end } = range ?? { start: 0, end: file.size - 1 };
+  if (range) reply.code(206).header("content-range", `bytes ${start}-${end}/${file.size}`);
+  return reply.header("content-length", end - start + 1).send(createReadStream(file.path, { start, end }));
 }
 
 // ---------------------------------------------------------------------------
