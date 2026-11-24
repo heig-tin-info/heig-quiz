@@ -91,7 +91,7 @@ export async function providedFile(assetsDir: string, row: Row): Promise<Awaited
   return { ...(await documentFile(assetsDir, row)), filename: `${row.title}.pdf` };
 }
 
-/** A Markdown document as a viewer shows it: its title, its HTML rendered at upload and its outline. */
+/** A Markdown document as a viewer shows it: its HTML rendered at upload and its outline. */
 export function providedHtml(row: Row): DocumentHtml {
-  return { title: row.title, html: row.html ?? "", toc: row.toc ?? [] };
+  return { html: row.html ?? "", toc: row.toc ?? [] };
 }

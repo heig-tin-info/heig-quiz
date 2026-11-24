@@ -13,7 +13,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { count, eq, ne } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { AttemptView, CSRF_COOKIE, type FeedbackPolicy } from "@quiz/contracts";
@@ -21,7 +21,7 @@ import { GRACE_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
 import { createSession, SESSION_COOKIE } from "../../auth/session.js";
-import { attempts, courseDocuments, courseStaff, evaluations, users } from "../../db/schema.js";
+import { attemptEvents, attempts, auditLog, courseDocuments, evaluations, users } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { type Actor, sessionOf, testServer, type TestServer } from "../../test/http.js";
 import { kioskStation } from "../../test/kiosk.js";
@@ -52,7 +52,9 @@ beforeAll(async () => {
   server = await testServer({ KIOSK_ATTESTATION: "mock" });
   server.clock.set("2026-11-24T08:00:00.000Z");
   owner = await server.signIn("teacher");
-  uploader = await server.signIn("teacher");
+  // An administrator with Super Powers, on no seat of the course: a teacher
+  // of the course is named to its students (`teachers`), the uploader as such never.
+  uploader = await server.signInWithSuperPowers();
   await server.app.db.update(users).set({ givenName: "Ulla", familyName: "Uploaderova" }).where(eq(users.id, uploader.id));
   student = await server.signIn("student");
   seated = await server.signIn("student");
@@ -85,7 +87,6 @@ async function world(options: { mode?: "exam" | "exercise"; settings?: Record<st
     settings: { timing: "duration", lobby: "skip", ...options.settings },
   });
   if (options.feedback) await db().update(evaluations).set({ feedbackPolicy: options.feedback }).where(eq(evaluations.id, seed.evaluationId));
-  await db().insert(courseStaff).values({ courseId: seed.courseId, userId: uploader.id, role: "assistant" });
   const marker = randomUUID();
   const bytes = pdfBytes(marker);
   const pdf = await uploadDocument(server, seed.courseId, uploader, {
@@ -137,14 +138,34 @@ async function attemptView(attemptId: string, headers: Headers = student.headers
 
 /** What a random document id asked on the caller's own open attempt answers: THE refusal. */
 async function baseline(attemptId: string) {
-  const out: Record<Route, { status: number; body: string }> = {} as never;
+  const out: Record<Route, Seen> = {} as never;
   for (const route of ["file", "html"] as const) {
-    const res = await call("GET", documentUrl(attemptId, randomUUID(), route), student.headers);
-    out[route] = { status: res.statusCode, body: res.body };
+    out[route] = seenOf(await call("GET", documentUrl(attemptId, randomUUID(), route), student.headers));
   }
-  expect(out.file).toEqual({ status: 404, body: JSON.stringify({ error: "not_found" }) });
+  expect(out.file).toEqual({
+    status: 404,
+    body: JSON.stringify({ error: "not_found" }),
+    type: "application/json; charset=utf-8",
+  });
   expect(out.html).toEqual(out.file);
   return out;
+}
+
+interface Seen {
+  status: number;
+  body: string;
+  type: string | undefined;
+}
+/**
+ * What a refusal shows: its status, body and type — and nothing of a file:
+ * no disposition, range nor a length beyond its own JSON body.
+ */
+function seenOf(res: Awaited<ReturnType<typeof call>>): Seen {
+  for (const header of ["content-disposition", "content-range", "accept-ranges"]) {
+    expect(res.headers[header], header).toBeUndefined();
+  }
+  expect(Number(res.headers["content-length"])).toBe(Buffer.byteLength(res.body));
+  return { status: res.statusCode, body: res.body, type: res.headers["content-type"] as string | undefined };
 }
 let refusal: Awaited<ReturnType<typeof baseline>>;
 
@@ -152,13 +173,14 @@ let refusal: Awaited<ReturnType<typeof baseline>>;
 async function expectRefused(label: string, attemptId: string, headers: Headers, ids: { file: string; html: string }) {
   for (const route of ["file", "html"] as const) {
     const res = await read(label, "GET", documentUrl(attemptId, ids[route], route), headers);
-    expect({ status: res.statusCode, body: res.body }, `${label} ${route}`).toEqual(refusal[route]);
+    expect(seenOf(res), `${label} ${route}`).toEqual(refusal[route]);
   }
 }
 const both = (w: World) => ({ file: w.pdf.id, html: w.markdown.id });
 
 /** Both routes serve the world's documents: the PDF whole, then a range of it, and the Markdown's HTML. */
 async function expectServed(label: string, w: World, attemptId: string, headers: Headers) {
+  const before = await traces(attemptId);
   const whole = await read(label, "GET", documentUrl(attemptId, w.pdf.id, "file"), headers);
   expect(whole.statusCode, whole.body).toBe(200);
   expect(whole.rawPayload).toEqual(w.bytes);
@@ -176,10 +198,46 @@ async function expectServed(label: string, w: World, attemptId: string, headers:
   expect(part.headers["content-range"]).toBe(`bytes 0-4/${w.bytes.length}`);
   const html = await read(label, "GET", documentUrl(attemptId, w.markdown.id, "html"), headers);
   expect(html.statusCode, html.body).toBe(200);
-  expect(html.json()).toMatchObject({ title: "Formulaire", toc: [{ depth: 1 }] });
+  expect(html.json()).toMatchObject({ toc: [{ depth: 1 }] });
+  expect(Object.keys(html.json()).sort()).toEqual(["html", "toc"]);
   expect(html.json().html).toContain("<strong>gras-du-source</strong>");
+  // A reading is neither audited nor journalled (ADR-144 §7).
+  expect(await traces(attemptId), `${label}: no trace`).toEqual(before);
   // Each route serves its own kind only.
   await expectRefused(`${label}, the other kind`, attemptId, headers, { file: w.markdown.id, html: w.pdf.id });
+}
+
+/** The rows a reading must not write: the audit log's, and the attempt's events. */
+async function traces(attemptId: string) {
+  // The seb session of these tests carries no Config Key: the trust layer
+  // audits that once per route (`auth.seb_config_key_mismatch`), not the reading.
+  const [audit] = await db()
+    .select({ n: count() })
+    .from(auditLog)
+    .where(ne(auditLog.action, "auth.seb_config_key_mismatch"));
+  const [events] = await db().select({ n: count() }).from(attemptEvents).where(eq(attemptEvents.attemptId, attemptId));
+  return { audit: audit!.n, events: events!.n };
+}
+
+/**
+ * The first frames of an SSE stream (`GET /app/api/events?watch=…`) until its
+ * snapshot, as the seb tests read them: a student response like any other.
+ */
+async function snapshotOf(who: string, watch: string, headers: Headers): Promise<string> {
+  const url = `/app/api/events?watch=${encodeURIComponent(watch)}`;
+  const hangUp = new AbortController();
+  const res = await server.app.inject({ method: "GET", url, headers, payloadAsStream: true, signal: hangUp.signal });
+  let text = "";
+  if (res.statusCode === 200) res.stream().on("data", (chunk: Buffer) => (text += chunk.toString("utf8")));
+  for (let i = 0; i < 50 && res.statusCode === 200 && !text.includes("snapshot"); i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  hangUp.abort();
+  res.stream().destroy();
+  responses.push({ who: `${who} SSE ${watch}`, body: text });
+  expect(res.statusCode, watch).toBe(200);
+  expect(text, watch).toContain("snapshot");
+  return text;
 }
 
 const provided = (w: World) => [
@@ -275,6 +333,77 @@ describe("an exam's official attempt (F-LIVE-15)", () => {
     server.clock.advance(1);
     await expectRefused("expired", attemptId, student.headers, both(w));
     expect((await attemptView(attemptId)).documents).toEqual([]);
+  });
+});
+
+describe("every student caller, every student response (05 §5.7)", () => {
+  it("serves a teacher's staff seat on their own attempt, and refuses it once the rule is false (ADR-018)", async () => {
+    const w = await world();
+    const enrolled = await call("POST", `/app/api/classrooms/${w.seed.classroomId}/self-enroll`, owner.headers);
+    expect(enrolled.statusCode, enrolled.body).toBe(201);
+    await start(w);
+    const mine = (await enter(w, owner)).attempt.id;
+    await expectServed("staff seat", w, mine, owner.headers);
+    expect((await call("POST", `/app/api/evaluations/${w.seed.evaluationId}/pause`, owner.headers, { confirm: true })).statusCode).toBe(200);
+    await expectRefused("staff seat, paused", mine, owner.headers, both(w));
+    expect((await attemptView(mine, owner.headers)).documents).toEqual([]);
+  });
+
+  it("serves an impersonation of the attempt's holder, read-only (ADR-034), and the snapshots follow the rule", async () => {
+    const w = await world();
+    await start(w);
+    const mine = (await enter(w)).attempt.id;
+    const admin = await server.signInWithSuperPowers();
+    const acting = await sessionOf(db(), student.id, { kind: "impersonation", actorUserId: admin.id });
+    await expectServed("impersonating the holder", w, mine, acting);
+    expect((await attemptView(mine, acting)).documents).toEqual(provided(w));
+    // The attempt's snapshot carries the list while the rule holds, none during a pause.
+    expect(await snapshotOf("student", `attempt:${mine}`, student.headers)).toContain(`"documents":[{"id":"${w.pdf.id}"`);
+    expect((await call("POST", `/app/api/evaluations/${w.seed.evaluationId}/pause`, owner.headers, { confirm: true })).statusCode).toBe(200);
+    expect(await snapshotOf("student", `attempt:${mine}`, student.headers)).toContain(`"documents":[]`);
+    await expectRefused("impersonating the holder, paused", mine, acting, both(w));
+  });
+
+  it("states the count in the lobby's snapshot, and the feedback and the personal export carry nothing of a document", async () => {
+    const w = await world({
+      settings: { lobby: "manual" },
+      feedback: {
+        when: "on_release",
+        showAnswer: true,
+        showKey: true,
+        showExplanation: false,
+        showHiddenCaseNames: false,
+        showTeacherComment: true,
+        contestationDays: 7,
+      },
+    });
+    await applyState(db(), await reload(db(), w.seed.evaluationId), "lobby", server.clock.now());
+    expect((await read("student", "POST", `/app/api/evaluations/${w.seed.evaluationId}/attempt`, student.headers, {})).statusCode).toBe(200);
+    expect(await snapshotOf("student", `lobby:${w.seed.evaluationId}`, student.headers)).toContain(`"key":"documents","kind":"provided","count":2`);
+    await applyState(db(), await reload(db(), w.seed.evaluationId), "running", server.clock.now());
+    const mine = (await enter(w)).attempt.id;
+    expect((await call("POST", `/app/api/attempts/${mine}/submit`, student.headers, { confirm: true })).statusCode).toBe(200);
+    expect((await call("POST", `/app/api/evaluations/${w.seed.evaluationId}/close`, owner.headers, { confirm: true })).statusCode).toBe(200);
+    await releaseResults(db(), await reload(db(), w.seed.evaluationId), server.clock.now());
+    expect((await read("student", "GET", `/app/api/attempts/${mine}/feedback`, student.headers)).statusCode).toBe(200);
+    expect((await read("student", "GET", "/app/api/me/export", student.headers)).statusCode).toBe(200);
+    await expectRefused("released", mine, student.headers, both(w));
+  });
+
+  it("answers the caller's own exam attempt from outside the allow-list its 403, whatever the document (F-EVAL-12)", async () => {
+    const w = await world();
+    await start(w);
+    const mine = (await enter(w)).attempt.id;
+    await db().update(evaluations).set({ ipAllowlist: ["10.99.0.0/16"] }).where(eq(evaluations.id, w.seed.evaluationId));
+    for (const route of ["file", "html"] as const) {
+      for (const id of [randomUUID(), w.unselected.id, w.pdf.id, w.markdown.id]) {
+        const res = await read("outside the room", "GET", documentUrl(mine, id, route), student.headers);
+        expect({ status: res.statusCode, body: res.body }, `${route} ${id}`).toEqual({
+          status: 403,
+          body: JSON.stringify({ error: "ip_not_allowed" }),
+        });
+      }
+    }
   });
 });
 

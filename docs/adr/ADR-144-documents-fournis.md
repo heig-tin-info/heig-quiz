@@ -203,10 +203,10 @@ The PDF viewer is pdf.js, pinned, hardened:
   module, `library/studentView.ts`, the one reader of a document toward a
   student. It applies one pure rule, `providedDocumentsReadable`
   (`@quiz/domain`), built on the write gate of an answer
-  (`attemptClosedReason`, moved there from `live/gates.ts`): never a poll;
-  on an exam the official attempt in progress while the exam is `running`
-  — not the lobby, not a pause — and the server's clock before the
-  attempt's deadline plus the grace; never a blank practice after the
+  (`attemptClosedReason`, moved there from `live/gates.ts`): never a poll,
+  never during a pause; on an exam the official attempt in progress while
+  the exam is `running` — not the lobby — and the server's clock before
+  the attempt's deadline plus the grace; never a blank practice after the
   release ([ADR-142](ADR-142-entrainement-sur-un-examen-publie.md)); on an
   exercise an open attempt, its practice after the due date included
   ([ADR-122](ADR-122-entrainement-apres-l-echeance.md)). "Not in the lobby,
@@ -215,11 +215,20 @@ The PDF viewer is pdf.js, pinned, hardened:
   product owner on 2026-11-24 and not objected to. Two sitting routes
   (`SITTING`): `GET /app/api/attempts/:id/documents/:documentId/file` (a
   PDF, `sendRanged`, named after its title) and `…/html` (a Markdown
-  document's `DocumentHtml`); every refusal is the 404 of a missing
-  document. `AttemptView.documents` lists them while the rule holds, `[]`
-  otherwise.
+  document's `DocumentHtml`, `{ html, toc }`: the caller holds the title);
+  every refusal is the 404 of a missing document, save the IP rule's `403
+  ip_not_allowed` on the caller's own attempt, which does not depend on the
+  document. Nothing leaves beyond the title, the kind and the bytes or the
+  HTML. An impersonation of the attempt's holder is served, read-only,
+  like every student payload ([ADR-034](ADR-034-agir-en-tant-qu-etudiant.md); the
+  orchestrator's decision, 2026-11-24). `AttemptView.documents` lists them
+  while the rule holds, `[]` otherwise; the conditions state their number
+  only, outside the rule.
 - The teacher's stateless preview (ADR-018) has no attempt: it lists the
-  selection, and reads the files through the course's staff routes. A
+  selection, and reads the files through the course's staff routes. The
+  preview's builder loads the selection for it alone (`withDocuments`):
+  the hand-out a student prints (ADR-122 §9) and the paper copies never
+  load it. A
   teacher on a staff seat has a real attempt and reads through the
   student's routes.
 - No audit row and no attempt event for a reading. A copy made from the

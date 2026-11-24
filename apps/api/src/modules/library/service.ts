@@ -47,7 +47,7 @@ import { RENDERER_VERSION, renderStandalone } from "@quiz/docrender";
 
 import { iso } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
-import { courseDocuments, courses, evaluationProvidedDocuments, evaluations, users } from "../../db/schema.js";
+import { classrooms, courseDocuments, courses, evaluationProvidedDocuments, evaluations, users } from "../../db/schema.js";
 import { refusalClass, type Refusal } from "../http.js";
 import { dropTemp, pathForHash, placeTemp, safeJoin, streamToTemp, type TempFile } from "../pool/assets.js";
 
@@ -309,8 +309,16 @@ async function usesOf(db: Db | Tx, documentIds: readonly string[]): Promise<Map<
       courseId: evaluations.courseId,
     })
     .from(evaluationProvidedDocuments)
+    .innerJoin(courseDocuments, eq(courseDocuments.id, evaluationProvidedDocuments.documentId))
     .innerJoin(evaluations, eq(evaluations.id, evaluationProvidedDocuments.evaluationId))
-    .where(inArray(evaluationProvidedDocuments.documentId, [...documentIds]))
+    .leftJoin(classrooms, eq(classrooms.id, evaluations.classroomId))
+    // Defence in depth: only an evaluation or a template of the document's own course.
+    .where(
+      and(
+        inArray(evaluationProvidedDocuments.documentId, [...documentIds]),
+        eq(sql`coalesce(${evaluations.courseId}, ${classrooms.courseId})`, courseDocuments.courseId),
+      ),
+    )
     .orderBy(asc(evaluations.createdAt), asc(evaluations.id));
   for (const { documentId, courseId, ...use } of rows) {
     uses.set(documentId, [...(uses.get(documentId) ?? []), { ...use, template: courseId !== null }]);

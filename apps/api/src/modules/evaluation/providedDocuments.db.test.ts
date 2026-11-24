@@ -22,7 +22,7 @@ import { fakeShort } from "../../test/fakeType.js";
 import { type Actor, testServer, type TestServer } from "../../test/http.js";
 import { pdfBytes, uploadDocument } from "../../test/library.js";
 import { reload, seedLive } from "../../test/live.js";
-import { conditionsFor } from "../live/views.js";
+import { conditionsFor, previewView } from "../live/views.js";
 import { releaseResults } from "../results/service.js";
 import * as service from "./service.js";
 
@@ -132,6 +132,24 @@ describe("the selection (F-EVAL-37)", () => {
     const closed = await patch(seed.evaluationId, []);
     expect([closed.statusCode, closed.json().error]).toEqual([409, "locked"]);
     expect(await selected(seed.evaluationId)).toEqual([ids[0]]);
+  });
+});
+
+describe("the documents of a preview (ADR-144 §7)", () => {
+  it("lists the selection to the teacher's stateless preview only, never to the builder's other callers", async () => {
+    const { seed, ids } = await world();
+    expect((await patch(seed.evaluationId, [ids[0]!, ids[1]!])).statusCode).toBe(200);
+    const row = await reload(db(), seed.evaluationId);
+    // The hand-out and every other caller of the builder: none, the conditions counting them all the same.
+    const plain = await previewView(db(), row, server.clock.now());
+    expect(plain.documents).toEqual([]);
+    expect(plain.conditions.imposed).toContainEqual({ key: "documents", kind: "provided", count: 2 });
+    // The hand-out (`evaluation/document.ts`) and the paper copies build on this default; the fake
+    // type of these tests does not print, so their records are searched by the paper's own tests.
+    // The stateless preview, the teacher's.
+    const preview = await call("POST", `/app/api/evaluations/${seed.evaluationId}/preview`);
+    expect(preview.statusCode, preview.body).toBe(200);
+    expect(preview.json().view.documents.map((d: { title: string }) => d.title)).toEqual(["Datasheet", "Formulaire"]);
   });
 });
 

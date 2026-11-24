@@ -151,7 +151,8 @@ export type AttemptDocumentParam = z.infer<typeof AttemptDocumentParam>;
  * `GET /courses/:id/documents/:documentId/html`: a Markdown document as the
  * server rendered it (`@quiz/docrender`, raw HTML escaped, no image), and
  * the table of contents the viewer's outline reads. The title is the
- * caller's already (the library's row).
+ * caller's already: the library's row, or `AttemptView.documents` for a
+ * student (`GET /attempts/:id/documents/:documentId/html`, ADR-144 §7).
  */
 export const DocumentHtml = z.object({
   html: z.string(),

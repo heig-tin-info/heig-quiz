@@ -219,8 +219,11 @@ export async function attemptView(
  * attempt row anywhere. Seed 0 by default, so it is stable between reloads;
  * the stateless preview of issue #75 passes the seed it drew instead, and
  * gets exactly the order and the shuffles an attempt of that seed would.
- * Its documents are the selection, as the staff read it (ADR-144 §7): a
- * staff payload, whose files the staff routes of the course's library serve.
+ * Its documents are none, unless the caller is the teacher's stateless
+ * preview (`withDocuments`, ADR-144 §7): then the selection as the staff
+ * read it, whose files the staff routes of the course's library serve. The
+ * hand-out and the paper copies, which a student may print (ADR-122 §9),
+ * never load it.
  */
 export async function previewView(
   db: Db,
@@ -229,14 +232,17 @@ export async function previewView(
   seed = 0,
   /** The evaluation's items when the caller already read them, not read twice. */
   items?: readonly JoinedItem[],
+  /** The teacher's stateless preview only: the selection, and its count in the conditions. */
+  withDocuments = false,
 ): Promise<AttemptView> {
-  const documents = await providedDocumentsOf(db, evaluation.id);
+  const documents = withDocuments ? await providedDocumentsOf(db, evaluation.id) : [];
   return viewOf(db, evaluation, {
     seed,
     timeBonusPercent: 0,
     practice: false,
     documents,
-    documentCount: documents.length,
+    // The conditions count the selection wherever the view is shown on a screen.
+    documentCount: withDocuments ? documents.length : await providedDocumentCount(db, evaluation.id),
     instances: {},
     acquired: [],
     items,
