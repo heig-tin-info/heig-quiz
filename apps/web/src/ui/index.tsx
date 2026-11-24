@@ -24,7 +24,8 @@
 //   meta      the small facts under a title (MetaItem, MetaLine), on layers.
 //   breadcrumb the trail of ancestors of a page (Breadcrumb), on controls.
 //   actions   the actions of one record: icon buttons or a menu, decided
-//             by their number (Actions), on layers and menu.
+//             by their number (Actions), and a row card's (RowActions), on
+//             layers, menu and controls.
 //   popover   the small floating card anchored on a trigger (Popover), on
 //             layers and menu (menuPosition).
 //   dateRange a period picked on one month calendar (DateRangeField), on

@@ -83,7 +83,7 @@ export function GradeTable({
   const t = useT();
 
   const columns: Column<Key>[] = [
-    { key: "name", label: t("results.col.student") },
+    { key: "name", label: t("results.col.student"), stack: "main" },
     /* The e-mail is the column the table can do without: hiding it brings
        the grade back on screen without a sideways scroll. It goes last of
        the two, after the duration — a grade sheet is read by name, and the
@@ -91,29 +91,33 @@ export function GradeTable({
        TABLE's width, not the phone's: this table also lives inside a tab
        beside a histogram. */
     { key: "email", label: t("results.col.email"), className: T.colHigh },
-    { key: "points", label: t("results.col.points"), right: true },
-    { key: "grade", label: t("results.col.grade"), right: true },
+    { key: "points", label: t("results.col.points"), right: true, stack: "sub" },
+    { key: "grade", label: t("results.col.grade"), right: true, stack: "sub" },
     { key: "duration", label: t("results.col.duration"), right: true, className: T.colLow },
-    { key: "state", label: t("results.col.state") },
-    ...(actions ? [{ key: "actions", label: t("common.actions"), srOnly: true, sortable: false as const, className: "w-12" }] : []),
+    { key: "state", label: t("results.col.state"), stack: "sub" },
+    ...(actions
+      ? [{ key: "actions", label: t("common.actions"), srOnly: true, sortable: false as const, className: "w-12", stack: "end" as const }]
+      : []),
   ];
 
+  // A row card on a phone (DESIGN.md › Row cards): the student and the row's
+  // menu on the first line; the points, the grade and the state under them.
   return (
     <div className={cx(T.container, "overflow-x-auto rounded-card border border-line bg-surface")}>
-      <table className={T.table}>
+      <table role="table" className={cx(T.table, T.stack.table)}>
         <TableHead columns={columns} sort={sort} onToggle={toggle} />
-        <tbody>
+        <tbody role="rowgroup">
           {sorted.map((row) => {
             const attemptId = row.attemptId;
             const open = onOpen && attemptId !== null ? () => onOpen(attemptId) : null;
             return (
-            <tr
+            <tr role="row"
               key={row.userId}
               {...(open ? pressable(open, "row") : {})}
               aria-current={attemptId !== null && attemptId === openId ? "true" : undefined}
-              className={cx(T.row, open && cx(T.rowHover, "cursor-pointer"), "aria-[current]:bg-surface-2")}
+              className={cx(T.row, T.stack.row, open && cx(T.rowHover, "cursor-pointer"), "aria-[current]:bg-surface-2")}
             >
-              <td className={cx(T.td, "font-semibold")}>
+              <td role="cell" className={cx(T.td, T.stack.main, "font-semibold")}>
                 <span className="inline-flex items-center gap-1.5">
                   {row.displayName}
                   {/* A teacher's own test walk (ADR-018): listed, badged, and
@@ -138,22 +142,24 @@ export function GradeTable({
                   ) : null}
                 </span>
               </td>
-              <td className={cx(T.td, "text-fg-muted", T.colHigh)}>{row.email}</td>
-              <td className={cx(T.td, "text-right tabular-nums")}>
+              <td role="cell" className={cx(T.td, "text-fg-muted", T.colHigh)}>{row.email}</td>
+              <td role="cell" className={cx(T.td, T.stack.sub, "text-right tabular-nums")}>
+                <span className={T.stack.label}>{t("results.col.points")}</span>
                 {formatPoints(row.points)}
               </td>
-              <td className={cx(T.td, "text-right font-semibold tabular-nums")}>
+              <td role="cell" className={cx(T.td, T.stack.sub, "text-right font-semibold tabular-nums")}>
+                <span className={cx(T.stack.label, "font-normal")}>{t("results.col.grade")}</span>
                 {/* Excused: the grade stays readable, in the ink — it counts nowhere. */}
                 <Grade value={row.grade} neutral={row.excused !== null} />
               </td>
-              <td className={cx(T.td, "text-right tabular-nums text-fg-muted", T.colLow)}>
+              <td role="cell" className={cx(T.td, "text-right tabular-nums text-fg-muted", T.colLow)}>
                 {row.durationS === null ? "—" : formatDuration(row.durationS * 1000, t)}
               </td>
-              <td className={T.td}>
+              <td role="cell" className={cx(T.td, T.stack.sub)}>
                 <Badge tone={STATE_TONES[row.state]}>{resultStateLabel(t, row.state)}</Badge>
               </td>
               {actions ? (
-                <td className={cx(T.td, "text-right")}>
+                <td role="cell" className={cx(T.td, T.stack.end, "text-right")}>
                   <Actions menu label={t("results.row.menu", { student: row.displayName })} items={actions(row)} />
                 </td>
               ) : null}

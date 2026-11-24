@@ -202,6 +202,20 @@ describe("control scale guard rail (ADR-094)", () => {
     expect(bad).toEqual([]);
   });
 
+  it("gives every element of a row-card table its explicit role (DESIGN.md, Row cards: `T.stack`)", () => {
+    // A `display` that is no longer `table` makes some screen readers drop
+    // the table's semantics: in a file holding a `T.stack.table`, every
+    // table, row group, row and cell says its role.
+    const bad: string[] = [];
+    for (const { path, src } of files) {
+      const tags = tagsOf(src, "table|tbody|tr|td");
+      if (!tags.some(({ tag }) => /^<table\b/.test(tag) && /\bT\.stack\.table\b/.test(tag))) continue;
+      // `pressable(…, "row")` spreads the row's role itself.
+      for (const { tag, line } of tags) if (!/\srole=|pressable\(/.test(tag)) bad.push(`${path}:${line}`);
+    }
+    expect(bad).toEqual([]);
+  });
+
   it("writes no rounded-full and no literal height beside the scale", () => {
     const bad: string[] = [];
     for (const { path, src } of files) {

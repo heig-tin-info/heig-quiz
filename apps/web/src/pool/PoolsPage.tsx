@@ -75,9 +75,9 @@ function PoolRow({
   return (
     <tr
       {...pressable(() => navigate({ view: "pool", id: pool.id }), "row")}
-      className={cx(T.row, T.rowHover, "cursor-pointer")}
+      className={cx(T.row, T.rowHover, T.stack.row, "cursor-pointer")}
     >
-      <td className={T.td}>
+      <td role="cell" className={cx(T.td, T.stack.main)}>
         <span className="flex min-w-0 items-center gap-2.5">
           <PoolIcon
             icon={pool.icon}
@@ -87,12 +87,15 @@ function PoolRow({
           <span className="min-w-0 truncate font-semibold">{pool.name}</span>
         </span>
       </td>
-      <td className={`${T.td} text-right tabular-nums`}>{pool.questionCount}</td>
-      <td className={`${T.td} ${T.colMid} text-right tabular-nums`}>{pool.usedCount}</td>
-      <td className={T.td}>
+      <td role="cell" className={cx(T.td, T.stack.sub, "text-right tabular-nums")}>
+        <span className={T.stack.label}>{t("pools.questionsColumn")}</span>
+        {pool.questionCount}
+      </td>
+      <td role="cell" className={`${T.td} ${T.colMid} text-right tabular-nums`}>{pool.usedCount}</td>
+      <td role="cell" className={cx(T.td, T.stack.sub)}>
         <VisibilityBadge pool={pool} />
       </td>
-      <td className={`${T.td} ${T.colMid}`}>
+      <td role="cell" className={`${T.td} ${T.colMid}`}>
         {/* The avatar stands alone, so it carries the name (DESIGN.md ›
             PersonAvatar); the accent disc is the reader's own, as in the shell. */}
         <PersonAvatar
@@ -104,8 +107,8 @@ function PoolRow({
       </td>
       {/* The role HELD, never the one Super Powers lend: an admin passing
           through a colleague's pool is not its owner (ADR-013). */}
-      <td className={`${T.td} ${T.colLow}`}>{t(`share.role.${pool.heldRole}`)}</td>
-      <td className={`${T.td} ${T.colHigh} whitespace-nowrap text-fg-muted`}>
+      <td role="cell" className={`${T.td} ${T.colLow}`}>{t(`share.role.${pool.heldRole}`)}</td>
+      <td role="cell" className={`${T.td} ${T.colHigh} whitespace-nowrap text-fg-muted`}>
         <RelativeTime iso={pool.updatedAt} />
       </td>
     </tr>
@@ -166,10 +169,10 @@ function PoolShelf({
     null,
   );
   const columns: Column<PoolSort>[] = [
-    { key: "name", label: t("pools.name") },
-    { key: "questions", label: t("pools.questionsColumn"), right: true },
+    { key: "name", label: t("pools.name"), stack: "main" },
+    { key: "questions", label: t("pools.questionsColumn"), right: true, stack: "sub" },
     { key: "used", label: t("pools.usedColumn"), right: true, className: T.colMid },
-    { key: "visibility", label: t("pools.visibility") },
+    { key: "visibility", label: t("pools.visibility"), stack: "sub" },
     { key: "owner", label: t("pools.owner"), className: T.colMid },
     { key: "role", label: t("pools.role"), className: T.colLow },
     { key: "updated", label: t("pools.updatedColumn"), className: T.colHigh },
@@ -206,9 +209,9 @@ function PoolShelf({
       ) : view === "list" ? (
         <Card className="overflow-hidden">
           <div className={cx(T.container, "overflow-x-auto")}>
-            <table className={T.table}>
+            <table role="table" className={cx(T.table, T.stack.table)}>
               <TableHead columns={columns} sort={sort} onToggle={toggle} />
-              <tbody>
+              <tbody role="rowgroup">
                 {sorted.map((pool) => (
                   <PoolRow key={pool.id} pool={pool} me={me.data} navigate={navigate} />
                 ))}

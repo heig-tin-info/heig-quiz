@@ -114,8 +114,10 @@ function Row({
     // Compact: an inline edit sits inside a table row, so it takes the 28 px
     // control height instead of the 34 px one a form field gets.
     return (
-      <tr className={cx(T.row, "bg-surface-2/60")}>
-        <td className={T.td}>
+      // On a card: the two names and the save on the first line, the address
+      // and the accommodation under them, back from the hidden columns.
+      <tr role="row" className={cx(T.row, T.stack.row, "bg-surface-2/60")}>
+        <td role="cell" className={cx(T.td, T.stack.main, "@max-md:pr-0")}>
           <TextInput
             size="sm"
             className="w-full"
@@ -125,7 +127,7 @@ function Row({
             autoFocus
           />
         </td>
-        <td className={T.td}>
+        <td role="cell" className={cx(T.td, T.stack.main, "@max-md:pr-0")}>
           <TextInput
             size="sm"
             className="w-full"
@@ -137,7 +139,7 @@ function Row({
         {/* One cell per column, colSpan-free: a cell spanning a column the
             container has hidden leaves this row one column wider than every
             other one, and the table shears. */}
-        <td className={cx(T.td, T.colHigh)}>
+        <td role="cell" className={cx(T.td, T.colHigh, T.stack.sub, "@max-md:block @max-md:basis-full")}>
           <TextInput
             size="sm"
             className="w-full"
@@ -151,11 +153,12 @@ function Row({
             <p className="mt-1 text-xs text-warning">{t("roster.emailChangeWarning")}</p>
           ) : null}
         </td>
-        <td className={T.td} />
-        <td className={cx(T.td, T.colMid)}>
+        <td role="cell" className={cx(T.td, "@max-md:hidden")} />
+        <td role="cell" className={cx(T.td, T.colMid, T.stack.sub, "@max-md:flex @max-md:items-center")}>
+          <span className={T.stack.label}>{t("roster.col.bonus")}</span>
           <TextInput
             size="sm"
-            className="w-full text-right tabular-nums"
+            className="w-full text-right tabular-nums @max-md:w-20"
             aria-label={t("roster.col.bonus")}
             type="number"
             min={0}
@@ -164,8 +167,8 @@ function Row({
             onChange={(e) => setForm({ ...form, timeBonusPercent: e.target.value })}
           />
         </td>
-        <td className={cx(T.td, T.colLow)} />
-        <td className={cx(T.td, "touch-group whitespace-nowrap text-right sticky right-0 bg-surface-2")}>
+        <td role="cell" className={cx(T.td, T.colLow)} />
+        <td role="cell" className={cx(T.td, "touch-group whitespace-nowrap text-right sticky right-0 bg-surface-2", T.stack.end)}>
           <IconButton label={t("common.save")} onClick={() => save.mutate()} disabled={save.isPending}>
             <Check />
           </IconButton>
@@ -199,15 +202,22 @@ function Row({
 
   return (
     <Fragment>
-      <tr className={cx(T.row, T.rowHover)}>
-        <td className={`${T.td} font-semibold`}>
-          <span className="flex items-center gap-2.5">
+      <tr role="row" className={cx(T.row, T.rowHover, T.stack.row)}>
+        <td role="cell" className={cx(T.td, T.stack.main, "font-semibold")}>
+          <span className="flex min-w-0 items-center gap-2.5">
             <PersonAvatar name={named ? [entry.prenom, entry.nom] : [fullName, ""]} src={entry.avatarUrl} />
-            {named ? entry.nom : <span className="font-normal text-fg-muted">{fullName}</span>}
+            {named ? (
+              <span className="truncate">
+                {entry.nom}
+                <span className="font-normal @md:hidden"> {entry.prenom}</span>
+              </span>
+            ) : (
+              <span className="truncate font-normal text-fg-muted">{fullName}</span>
+            )}
           </span>
         </td>
-        <td className={T.td}>{named ? entry.prenom : <span className="text-fg-faint">—</span>}</td>
-        <td className={cx(T.td, "text-fg-muted", T.colHigh)}>
+        <td role="cell" className={cx(T.td, "@max-md:hidden")}>{named ? entry.prenom : <span className="text-fg-faint">—</span>}</td>
+        <td role="cell" className={cx(T.td, "text-fg-muted", T.colHigh)}>
           <a href={`mailto:${entry.email}`} className="hover:text-fg hover:underline">
             {entry.email}
           </a>
@@ -222,7 +232,7 @@ function Row({
             </span>
           ) : null}
         </td>
-        <td className={T.td}>
+        <td role="cell" className={cx(T.td, T.stack.sub)}>
           <span className="inline-flex items-center gap-1">
             {entry.conflictFlag ? (
               <Badge tone="red" icon={AlertTriangle}>
@@ -247,17 +257,17 @@ function Row({
         {/* The accommodation, right-aligned and tabular like every number.
             Zero shows an em dash: a column of "0 %" reads as data when it is
             in fact the absence of any. */}
-        <td className={cx(T.td, "text-right tabular-nums", T.colMid)}>
+        <td role="cell" className={cx(T.td, "text-right tabular-nums", T.colMid)}>
           {entry.timeBonusPercent > 0 ? (
             <span className="font-semibold text-accent">+{entry.timeBonusPercent}%</span>
           ) : (
             <Dash />
           )}
         </td>
-        <td className={cx(T.td, "whitespace-nowrap text-fg-muted", T.colLow)}>
+        <td role="cell" className={cx(T.td, "whitespace-nowrap text-fg-muted", T.colLow)}>
           {entry.lastLoginAt ? <RelativeTime iso={entry.lastLoginAt} /> : "—"}
         </td>
-        <td className={cx(T.td, "whitespace-nowrap text-right", T.stickyEnd)}>
+        <td role="cell" className={cx(T.td, "whitespace-nowrap text-right", T.stickyEnd, T.stack.end)}>
           {/* The menu is gone by the time the request answers, so the row
               itself carries the fact that something is running. */}
           {busy ? (
@@ -324,8 +334,8 @@ function Row({
         </td>
       </tr>
       {failure ? (
-        <tr>
-          <td colSpan={7} className="px-3 pb-2 text-[13px] text-danger">
+        <tr role="row" className={T.stack.band}>
+          <td role="cell" colSpan={7} className={cx(T.stack.band, "px-3 pb-2 text-[13px] text-danger")}>
             {failure}
           </td>
         </tr>
@@ -368,10 +378,11 @@ export function RosterTable({
     caseInsensitiveCompare,
   );
   const columns: Column<SortKey>[] = [
-    { key: "nom", label: t("roster.col.lastName") },
-    { key: "prenom", label: t("roster.col.firstName") },
+    { key: "nom", label: t("roster.col.lastName"), stack: "main" },
+    // On a card the first name joins the last one on the first line.
+    { key: "prenom", label: t("roster.col.firstName"), stack: "sub" },
     { key: "email", label: t("roster.col.email"), className: T.colHigh },
-    { key: "status", label: t("roster.col.status") },
+    { key: "status", label: t("roster.col.status"), stack: "sub" },
     { key: "timeBonusPercent", label: t("roster.col.bonus"), className: T.colMid },
     { key: "lastLoginAt", label: t("roster.col.lastSignIn"), className: T.colLow },
     {
@@ -380,6 +391,7 @@ export function RosterTable({
       sortable: false,
       srOnly: true,
       className: T.stickyEnd,
+      stack: "end",
     },
   ];
 
@@ -389,11 +401,12 @@ export function RosterTable({
        priority): the last sign-in, then the accommodation, then the e-mail.
        The name, the first name, the status and the row menu stay, and the
        menu is pinned to the right edge for the widths where even that four
-       scrolls. */
+       scrolls. Under 28 rem each row is a card (`T.stack`): the person and
+       the menu, the status under them. */
     <div className={cx(T.container, "overflow-x-auto")}>
-      <table className={T.table}>
+      <table role="table" className={cx(T.table, T.stack.table)}>
         <TableHead columns={columns} sort={sort} onToggle={toggle} />
-        <tbody>
+        <tbody role="rowgroup">
           {sorted.map((r) => (
             <Row key={r.id} classroomId={classroomId} entry={r} canImpersonate={canImpersonate} />
           ))}

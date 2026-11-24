@@ -85,8 +85,9 @@ describe("spanOf", () => {
 
 describe("the schedule view", () => {
   const original = window.matchMedia;
+  // Only the `min-width` queries answer: a phone's `max-width` one would show the cards.
   const wide = (on: boolean) =>
-    vi.stubGlobal("matchMedia", (query: string) => ({ ...original(query), matches: on }));
+    vi.stubGlobal("matchMedia", (query: string) => ({ ...original(query), matches: on && query.includes("min-width") }));
   beforeEach(() => {
     localStorage.setItem("quiz-activities-view", "schedule");
     localStorage.removeItem("quiz-activities-tab");

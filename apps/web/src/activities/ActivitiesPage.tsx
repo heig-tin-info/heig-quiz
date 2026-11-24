@@ -25,6 +25,7 @@ import {
   useMinWidth,
   useNow,
   usePersistentChoice,
+  useTouchPhone,
   ViewSwitch,
 } from "../ui";
 import { endable, useEndPoll } from "./actions";
@@ -99,7 +100,12 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
   // "Live" moves with the clock too (a scheduled exam 15 minutes out), not
   // only with the hints: re-evaluated every half minute.
   const now = useNow(30_000);
-  const [view, setView] = usePersistentChoice<View>("quiz-activities-view", VIEWS, "list");
+  const [chosen, setView] = usePersistentChoice<View>("quiz-activities-view", VIEWS, "list");
+  // A phone in the hand reads the cards, with no switch: the switch is a
+  // feature, and only narrow AND touch may lose one (DESIGN.md › Touch). The
+  // choice stored for this browser's wider windows stays as it was.
+  const phone = useTouchPhone();
+  const view: View = phone ? "cards" : chosen;
   const [types, setTypes] = useState<ReadonlySet<ActivityType>>(new Set());
   const [tab, setTab] = usePersistentChoice<Tab>("quiz-activities-tab", TABS, "current");
   // The Ended tab narrowed to what waits for its results (the summary's tile).
@@ -280,7 +286,9 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
             </>
           ) : null}
           <span className="flex-1" />
-          <ViewSwitch name="activities-view" views={["list", "cards", "schedule"]} value={view} onChange={setView} />
+          {phone ? null : (
+            <ViewSwitch name="activities-view" views={["list", "cards", "schedule"]} value={view} onChange={setView} />
+          )}
         </div>
       ) : null}
 

@@ -104,6 +104,11 @@ const stack = {
   band: "@max-md:block",
   /** A `sub` column's header: the card has no head line for it. */
   subHead: "@max-md:hidden",
+  /**
+   * On a span before a `sub` cell's figure: the column's label, on the card
+   * only, since a number alone on the second line says nothing ("Calls 12").
+   */
+  label: "mr-1 text-fg-faint @md:hidden",
 } as const;
 
 /**
@@ -205,7 +210,8 @@ function SortHeader<K extends string>({
       <button
         type="button"
         className={cx(
-          "group inline-flex items-center gap-1 rounded-sm transition-colors hover:text-fg",
+          // 16 px tall: a finger gets the 44 px area (DESIGN.md › Touch).
+          "touch-hit group inline-flex items-center gap-1 rounded-sm transition-colors hover:text-fg",
           // A right-aligned column keeps its LABEL flush with the figures
           // under it, so the arrow hangs on the label's left instead of
           // pushing the word out of line with its own numbers.

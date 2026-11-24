@@ -6,6 +6,7 @@ import type { ActivitySummary, EvaluationActivitySummary, ProjectActivitySummary
 
 import { id, liveAt } from "../test/live-fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
+import { phoneScreen } from "../test/viewport";
 import { activitiesKey } from "../queryKeys";
 import { ActivitiesPage } from "./ActivitiesPage";
 
@@ -316,6 +317,36 @@ describe("ActivitiesPage", () => {
     await user.click(screen.getByRole("button", { name: /Show the/ }));
     expect(screen.getByText("Test 0")).toBeInTheDocument();
     expect(localStorage.getItem("quiz-activities-view")).toBe("schedule");
+  });
+
+  // DESIGN.md › Touch: a narrow window with a mouse (a desktop zoomed to
+  // 200 %) loses no feature, the view switch included.
+  it("keeps the view switch in a narrow window with a mouse", async () => {
+    const initial = window.matchMedia;
+    phoneScreen();
+    try {
+      render();
+      expect(await screen.findByRole("radio", { name: "Cards" })).toBeInTheDocument();
+    } finally {
+      vi.stubGlobal("matchMedia", initial);
+    }
+  });
+
+  // DESIGN.md › Row cards: a phone in the hand reads the cards, with no
+  // switch, and the choice this browser keeps for its wider windows stays.
+  it("shows the cards on a touch phone, with no view switch, and leaves the stored choice alone", async () => {
+    localStorage.setItem("quiz-activities-view", "schedule");
+    const initial = window.matchMedia;
+    phoneScreen({ coarse: true });
+    try {
+      render();
+      expect(await screen.findByRole("button", { name: "Série 6 — SPI" })).toBeInTheDocument();
+      expect(screen.queryByRole("table")).not.toBeInTheDocument();
+      expect(screen.queryByRole("radio", { name: "Cards" })).not.toBeInTheDocument();
+      expect(localStorage.getItem("quiz-activities-view")).toBe("schedule");
+    } finally {
+      vi.stubGlobal("matchMedia", initial);
+    }
   });
 
   it("offers the poll launcher when there is no activity at all", async () => {

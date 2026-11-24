@@ -254,35 +254,51 @@ function UsageSection({ settings }: { settings: LlmSettings | null }) {
             </Card>
           ) : (
             <Card className={cx(T.container, "overflow-x-auto")}>
-              <table className={cx(T.table, "min-w-160")}>
+              {/* A row card on a phone: the person and the cost on the first
+                  line, the counts under them, each with its label. */}
+              <table role="table" className={cx(T.table, T.stack.table, "@md:min-w-160")}>
                 <TableHead
                   columns={[
-                    { key: "person", label: t("admin.col.person") },
-                    { key: "calls", label: t("admin.llm.col.calls"), right: true },
-                    { key: "errors", label: t("admin.llm.col.errors"), right: true },
-                    { key: "input", label: t("admin.llm.col.input"), right: true },
-                    { key: "output", label: t("admin.llm.col.output"), right: true },
-                    { key: "cost", label: t("admin.llm.col.cost"), right: true },
+                    { key: "person", label: t("admin.col.person"), stack: "main" },
+                    { key: "calls", label: t("admin.llm.col.calls"), right: true, stack: "sub" },
+                    { key: "errors", label: t("admin.llm.col.errors"), right: true, stack: "sub" },
+                    { key: "input", label: t("admin.llm.col.input"), right: true, stack: "sub" },
+                    { key: "output", label: t("admin.llm.col.output"), right: true, stack: "sub" },
+                    { key: "cost", label: t("admin.llm.col.cost"), right: true, stack: "end" },
                   ]}
                 />
-                <tbody>
+                <tbody role="rowgroup">
                   {usage.data.rows.map((r) => {
                     const name = [r.givenName, r.familyName].filter(Boolean).join(" ");
+                    const figure = (label: string, value: string) => (
+                      <>
+                        <span className={T.stack.label}>{label}</span>
+                        {value}
+                      </>
+                    );
                     return (
-                      <tr key={r.userId ?? "system"} className={T.row}>
-                        <td className={T.td}>
+                      <tr role="row" key={r.userId ?? "system"} className={cx(T.row, T.stack.row)}>
+                        <td role="cell" className={cx(T.td, T.stack.main)}>
                           <span className="font-semibold">
                             {r.userId === null ? t("admin.llm.system") : name || r.email || "—"}
                           </span>
                           {r.userId !== null && name && r.email ? (
-                            <span className="block text-xs text-fg-faint">{r.email}</span>
+                            <span className="block truncate text-xs text-fg-faint">{r.email}</span>
                           ) : null}
                         </td>
-                        <td className={cx(T.td, "text-right tabular-nums")}>{tokens(r.calls)}</td>
-                        <td className={cx(T.td, "text-right tabular-nums")}>{r.errors ? tokens(r.errors) : "—"}</td>
-                        <td className={cx(T.td, "text-right tabular-nums")}>{tokens(r.inputTokens)}</td>
-                        <td className={cx(T.td, "text-right tabular-nums")}>{tokens(r.outputTokens)}</td>
-                        <td className={cx(T.td, "text-right tabular-nums")}>{usd(r.costUsd, locale)}</td>
+                        <td role="cell" className={cx(T.td, T.stack.sub, "text-right tabular-nums")}>
+                          {figure(t("admin.llm.col.calls"), tokens(r.calls))}
+                        </td>
+                        <td role="cell" className={cx(T.td, T.stack.sub, "text-right tabular-nums")}>
+                          {figure(t("admin.llm.col.errors"), r.errors ? tokens(r.errors) : "—")}
+                        </td>
+                        <td role="cell" className={cx(T.td, T.stack.sub, "text-right tabular-nums")}>
+                          {figure(t("admin.llm.col.input"), tokens(r.inputTokens))}
+                        </td>
+                        <td role="cell" className={cx(T.td, T.stack.sub, "text-right tabular-nums")}>
+                          {figure(t("admin.llm.col.output"), tokens(r.outputTokens))}
+                        </td>
+                        <td role="cell" className={cx(T.td, T.stack.end, "text-right tabular-nums")}>{usd(r.costUsd, locale)}</td>
                       </tr>
                     );
                   })}

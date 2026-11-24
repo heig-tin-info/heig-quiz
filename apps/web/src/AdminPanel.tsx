@@ -35,11 +35,11 @@ import {
   EmptyState,
   ErrorText,
   Field,
-  IconButton,
   PageHeader,
   PersonAvatar,
   QueryError,
   RelativeTime,
+  RowActions,
   SectionHeading,
   Skeleton,
   Switch,
@@ -176,14 +176,19 @@ export function TeachersSection() {
     caseInsensitiveCompare,
   );
 
+  // A row card on a phone (DESIGN.md › Row cards): the person and the "…" on
+  // the first line; the address, the courses, the last sign-in and the
+  // workspace grant under them. The grant's date stays on a desktop.
   const columns: Column<SortKey>[] = [
-    { key: "name", label: t("admin.col.person") },
-    { key: "email", label: t("admin.email") },
-    { key: "courses", label: t("admin.col.courses") },
-    { key: "lastLoginAt", label: t("admin.col.lastSignIn") },
-    { key: "grantedAt", label: t("admin.col.granted") },
-    ...(workspace ? [{ key: "workspace", label: t("admin.col.workspace"), sortable: false as const }] : []),
-    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true },
+    { key: "name", label: t("admin.col.person"), stack: "main" },
+    { key: "email", label: t("admin.email"), stack: "sub" },
+    { key: "courses", label: t("admin.col.courses"), stack: "sub" },
+    { key: "lastLoginAt", label: t("admin.col.lastSignIn"), stack: "sub" },
+    { key: "grantedAt", label: t("admin.col.granted"), className: T.colLow },
+    ...(workspace
+      ? [{ key: "workspace", label: t("admin.col.workspace"), sortable: false as const, stack: "sub" as const }]
+      : []),
+    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true, stack: "end" },
   ];
 
   return (
@@ -233,58 +238,88 @@ export function TeachersSection() {
           </Card>
         ) : (
           <Card className={cx(T.container, "overflow-x-auto")}>
-            <table className={cx(T.table, "min-w-180")}>
+            <table role="table" className={cx(T.table, T.stack.table, "@md:min-w-180")}>
               <TableHead columns={columns} sort={sort} onToggle={toggle} />
-              <tbody>
+              <tbody role="rowgroup">
                 {sorted.map((r) => (
-                  <tr key={r.id} className={cx(T.row, T.rowHover)}>
-                    <td className={`${T.td} font-semibold`}>
+                  <tr role="row" key={r.id} className={cx(T.row, T.rowHover, T.stack.row)}>
+                    <td role="cell" className={cx(T.td, T.stack.main, "font-semibold")}>
                       {r.signedUp ? (
-                        <span className="flex items-center gap-2.5">
+                        <span className="flex min-w-0 items-center gap-2.5">
                           <PersonAvatar name={nameOf(r)} src={r.avatarUrl} />
-                          {nameOf(r).join(" ").trim() || r.email}
+                          <span className="truncate">{nameOf(r).join(" ").trim() || r.email}</span>
                         </span>
                       ) : (
-                        <Badge tone="amber">{t("admin.pending")}</Badge>
+                        // No name before the first sign-in: the card names the
+                        // grant by its address (the table has a column for it).
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="truncate font-normal text-fg-muted @md:hidden">{r.email}</span>
+                          <Badge tone="amber">{t("admin.pending")}</Badge>
+                        </span>
                       )}
                     </td>
-                    <td className={`${T.td} text-fg-muted`}>{r.email}</td>
-                    <td className={`${T.td} tabular-nums`}>
+                    <td role="cell"
+                      className={cx(
+                        T.td,
+                        T.stack.sub,
+                        "text-fg-muted @max-md:max-w-full @max-md:truncate",
+                        !r.signedUp && "@max-md:hidden",
+                      )}
+                    >
+                      {r.email}
+                    </td>
+                    <td role="cell" className={cx(T.td, T.stack.sub, "tabular-nums")}>
                       <span className="inline-flex items-center gap-1.5 text-fg-muted">
-                        <Library className="size-3.5" /> {r.courses}
+                        <Library aria-hidden className="size-3.5" />
+                        <span className={T.stack.label}>{t("admin.col.courses")}</span>
+                        {r.courses}
                       </span>
                     </td>
-                    <td className={`${T.td} whitespace-nowrap text-fg-muted`}>
+                    <td role="cell" className={cx(T.td, T.stack.sub, "whitespace-nowrap text-fg-muted")}>
+                      <span className={T.stack.label}>{t("admin.col.lastSignIn")}</span>
                       {r.lastLoginAt ? <RelativeTime iso={r.lastLoginAt} /> : "—"}
                     </td>
-                    <td className={`${T.td} whitespace-nowrap text-fg-muted`}>
+                    <td role="cell" className={cx(T.td, T.colLow, "whitespace-nowrap text-fg-muted")}>
                       <RelativeTime iso={r.grantedAt} />
                     </td>
                     {workspace ? (
-                      <td className={T.td}>
-                        {r.codespace ? <WorkspaceGrant id={r.id} email={r.email} admin={r.admin} grant={r.codespace} /> : "—"}
+                      <td role="cell" className={cx(T.td, T.stack.sub)}>
+                        {r.codespace ? (
+                          <span className="flex items-center gap-2">
+                            <span className={T.stack.label}>{t("admin.col.workspace")}</span>
+                            <WorkspaceGrant id={r.id} email={r.email} admin={r.admin} grant={r.codespace} />
+                          </span>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                     ) : null}
-                    <td className={`${T.td} text-right`}>
-                      <IconButton
-                        label={t("admin.revoke")}
-                        danger
-                        disabled={revoke.isPending}
-                        onClick={async () => {
-                          if (
-                            await confirm({
-                              // The administrator keeps their role: only the quota goes back to the default.
-                              title: t(r.admin ? "admin.revokeQuotaConfirm" : "admin.revokeConfirm", { email: r.email }),
-                              confirmLabel: t("admin.revoke"),
-                              danger: true,
-                            })
-                          ) {
-                            revoke.mutate(r.id);
-                          }
-                        }}
-                      >
-                        <Trash2 />
-                      </IconButton>
+                    <td role="cell" className={cx(T.td, T.stack.end, "text-right")}>
+                      <RowActions
+                        label={t("common.rowActions", { name: r.email })}
+                        items={[
+                          {
+                            label: t("admin.revoke"),
+                            icon: Trash2,
+                            danger: true,
+                            disabled: revoke.isPending,
+                            onSelect: async () => {
+                              if (
+                                await confirm({
+                                  // The administrator keeps their role: only the quota goes back to the default.
+                                  title: t(r.admin ? "admin.revokeQuotaConfirm" : "admin.revokeConfirm", {
+                                    email: r.email,
+                                  }),
+                                  confirmLabel: t("admin.revoke"),
+                                  danger: true,
+                                })
+                              ) {
+                                revoke.mutate(r.id);
+                              }
+                            },
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 ))}
