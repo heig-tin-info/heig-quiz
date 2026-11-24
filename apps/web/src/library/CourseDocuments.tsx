@@ -13,7 +13,10 @@
  * and its preview, download, rename and delete. The preview (its title, or
  * the first row action) opens the document viewer in the expand layer
  * (`DocumentPreview`), unless the file is missing. A delete is offered to
- * the uploader and to an owner of the course, as the server allows.
+ * the uploader and to an owner of the course, as the server allows; while
+ * an evaluation not yet over or a template provides the document (ADR-144
+ * §7) the server refuses it, and the toast names them. Each row says where
+ * it is provided.
  */
 import { AlertTriangle, Download, Eye, FileCode2, FileText, Pencil, Trash2, X } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
@@ -22,14 +25,16 @@ import {
   DOCUMENT_ACCEPT,
   DOCUMENT_TITLE_MAX,
   DOCUMENTS_QUOTA_LIMIT_BYTES,
+  DocumentInUse,
   type CourseDocument,
   type CourseLibrary,
+  type DocumentUse,
 } from "@quiz/contracts";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { useMe } from "../api";
+import { ApiError, refusalCodeOf, useMe } from "../api";
 import { useConfirm } from "../confirm";
-import { formatBytes, useI18n, useT } from "../i18n";
+import { formatBytes, useI18n, useT, type TFunction } from "../i18n";
 import type { WarningWords } from "../journal/words";
 import { warningText } from "../journal/words";
 import { useErrorToast, useToast } from "../notify";
@@ -315,6 +320,11 @@ const DOCUMENT_WARNINGS: WarningWords = {
   asset_too_large: (w, t) => t("courses.docs.warning.target", { href: w.href }),
 };
 
+/** Where a document is provided, by title, a template said so: "Quiz 1, Final exam (template)". */
+function usesText(uses: readonly DocumentUse[], t: TFunction): string {
+  return uses.map((use) => (use.template ? t("courses.docs.usedBy.template", { title: use.title }) : use.title)).join(", ");
+}
+
 function DocumentRow({ courseId, document }: { courseId: string; document: CourseDocument }) {
   const t = useT();
   const { locale } = useI18n();
@@ -337,7 +347,12 @@ function DocumentRow({ courseId, document }: { courseId: string; document: Cours
     if (ok) {
       remove.mutate(document.id, {
         onSuccess: () => toast(t("courses.docs.deleted"), "success"),
-        onError: toastError("error.save"),
+        onError: (error) => {
+          // ADR-144 §7: what still provides it, by title.
+          const inUse = refusalCodeOf(error) === "document_in_use" && error instanceof ApiError ? DocumentInUse.safeParse(error.body) : null;
+          if (inUse?.success) toast(t("courses.docs.inUse", { list: usesText(inUse.data.evaluations, t) }), "error");
+          else toastError("error.save")(error);
+        },
       });
     }
   };
@@ -371,6 +386,11 @@ function DocumentRow({ courseId, document }: { courseId: string; document: Cours
           {document.uploadedBy.name} · <RelativeTime iso={document.uploadedAt} />
         </p>
         <p className="truncate text-xs text-fg-faint">{document.filename}</p>
+        {document.usedBy.length > 0 ? (
+          <p className="text-[13px] text-fg-muted [overflow-wrap:anywhere]">
+            {t("courses.docs.usedBy", { list: usesText(document.usedBy, t) })}
+          </p>
+        ) : null}
         {document.missing ? <p className="text-[13px] text-fg-muted">{t("courses.docs.missing.hint")}</p> : null}
         {document.warnings.length > 0 ? (
           <ul className="space-y-0.5 text-[13px] text-fg-muted">

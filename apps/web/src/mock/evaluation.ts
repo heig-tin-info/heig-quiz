@@ -1,5 +1,5 @@
 /** Section 3 of the mock — see `index.ts` for the layout. */
-import { countsAsCompleted,
+import { countsAsCompleted, providedDocumentsAllowedFor,
   trustedClientsOf,
   evaluationDeletionRole,
   evaluationTotal,
@@ -39,7 +39,17 @@ import type {
   LobbyName,
   McqScorePolicy,
 } from "@quiz/domain";
-import { FeedbackPolicy, TemplatePatch, type DashboardAccess, type EvaluationExports, type IntegrityIncident } from "@quiz/contracts";
+import {
+  FeedbackPolicy,
+  TemplatePatch,
+  type DashboardAccess,
+  type DocumentUse,
+  type EvaluationExports,
+  type IntegrityIncident,
+} from "@quiz/contracts";
+import { MOCK_PROVIDED } from "./documentIds";
+// A cycle of functions only: `library.ts` reads the selections back (`usedBy`).
+import { mockProvided } from "./library";
 import {
   D,
   H,
@@ -472,6 +482,8 @@ export interface MockEvaluation {
   /** The template it was made from, and the revision its questions came from (ADR-031). */
   originTemplateId: string | null;
   originRevision: number | null;
+  /** ADR-144 §7: the ids of its course's documents it provides, in their order. */
+  documents: string[];
   items: MockItem[];
   rows: MockRowState[];
   present: number;
@@ -662,6 +674,7 @@ export function makeEvaluation(
     createdAt: iso(-10 * D),
     originTemplateId: null,
     originRevision: null,
+    documents: [],
     items: [],
     rows: [],
     present: 0,
@@ -736,6 +749,8 @@ function seedEvaluations() {
   evaluations.push(
     // ADR-079: the draft exam announces its conditions (the editor's screenshot).
     makeEvaluation(room.id, "Quiz 1 — variables et types", "draft", 4, {
+      // ADR-144 §7: two of PRG1's documents provided.
+      documents: [...MOCK_PROVIDED],
       // The first two were ticked in PRG1's catalog (F-ORG-16); the rest are one-off.
       settings: {
         ...defaultEvaluationSettings(),
@@ -751,6 +766,7 @@ function seedEvaluations() {
     }),
     makeEvaluation(room.id, "Quiz 4 — chaînes", "lobby", 8),
     makeEvaluation(room.id, "Quiz 3 — pointeurs et tableaux", "running", 10, {
+      documents: [MOCK_PROVIDED[0]],
       startedAt: iso(-13 * 60_000),
       closesAt: iso(12 * 60_000),
     }),
@@ -1129,7 +1145,12 @@ const evaluationDetail = (e: MockEvaluation) => ({
   templateRevision: templateRevisionOf(e),
   courseId: rooms.find((r) => r.id === e.classroomId)?.courseId ?? "",
   exports: exportsOf(e),
+  documents: mockProvided(mockCourseOf(e), e.documents),
 });
+
+/** The course of an evaluation, or of a template's shell (which no classroom holds). */
+export const mockCourseOf = (e: MockEvaluation): string =>
+  rooms.find((r) => r.id === e.classroomId)?.courseId ?? templates.find((x) => x.shell === e)?.courseId ?? "";
 
 /**
  * Like the server's `printRefusal` (ADR-125 §5). This set MIRRORS the
@@ -1408,6 +1429,7 @@ on("PATCH", "/app/api/evaluations/:id", (m, body) => {
     });
   }
   assertConfigPatch(e, body);
+  assertDocuments(roomOr404(e.classroomId).courseId, body);
   applyConfigPatch(e, body);
   if ("opensAt" in body) e.opensAt = body.opensAt as string | null;
   if ("closesAt" in body) e.closesAt = body.closesAt as string | null;
@@ -1419,6 +1441,10 @@ on("PATCH", "/app/api/evaluations/:id", (m, body) => {
  * (F-EVAL-15, F-EVAL-11): an evaluation's and a template's alike.
  */
 function assertConfigPatch(e: MockEvaluation, body: Record<string, unknown>): void {
+  // ADR-144 §7: a poll provides no documents, an empty list excepted.
+  if (Array.isArray(body.documents) && body.documents.length > 0 && !providedDocumentsAllowedFor(e.mode)) {
+    throw new MockPayload(422, { error: "documents_not_allowed", message: "a poll provides no documents (ADR-144)" });
+  }
   const settings = body.settings as
     | { lobby?: LobbyName; retakes?: { enabled?: boolean } }
     | undefined;
@@ -1459,9 +1485,41 @@ function assertConfigPatch(e: MockEvaluation, body: Record<string, unknown>): vo
   }
 }
 
+/** ADR-144 §7: every selected document is one of the course's, else the server's `422 document_unknown`. */
+function assertDocuments(courseId: string, body: Record<string, unknown>): void {
+  if (!Array.isArray(body.documents)) return;
+  const known = new Set(mockProvided(courseId, body.documents as string[]).map((d) => d.id));
+  if ((body.documents as string[]).some((id) => !known.has(id))) {
+    throw new MockPayload(422, { error: "document_unknown", message: "a selected document is not in this course's library" });
+  }
+}
+
+/**
+ * ADR-144 §7: the evaluations and templates that provide a document — what
+ * the library mock's `usedBy` and its delete refusal read.
+ */
+export function mockDocumentUses(documentId: string): DocumentUse[] {
+  return [
+    ...evaluations
+      .filter((e) => e.documents.includes(documentId))
+      .map((e) => ({ evaluationId: e.id, title: e.title, state: e.state, template: false })),
+    ...templates
+      .filter((x) => x.shell.documents.includes(documentId))
+      .map((x) => ({ evaluationId: x.id, title: x.shell.title, state: "draft" as const, template: true })),
+  ];
+}
+
+/** A deleted document leaves every selection, by the database's cascade. */
+export function dropMockDocument(documentId: string): void {
+  for (const e of [...evaluations, ...templates.map((x) => x.shell)]) {
+    e.documents = e.documents.filter((id) => id !== documentId);
+  }
+}
+
 /** The fields an evaluation and a template share, written. */
 function applyConfigPatch(e: MockEvaluation, body: Record<string, unknown>): void {
   if (typeof body.title === "string") e.title = body.title;
+  if (Array.isArray(body.documents)) e.documents = [...(body.documents as string[])];
   // ADR-092: only the forced consequences, no preset (the server's rule).
   const modeChanged = typeof body.mode === "string" && body.mode !== e.mode; // the single no-op exemption
   const from = e.mode;
@@ -1500,6 +1558,8 @@ on("POST", "/app/api/evaluations/:id/duplicate", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
   const copy = makeEvaluation(e.classroomId, String(body.title), "draft", e.items.length, {
     mode: e.mode,
+    // ADR-144 §7: within the course, the selection is copied.
+    documents: [...e.documents],
   });
   evaluations.push(copy);
   columnSettingsCopy.of(e.id, copy.id);
@@ -1547,6 +1607,7 @@ function makeTemplate(courseId: string, source: MockEvaluation): MockTemplate {
     rows: [],
     present: 0,
     items: source.items.map((item) => ({ ...item, id: uuid() })),
+    documents: [...source.documents],
   };
   return { id: shell.id, courseId, revision: 1, shell };
 }
@@ -1584,6 +1645,7 @@ export const templateDetail = (x: MockTemplate) => {
     },
     items: e.items.map((i) => ({ ...itemRow(i), poolUnlinked: !inLinkedPool(i, x.courseId) })),
     ...itemListFacts(e),
+    documents: mockProvided(x.courseId, e.documents),
   };
 };
 
@@ -1664,6 +1726,7 @@ function instantiate(
     feedbackPolicy: template.shell.feedbackPolicy,
     mcqPolicy: template.shell.mcqPolicy,
     durationS: template.shell.durationS,
+    documents: [...template.shell.documents],
     originTemplateId: template.id,
     originRevision: template.revision,
     ...extra,
@@ -1919,6 +1982,7 @@ const contentOf = (e: MockEvaluation) =>
     e.feedbackPolicy,
     e.mcqPolicy,
     e.durationS,
+    e.documents,
   ]);
 
 /** One write to a template, moving the revision once when the content moved. */
@@ -1957,6 +2021,7 @@ on("PATCH", "/app/api/templates/:id", (m, body) =>
     const parsed = TemplatePatch.safeParse(body);
     if (!parsed.success) throw new MockError(400, parsed.error.message);
     assertConfigPatch(e, body);
+    assertDocuments(templateOr404(m.groups!.id!).courseId, body);
     applyConfigPatch(e, body);
   }),
 );

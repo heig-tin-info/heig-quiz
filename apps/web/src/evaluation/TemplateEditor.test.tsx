@@ -68,6 +68,7 @@ function detail(over: Partial<TemplateDetail> = {}): TemplateDetail {
     totalPoints: items.length,
     staleItems: items.filter((i) => i.id === stale.id).map((i) => i.id),
     editableQuestionIds: items.map((i) => i.questionId),
+    documents: [],
     ...over,
   };
 }

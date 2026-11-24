@@ -41,6 +41,7 @@ export function Harness({
       disabled={disabled}
       feedbackDisabled={false}
       holdsCategorize={holdsCategorize}
+      documents={{ courseId: detail.courseId, selected: detail.documents }}
     />
   );
 }

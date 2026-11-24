@@ -23,7 +23,8 @@ import type {
 import { AI_KEY, JUSTIFICATION_KEY, evaluationConditionsOf } from "@quiz/contracts";
 import { evaluationTotal, gradeFromPoints, placeIntros, round2, sectionedOrder } from "@quiz/domain";
 
-import { evaluationOr404, itemQuestion, templateOr404, type MockEvaluation } from "./evaluation";
+import { evaluationOr404, itemQuestion, mockCourseOf, templateOr404, type MockEvaluation } from "./evaluation";
+import { mockProvided } from "./library";
 import { frozenConfig, solutionOf, studentSolutionOf, studentView, tryAnswer } from "./pool";
 import { MockError, flags, on } from "./runtime";
 
@@ -62,6 +63,8 @@ export function viewOf(e: MockEvaluation, seed: number): AttemptView {
   const nowIso = new Date().toISOString();
   const ordered = orderOf(e, seed);
   const placed = placeIntros(e.items, ordered, (i) => i);
+  // ADR-144 §7: the staff's preview lists the selection, as the server's does.
+  const documents = mockProvided(mockCourseOf(e), e.documents);
   return {
     attempt: {
       id: PREVIEW_ATTEMPT_ID,
@@ -80,7 +83,9 @@ export function viewOf(e: MockEvaluation, seed: number): AttemptView {
       durationS: e.durationS,
       closesAt: e.closesAt,
       timeBonusPercent: 0,
+      documentCount: documents.length,
     }),
+    documents,
     evaluation: {
       id: e.id,
       title: e.title,

@@ -27,7 +27,7 @@ export function lobbyPreviewView(detail: EvaluationDetail): LobbyScreenView {
       state: "lobby",
     },
     // ADR-079: the same builder the server uses, for a student with no extra time.
-    conditions: evaluationConditionsOf({ ...evaluation, timeBonusPercent: 0 }),
+    conditions: evaluationConditionsOf({ ...evaluation, timeBonusPercent: 0, documentCount: detail.documents.length }),
   };
 }
 

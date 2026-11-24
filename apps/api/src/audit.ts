@@ -161,7 +161,9 @@ export type AuditAction =
    * subject the course, `payload.documentId`, `payload.title`,
    * `payload.kind` (`pdf` | `markdown`) and `payload.bytes`. `rename` adds
    * `payload.from`, the title before. An upload of bytes the course already
-   * holds changes nothing and is not traced.
+   * holds changes nothing and is not traced. `delete` adds
+   * `payload.evaluations`, the finished evaluations whose selection of it
+   * went with it (ADR-144 §7), when there were any.
    */
   | "course.document_upload"
   | "course.document_rename"

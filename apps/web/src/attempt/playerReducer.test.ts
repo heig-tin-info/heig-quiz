@@ -56,6 +56,7 @@ function view(
 ): AttemptView {
   return {
     conditions: { announced: [], imposed: [] },
+    documents: [],
     attempt: {
       id: "a1",
       state: "in_progress",

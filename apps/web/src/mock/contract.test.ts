@@ -296,6 +296,12 @@ const CHECKED: Case[] = [
     `/app/api/courses/${courses[0]!.id}/documents/5b0c8a1e-2f7d-4c3a-9e61-0d4b7a2c1f02/html`,
     DocumentHtml,
   ),
+  // ADR-144 §7: the student's route of the same rendering.
+  one(
+    "/app/api/attempts/:id/documents/:documentId/html",
+    "/app/api/attempts/22222222-2222-4222-8222-222222222222/documents/5b0c8a1e-2f7d-4c3a-9e61-0d4b7a2c1f02/html",
+    DocumentHtml,
+  ),
   one(
     "/app/api/courses/:id/staff/candidates",
     `/app/api/courses/${courses[0]!.id}/staff/candidates?q=a`,
@@ -698,6 +704,7 @@ const UNCHECKED = [
   "/app/api/evaluations/:id/results/attempts/:attemptId/copy.pdf", // a PDF file
   "/app/api/attempts/:id/copy.pdf", // a PDF file
   "/app/api/courses/:id/documents/:documentId/file", // a document's bytes (a PDF, or the Markdown source)
+  "/app/api/attempts/:id/documents/:documentId/file", // a provided PDF's bytes (ADR-144 §7)
   "/app/api/student/evaluations/:id/handout.pdf", // a PDF file
   "/app/api/me", // Me
   "/app/api/courses", // CourseSummary[]

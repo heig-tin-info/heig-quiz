@@ -97,6 +97,7 @@ import { PlayerQuestion, QuestionHeading } from "./PlayerQuestion";
 import { PlayerRail } from "./PlayerRail";
 import { BatteryClock } from "./BatteryClock";
 import { PlayerShell } from "./PlayerShell";
+import { attemptDocumentRoutes, type PlayerDocuments } from "./DocumentsPanel";
 import { PlayerTools } from "./PlayerTools";
 import { isAnswered, isWide } from "./QuestionHost";
 import { FlagButton, QuestionTools } from "./QuestionTools";
@@ -274,6 +275,12 @@ export function Player({
       <PlayerView
         initial={initial}
         session={session}
+        // ADR-144 §7: the list of the latest attempt view, read through the attempt's routes.
+        documents={{
+          list: (attempt.view ?? initial).documents,
+          routes: attemptDocumentRoutes(attemptId),
+          onGone: () => void attempt.query.refetch(),
+        }}
         onHome={() => void leave()}
         homeBusy={leaving}
         onResults={onResults}
@@ -297,9 +304,12 @@ export function PlayerView({
   finish,
   homeBusy = false,
   confinement,
+  documents,
 }: {
   initial: AttemptView;
   session: PlayerSession;
+  /** ADR-144 §7: the documents the attempt may read, and where; absent where there are none to read. */
+  documents?: PlayerDocuments | undefined;
   /**
    * The hand-in's words where it is not a student's (ADR-125: a paper copy
    * a staff member hands in): the bar's button and the dialog's title and
@@ -638,6 +648,8 @@ export function PlayerView({
           preview={initial.attempt.preview === true}
           navigation={state.navigation}
           items={state.items}
+          documents={documents}
+          paused={paused}
         />
       </PlayerShell>
       {conditionsOpen ? (

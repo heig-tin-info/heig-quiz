@@ -437,7 +437,7 @@ export async function enterEvaluation(
   // must be able to reopen the page and see what they submitted.
   if (!open && existing === null) throw new LiveError("not_open");
   if (existing === null && evaluation.state === "running" && !start) {
-    return { kind: "ready", view: readyView(evaluation, participant), attempt: null };
+    return { kind: "ready", view: await readyView(db, evaluation, participant), attempt: null };
   }
 
   let attempt = existing ?? (await ensureAttempt(db, evaluation, participant, now));

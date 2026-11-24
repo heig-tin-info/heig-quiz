@@ -109,6 +109,6 @@ export type ConfigView = Pick<
  * gives one for either target.
  */
 export interface ConfigPatch {
-  mutate(body: TemplatePatch, options?: { onSuccess?: () => void }): void;
+  mutate(body: TemplatePatch, options?: { onSuccess?: () => void; onError?: (error: unknown) => void }): void;
   readonly error: unknown;
 }

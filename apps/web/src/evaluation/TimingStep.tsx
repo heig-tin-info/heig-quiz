@@ -6,6 +6,7 @@ import {
   TransitionRefusal,
   type EvaluationDetail,
   type EvaluationPatch,
+  type ProvidedDocument,
 } from "@quiz/contracts";
 import {
   clockChoiceOf,
@@ -233,6 +234,7 @@ export function ConfigSettings({
   feedbackExtra,
   windowSet = false,
   gradebook,
+  documents,
 }: {
   config: ConfigView;
   /** The course of the evaluation or the template: its catalog of conditions (F-ORG-16). */
@@ -259,6 +261,8 @@ export function ConfigSettings({
    * the advanced options. Its own writer, live whatever `disabled` says.
    */
   gradebook?: ReactNode;
+  /** ADR-144 §7: the documents it provides, in their order — counted in the conditions, chosen in the advanced options. */
+  documents: readonly ProvidedDocument[];
 }) {
   const t = useT();
   const { settings, durationS, mode } = config;
@@ -365,7 +369,14 @@ export function ConfigSettings({
 
       {/* ADR-079: an exam or an exercise announces its conditions; a poll has none. */}
       {conditionsAllowedFor(mode) ? (
-        <ConditionsSetting config={config} courseId={courseId} closesAt={closesAt} patch={patch} disabled={disabled} />
+        <ConditionsSetting
+          config={config}
+          courseId={courseId}
+          closesAt={closesAt}
+          documentCount={documents.length}
+          patch={patch}
+          disabled={disabled}
+        />
       ) : null}
 
       <AdvancedDisclosure
@@ -376,6 +387,7 @@ export function ConfigSettings({
         holdsCategorize={holdsCategorize}
         feedbackExtra={feedbackExtra}
         windowSet={windowSet}
+        documents={{ courseId, selected: documents }}
       />
     </>
   );
@@ -533,6 +545,7 @@ export function TimingStep({
       <ConfigSettings
         config={detail.evaluation}
         courseId={detail.courseId}
+        documents={detail.documents}
         patch={patch}
         summary={summary}
         disabled={locked}

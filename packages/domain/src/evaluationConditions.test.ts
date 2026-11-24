@@ -15,6 +15,7 @@ const base = (over: Partial<ConditionsInput> = {}, settings: Partial<ConditionsI
   durationS: null,
   closesAt: null,
   timeBonusPercent: 0,
+  documentCount: 0,
   ...over,
   settings: { navigation: "free", timing: "manual", logVisibility: false, ...settings },
 });
@@ -81,6 +82,19 @@ describe("imposedConditions (ADR-079)", () => {
     ]);
     expect(keys(base({}, { notepad: "none" }))).not.toContain("notepad");
     expect(keys(base({ mode: "poll" }, { notepad: "provided" }))).toEqual([]);
+  });
+
+  it("counts the documents provided after the notepad, nothing for none, and never on a poll (ADR-144 §7)", () => {
+    expect(
+      imposedConditions(base({ documentCount: 3 }, { calculator: "standard", notepad: "provided_no_clipboard" })).slice(0, 4),
+    ).toEqual([
+      { key: "calculator", kind: "provided", calculator: "standard" },
+      { key: "notepad", kind: "provided" },
+      { key: "notepad_no_clipboard", kind: "provided" },
+      { key: "documents", kind: "provided", count: 3 },
+    ]);
+    expect(keys(base({ documentCount: 0 }))).not.toContain("documents");
+    expect(keys(base({ mode: "poll", documentCount: 2 }))).toEqual([]);
   });
 
   it("states the duration with the student's bonus, or the deadline", () => {

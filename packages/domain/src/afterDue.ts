@@ -61,6 +61,12 @@ export interface PracticePolicy {
   practiceFeedsDrill: boolean;
   /** The blank print of the series is offered (ADR-112 amendment of 2026-11-03); never where `needsTaken`. */
   printable: boolean;
+  /**
+   * A practice attempt reads the documents the evaluation provides (ADR-144
+   * §7): an exercise's does; an exam's blank practice after the release
+   * does not — its documents were the sitting's.
+   */
+  providesDocuments: boolean;
 }
 
 export const PRACTICE_BY_MODE: Record<EvaluationModeName, PracticePolicy | null> = {
@@ -74,6 +80,7 @@ export const PRACTICE_BY_MODE: Record<EvaluationModeName, PracticePolicy | null>
     ignoresSittingConditions: false,
     practiceFeedsDrill: true,
     printable: true,
+    providesDocuments: true,
   },
   exam: {
     defaultOpen: false,
@@ -85,6 +92,7 @@ export const PRACTICE_BY_MODE: Record<EvaluationModeName, PracticePolicy | null>
     ignoresSittingConditions: true,
     practiceFeedsDrill: false,
     printable: false,
+    providesDocuments: false,
   },
   poll: null,
 };
@@ -180,6 +188,11 @@ export function practiceFeedsDrill(mode: EvaluationModeName): boolean {
 /** Whether a practice of this mode leaves the sitting's trusted clients and IP allow-list aside (ADR-142 §4). */
 export function practiceIgnoresSittingConditions(mode: EvaluationModeName): boolean {
   return practicePolicyOf(mode)?.ignoresSittingConditions === true;
+}
+
+/** Whether a practice attempt of this mode reads the evaluation's provided documents (ADR-144 §7). */
+export function practiceProvidesDocuments(mode: EvaluationModeName): boolean {
+  return practicePolicyOf(mode)?.providesDocuments === true;
 }
 
 /** How long a practice attempt lasts when the exercise has no time limit of its own: 8 hours. */

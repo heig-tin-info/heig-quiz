@@ -37,6 +37,9 @@ export const SITTING_ROUTES = new Set([
   "POST /app/api/attempts/:id/events",
   "POST /app/api/attempts/:id/run",
   "POST /app/api/attempts/:id/simulate",
+  // ADR-144 §7: the documents the evaluation provides, read while sitting it.
+  "GET /app/api/attempts/:id/documents/:documentId/file",
+  "GET /app/api/attempts/:id/documents/:documentId/html",
 ]);
 
 /** A route's path with its parameters filled by a well-formed id nobody holds. */

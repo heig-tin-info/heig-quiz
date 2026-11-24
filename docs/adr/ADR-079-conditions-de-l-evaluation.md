@@ -26,6 +26,13 @@ Amended 2026-10-09 by [ADR-090](ADR-090-calepin-fourni.md): §2 only — two
 imposed lines after the calculator's, both *provided*: the notepad, and
 that copy and paste are disabled in it when they are.
 
+Amended 2026-11-24 by [ADR-144](ADR-144-documents-fournis.md) §7: §2 only —
+one more imposed line of kind *provided*, after the notepad's: the number of
+documents of the course's library the evaluation provides (`documents`,
+`count`), never their titles. The selection is a join table, not a setting,
+so the derivation takes one more input, `documentCount`, from every caller;
+an exam's blank practice (ADR-142) counts none.
+
 Scope: `EvaluationSettings.conditions`, the derivation `imposedConditions`
 (`packages/domain/src/evaluationConditions.ts`), the student views that carry
 `EvaluationConditions` (waiting room, ready screen, attempt, and for a

@@ -20,6 +20,11 @@
  * open through `open`/`onOpenChange`, so one panel shows at a time. Every
  * panel rises above the whole stack.
  *
+ * A host that opens something of its own rather than a floating panel (the
+ * player's documents, ADR-144 §7) takes the button alone, `ToolDockButton`,
+ * in its slot of the stack. `--tool-dock-inset` moves the whole stack left
+ * of a column the page keeps on its right (the documents' split view).
+ *
  * `sheetOnPhone` (the help assistant, #450, #849): on a phone
  * (`usePhoneScreen`: held upright, or in landscape) a floating panel is the
  * window less its margins, or a few lines between the top bar and the docks,
@@ -41,6 +46,7 @@ import {
   type ComponentType,
   type CSSProperties,
   type ReactNode,
+  type Ref,
 } from "react";
 
 import { cx } from "@quiz/ui";
@@ -50,6 +56,8 @@ import { useLayer, usePhoneScreen, useScrollLock, Z } from "./layers";
 /** A dock's place in a group (ADR-090): what the group's owner hands each tool. */
 export interface ToolDockSeat {
   slot: number;
+  /** What the stack sits above (a footer, a bottom bar), a CSS length. */
+  offset: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -163,7 +171,8 @@ export function ToolDock({
                   Z.modal,
                 )
               : cx(
-                  "right-4 max-w-[calc(100vw-2rem)] rounded-sheet border sm:right-6",
+                  "max-w-[calc(100vw-var(--tool-dock-inset,0px)-2rem)] rounded-sheet border",
+                  DOCK_RIGHT,
                   panelClassName,
                   Z.tool,
                 ),
@@ -172,23 +181,71 @@ export function ToolDock({
           {children(close, titleId)}
         </section>
       ) : null}
-      <button
-        ref={trigger}
-        type="button"
-        aria-label={open ? closeLabel : openLabel}
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
+      <DockButton
+        buttonRef={trigger}
+        icon={Icon}
+        label={open ? closeLabel : openLabel}
+        pressed={open}
+        controls={open ? panelId : undefined}
         onClick={() => (open ? close() : setOpen(true))}
-        style={{ bottom: `calc(${offset} + 1rem + ${slot} * var(--tool-dock-step))` }}
-        className={cx(
-          "fixed right-4 inline-flex size-12 items-center justify-center rounded-full border shadow-popover transition-[background-color,transform] duration-120 active:scale-[0.97] sm:right-6",
-          // Open, the neutral ink fill of a pressed toggle (`ToggleChip`'s): never the accent.
-          open ? "border-fg bg-fg text-surface" : "border-line bg-surface text-fg hover:bg-surface-2",
-          Z.tool,
-        )}
-      >
-        <Icon className="size-5" aria-hidden />
-      </button>
+        offset={offset}
+        slot={slot}
+      />
+    </div>
+  );
+}
+
+/** The stack's right edge: the gutter, plus a column the page keeps on its right. */
+const DOCK_RIGHT = "right-[calc(var(--tool-dock-inset,0px)+1rem)] sm:right-[calc(var(--tool-dock-inset,0px)+1.5rem)]";
+
+interface DockButtonProps {
+  icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  label: string;
+  /** What it opened is open: the button is a pressed toggle. */
+  pressed: boolean;
+  /** The id of what it opened, while it is open. */
+  controls?: string | undefined;
+  onClick: () => void;
+  offset: string;
+  slot: number;
+  buttonRef?: Ref<HTMLButtonElement>;
+}
+
+function DockButton({ icon: Icon, label, pressed, controls, onClick, offset, slot, buttonRef }: DockButtonProps) {
+  return (
+    <button
+      ref={buttonRef}
+      type="button"
+      aria-label={label}
+      aria-expanded={pressed}
+      aria-controls={controls}
+      onClick={onClick}
+      style={{ bottom: `calc(${offset} + 1rem + ${slot} * var(--tool-dock-step))` }}
+      className={cx(
+        "fixed inline-flex size-12 items-center justify-center rounded-full border shadow-popover transition-[background-color,transform,right] duration-120 active:scale-[0.97]",
+        DOCK_RIGHT,
+        // Open, the neutral ink fill of a pressed toggle (`ToggleChip`'s): never the accent.
+        pressed ? "border-fg bg-fg text-surface" : "border-line bg-surface text-fg hover:bg-surface-2",
+        Z.tool,
+      )}
+    >
+      <Icon className="size-5" aria-hidden />
+    </button>
+  );
+}
+
+/**
+ * The button of a dock alone, in its slot of the stack: for a tool that
+ * opens something of its own (the player's documents panel, ADR-144 §7)
+ * rather than a floating panel above the stack.
+ */
+export function ToolDockButton({
+  dockProps,
+  ...props
+}: DockButtonProps & { dockProps?: Record<`data-${string}`, string | boolean> }) {
+  return (
+    <div data-tool-dock data-tool-dock-slot={props.slot} {...dockProps}>
+      <DockButton {...props} />
     </div>
   );
 }

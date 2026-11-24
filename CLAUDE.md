@@ -104,6 +104,13 @@ Never work around these, not even "temporarily".
    (N-SEC-12, N-SEC-13). Tested by a draft, a future page and an asset
    referenced by them only, searched for in every student response, for
    each student caller (05 §5.7).
+   **A course's document reaches a student only through the student view
+   of the `library` module** (ADR-144 §7): one the evaluation of their own
+   attempt selected, while the read rule holds (`providedDocumentsReadable`);
+   its title, kind and bytes or HTML, nothing else. The conditions state
+   their number only (ADR-079). Tested by a document not selected, another
+   course's, an exam's practice attempt and a closed attempt, for each
+   student caller (05 §5.7).
 5. **The server owns the clock.** A deadline is closed by the ticker, never
    by a client. The receipt time of a write is the server's, never the
    browser's. A write arriving after `deadline + 3 s` is refused with

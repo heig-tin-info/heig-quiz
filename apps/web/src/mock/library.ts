@@ -21,10 +21,14 @@ import {
   type CourseDocument,
   type CourseLibrary,
   type DocumentHtml,
+  type ProvidedDocument,
 } from "@quiz/contracts";
+import { isEvaluationOver } from "@quiz/domain";
 
 import { renderStandalone } from "@quiz/docrender";
 
+import { AIDE_MEMOIRE_ID, FORMULAIRE_ID } from "./documentIds";
+import { dropMockDocument, mockDocumentUses } from "./evaluation";
 import { courseOr404, ME_TEACHER, myRoleOn } from "./org";
 import { D, flags, H, iso, MockError, on, refuse } from "./runtime";
 import markdownSample from "./samples/aide-memoire.md?raw";
@@ -40,12 +44,13 @@ const doc = (over: Partial<CourseDocument> & Pick<CourseDocument, "id" | "title"
   warnings: [],
   missing: false,
   canDelete: true,
+  usedBy: [],
   ...over,
 });
 
 const PRG1: CourseDocument[] = [
   doc({
-    id: "5b0c8a1e-2f7d-4c3a-9e61-0d4b7a2c1f01",
+    id: FORMULAIRE_ID,
     title: "Formulaire d'électronique",
     filename: "formulaire-electronique.pdf",
     kind: "pdf",
@@ -53,7 +58,7 @@ const PRG1: CourseDocument[] = [
     uploadedAt: iso(-3 * H),
   }),
   doc({
-    id: "5b0c8a1e-2f7d-4c3a-9e61-0d4b7a2c1f02",
+    id: AIDE_MEMOIRE_ID,
     title: "Aide-mémoire du langage C",
     filename: "aide-memoire.md",
     kind: "markdown",
@@ -107,7 +112,17 @@ const libraryOf = (courseId: string): MockLibrary =>
 const asRead = (courseId: string, d: CourseDocument): CourseDocument => ({
   ...d,
   canDelete: myRoleOn(courseId) === "owner" || d.uploadedBy.id === me.id,
+  usedBy: mockDocumentUses(d.id),
 });
+
+/** ADR-144 §7: the course's documents of a selection, in its order; an id of no document of the course is left out. */
+export function mockProvided(courseId: string, ids: readonly string[]): ProvidedDocument[] {
+  const documents = libraries[courseId]?.documents ?? [];
+  return ids.flatMap((id) => {
+    const d = documents.find((x) => x.id === id);
+    return d ? [{ id: d.id, title: d.title, kind: d.kind }] : [];
+  });
+}
 
 const documentOr404 = (m: RegExpMatchArray) => {
   const library = libraryOf(m.groups!.id!);
@@ -162,7 +177,13 @@ on("DELETE", "/app/api/courses/:id/documents/:documentId", (m) => {
   if (!asRead(m.groups!.id!, document).canDelete) {
     throw refuse(403, "owner_required", "Only an owner of this course may do that");
   }
+  // ADR-144 §7: a template or an evaluation not yet over holds it.
+  const holding = mockDocumentUses(document.id).filter((use) => use.template || !isEvaluationOver(use.state));
+  if (holding.length > 0) {
+    throw refuse(409, "document_in_use", "an evaluation or a template still provides this document", { evaluations: holding });
+  }
   library.documents.splice(library.documents.indexOf(document), 1);
+  dropMockDocument(document.id);
   return undefined;
 });
 
@@ -181,6 +202,47 @@ on("GET", "/app/api/courses/:id/documents/:documentId/file", async (m) => {
 on("GET", "/app/api/courses/:id/documents/:documentId/html", (m): DocumentHtml => {
   const { document } = documentOr404(m);
   if (document.kind !== "markdown") throw new MockError(404, "not_found");
+  const { html, toc } = renderStandalone(markdownSample);
+  return { html, toc };
+});
+
+/**
+ * The student's routes (ADR-144 §7): a document of PRG1's library the
+ * attempt reads, as the course's own routes serve it; anything else — and
+ * every document under `?empty=1` — the 404 of a missing one.
+ */
+const providedOr404 = (m: RegExpMatchArray, kind: CourseDocument["kind"]) => {
+  const found = [...libraryOf("c1").documents, ...extraDocuments()].find(
+    (d) => d.id === m.groups!.documentId && d.kind === kind && !("missing" in d && d.missing),
+  );
+  if (!found || flags.empty) throw new MockError(404, "not_found");
+  return found;
+};
+
+/** `?tendocs=1`: eight more sheets, so the student's exam provides ten (the strip of tabs). */
+const extraDocuments = (): ProvidedDocument[] =>
+  flags.tendocs
+    ? Array.from({ length: 8 }, (_, i) => ({
+        id: `5b0c8a1e-2f7d-4c3a-9e61-0d4b7a2c1e${String(i).padStart(2, "0")}`,
+        title: ["Table des transistors", "Normes de câblage", "Formulaire de trigonométrie", "Unités SI", "Codes couleur", "Table ASCII étendue", "Lois de Kirchhoff", "Fiche technique ZX-4711"][i]!,
+        kind: i % 3 === 2 ? ("markdown" as const) : ("pdf" as const),
+      }))
+    : [];
+
+/** The documents the mock's student exam provides (`student.ts`): two of PRG1's, ten under `?tendocs=1`. */
+export const mockStudentDocuments = (ids: readonly string[]): ProvidedDocument[] => [
+  ...mockProvided("c1", ids),
+  ...extraDocuments(),
+];
+on("GET", "/app/api/attempts/:id/documents/:documentId/file", async (m) => {
+  providedOr404(m, "pdf");
+  const bytes = await (await fetch(pdfSample)).arrayBuffer();
+  return new Response(bytes, {
+    headers: { "content-type": "application/pdf", "content-length": String(bytes.byteLength) },
+  });
+});
+on("GET", "/app/api/attempts/:id/documents/:documentId/html", (m): DocumentHtml => {
+  providedOr404(m, "markdown");
   const { html, toc } = renderStandalone(markdownSample);
   return { html, toc };
 });

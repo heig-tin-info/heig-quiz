@@ -68,7 +68,9 @@ import { mcqServer } from "@quiz/qt-mcq/server";
 import { pollOfTeacher, teacherPolls } from "./poll";
 import { hasMockJournal } from "./journal";
 import { hasStudentGroups, studentGroupSetCards } from "./groups";
+import { MOCK_PROVIDED } from "./documentIds";
 import { findEvaluation } from "./evaluation";
+import { mockStudentDocuments } from "./library";
 import { roomOr404, studentRooms } from "./org";
 import { me } from "./session";
 
@@ -562,7 +564,13 @@ export const studentConditions = (kiosk = false) =>
     durationS: 20 * 60,
     closesAt: null,
     timeBonusPercent: 33,
+    // ADR-144 §7: two of PRG1's documents, counted (none under `?empty=1`).
+    documentCount: flags.empty ? 0 : mockStudentDocuments(MOCK_PROVIDED).length,
   });
+
+/** What the student may read now (ADR-144 §7): the selection while the attempt runs, none otherwise. */
+const studentDocuments = () =>
+  flags.empty || scene === "closed" || scene === "paused" ? [] : mockStudentDocuments(MOCK_PROVIDED);
 
 /** What question n is worth. */
 const studentItemPoints = (n: number): number => (n === 4 ? 5 : n === 5 || n === 7 ? 3 : n === 3 ? 1 : 2);
@@ -572,6 +580,7 @@ const studentNumbers = (): number[] => (scene === "single" ? [1] : STUDENT_TYPES
 
 export const studentAttemptView = (): AttemptView => ({
   conditions: studentConditions(),
+  documents: studentDocuments(),
   attempt: {
     id: STUDENT_ATTEMPT,
     // `closed` is the deadline case of F-LIVE-07: the server expired the
@@ -1232,6 +1241,7 @@ const practiceReadyView = (id: string): ReadyView => ({
     durationS: 8 * 3600,
     closesAt: null,
     timeBonusPercent: 0,
+    documentCount: 0,
   }),
 });
 const practiceAttemptView = (): AttemptView => {

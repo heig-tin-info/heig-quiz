@@ -26,6 +26,8 @@ export interface Paper {
   editableQuestionIds: readonly string[];
   /** Why its item list is frozen, or null: a template never is (no attempt, never opened). */
   lock: ItemListLock | null;
+  /** Its course: the staff routes its documents are read from in the walk (ADR-144 §7). */
+  courseId: string;
 }
 
 export interface PreviewSubject extends PaperHome {
@@ -51,7 +53,7 @@ const SUBJECTS: Record<PreviewKind, (id: string) => PreviewSubject> = {
     copy: { back: "preview.backToEvaluation", notFound: "preview.notFound" },
     usePaper: () => {
       const data = useEvaluation(id).data;
-      return data && { ...data, lock: itemListLock(data.evaluation.state, data.attemptCount) };
+      return data && { ...data, lock: itemListLock(data.evaluation.state, data.attemptCount), courseId: data.courseId };
     },
   }),
   template: (id) => ({
@@ -61,7 +63,7 @@ const SUBJECTS: Record<PreviewKind, (id: string) => PreviewSubject> = {
     copy: { back: "preview.backToTemplate", notFound: "templates.notFound" },
     usePaper: () => {
       const data = useTemplate(id).data;
-      return data && { ...data, lock: null };
+      return data && { ...data, lock: null, courseId: data.template.courseId };
     },
   }),
 };

@@ -34,6 +34,7 @@ const URL = `/app/api/evaluations/${EVAL}/preview`;
 
 const view = (): AttemptView => ({
   conditions: { announced: [], imposed: [] },
+  documents: [],
   attempt: {
     id: "00000000-0000-4000-8000-000000000000",
     state: "in_progress",
@@ -665,6 +666,7 @@ describe("EvaluationPreviewPage — a template", () => {
       totalPoints: 3,
       staleItems: [],
       editableQuestionIds: ["q1", "q2"],
+      documents: [],
     };
   };
 

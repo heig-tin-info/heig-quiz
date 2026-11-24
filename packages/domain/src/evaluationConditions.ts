@@ -11,7 +11,8 @@
  *     platform itself ENFORCES or records (ADR-069 §2, generalised by
  *     ADR-079). A calculator set to `none` says nothing — Quiz forbids no
  *     other calculator, only a trusted client can (nor does a notepad set to
- *     `none` forbid paper, ADR-090) — and the network allowlist
+ *     `none` forbid paper, ADR-090; the documents an evaluation provides
+ *     are counted, ADR-144 §7) — and the network allowlist
  *     and the shuffles are left out: they are not the student's to act on.
  *     So is `requireFullscreen`: no player asks for full screen nor records
  *     leaving it yet, and a line saying so would state what is not true.
@@ -82,6 +83,7 @@ export type ImposedCondition =
   | { key: "calculator"; kind: "provided"; calculator: (typeof PROVIDED_CALCULATORS)[number] }
   | { key: "notepad"; kind: "provided" }
   | { key: "notepad_no_clipboard"; kind: "provided" }
+  | { key: "documents"; kind: "provided"; count: number }
   | { key: "duration"; kind: "info"; durationS: number; bonusPercent: number }
   | { key: "deadline"; kind: "info"; closesAt: string; bonusPercent: number }
   | { key: "attempts"; kind: "info"; maxAttempts: number | null }
@@ -117,6 +119,13 @@ export interface ConditionsInput {
    * attempt's are unlimited (`null`, ADR-122 §5), whatever the mode.
    */
   maxAttempts?: number | null | undefined;
+  /**
+   * How many documents of the course's library the evaluation provides
+   * (ADR-144 §7): a join table, not a setting, so the caller reads it. A
+   * count, never the titles; 0 where the attempt reads none (a blank
+   * practice of an exam).
+   */
+  documentCount: number;
 }
 
 type Line<K extends ImposedConditionKey> = Extract<ImposedCondition, { key: K }>;
@@ -146,6 +155,9 @@ const DERIVE: { [K in ImposedConditionKey]: (input: ConditionsInput) => Line<K> 
     notepadOn(mode, settings.notepad) === "provided_no_clipboard"
       ? { key: "notepad_no_clipboard", kind: "provided" }
       : null,
+  // ADR-144 §7: the documents the evaluation provides, after the notepad.
+  documents: ({ documentCount }) =>
+    documentCount > 0 ? { key: "documents", kind: "provided", count: documentCount } : null,
   duration: ({ settings, durationS, timeBonusPercent }) =>
     settings.timing === "duration" && durationS !== null && durationS > 0
       ? { key: "duration", kind: "info", durationS, bonusPercent: timeBonusPercent }

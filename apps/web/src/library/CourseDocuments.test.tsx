@@ -44,6 +44,7 @@ const pdf: CourseDocument = {
   warnings: [],
   missing: false,
   canDelete: true,
+  usedBy: [],
 };
 const sheet: CourseDocument = {
   ...pdf,
@@ -184,6 +185,31 @@ describe("the Documents tab", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
     await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
     expect(await screen.findByText("Document deleted")).toBeInTheDocument();
+  });
+
+  it("says where a document is provided, and names what refuses its delete (ADR-144 §7)", async () => {
+    const used: CourseDocument = {
+      ...pdf,
+      usedBy: [
+        { evaluationId: "0190d3c4-0000-7000-8000-0000000000f1", title: "Quiz 1", state: "draft", template: false },
+        { evaluationId: "0190d3c4-0000-7000-8000-0000000000f2", title: "Final exam", state: "draft", template: true },
+      ],
+    };
+    renderTab(ok(libraryOf([used])), {
+      [`DELETE ${URL_LIST}/${pdf.id}`]: fail(409, {
+        error: "document_in_use",
+        message: "in use",
+        evaluations: used.usedBy,
+      }),
+    });
+    expect(await screen.findByText("Provided by Quiz 1, Final exam (template)")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Actions" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Delete" }));
+    const dialog = await screen.findByRole("dialog", { name: "Delete document" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Delete" }));
+    expect(
+      await screen.findByText("Still provided by Quiz 1, Final exam (template). Remove it there first, or wait until they are over."),
+    ).toBeInTheDocument();
   });
 
   it("lets an administrator type the quota in, in MB", async () => {

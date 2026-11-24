@@ -26,7 +26,16 @@ import { markdownBody } from "@quiz/docexport/markdown";
 import { renderTypst } from "@quiz/docexport/typst";
 import { LOCALES } from "@quiz/domain";
 
-import { answers, auditLog, classrooms, enrollments, evaluations, questions } from "../../db/schema.js";
+import {
+  answers,
+  auditLog,
+  classrooms,
+  courseDocuments,
+  enrollments,
+  evaluationProvidedDocuments,
+  evaluations,
+  questions,
+} from "../../db/schema.js";
 import { type Payload, sessionOf, testServer, type TestServer } from "../../test/http.js";
 import { kioskStation } from "../../test/kiosk.js";
 import { reload, seedLive } from "../../test/live.js";
@@ -450,6 +459,29 @@ describe("the blank print of a past series (ADR-122 §9)", () => {
       for (const prompt of PROMPTS) expect(source).toContain(prompt);
       expect(new RegExp(`(?<![\\w-])${paperSeed}(?![\\w])`).test(source)).toBe(false);
     }
+  });
+
+  it("never loads nor carries the documents the series provides (ADR-144 §7)", async () => {
+    const db = server.app.db;
+    const seed = await pastSeries();
+    const [classroom] = await db.select().from(classrooms).where(eq(classrooms.id, seed.classroomId));
+    const documentId = randomUUID();
+    await db.insert(courseDocuments).values({
+      id: documentId,
+      courseId: classroom!.courseId,
+      title: "PROVIDED_DOCUMENT_TITLE",
+      filename: "provided.pdf",
+      kind: "pdf",
+      sha256: "f".repeat(64),
+      bytes: 10,
+      uploadedBy: teacher.id,
+    });
+    await db.insert(evaluationProvidedDocuments).values({ evaluationId: seed.evaluationId, documentId, position: 0 });
+    const found = await handout(db, await reload(db, seed.evaluationId), { now: server.clock.now() });
+    const printed = JSON.stringify(found) + JSON.stringify(handoutTree(found, "en"));
+    for (const secret of ["PROVIDED_DOCUMENT_TITLE", documentId, "provided.pdf"]) expect(printed).not.toContain(secret);
+    // The builder under it lists nothing unless the teacher's stateless preview asks.
+    expect((await live.previewView(db, await reload(db, seed.evaluationId), server.clock.now())).documents).toEqual([]);
   });
 
   it.skipIf(!pdfTools)("prints the statements in the paper's order, its text holding no secret and no seed", async () => {

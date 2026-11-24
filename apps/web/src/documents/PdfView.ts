@@ -66,12 +66,16 @@ export class PdfView implements DocView {
   #doc: PDFDocumentProxy | null = null;
   readonly #abort = new AbortController();
   #unwatch: (() => void) | null = null;
+  /** While a refit is under way, the spot it keeps the view on; null otherwise. */
+  #refit: PdfLocation | null = null;
   #destroyed = false;
 
   readonly #pageLabel: (page: number) => string;
+  readonly #onFailed: ((error: unknown) => void) | undefined;
 
-  constructor(url: string, { element, onChange, isActive, pageLabel }: ViewOptions, saved: PdfViewState) {
+  constructor(url: string, { element, onChange, isActive, pageLabel, onFailed }: ViewOptions, saved: PdfViewState) {
     this.#url = url;
+    this.#onFailed = onFailed;
     this.#pageLabel = pageLabel;
     this.#element = element;
     this.#onChange = onChange;
@@ -95,6 +99,7 @@ export class PdfView implements DocView {
       if (this.#destroyed) return;
       this.status = "failed";
       this.#onChange();
+      this.#onFailed?.(error);
       console.warn("document viewer: the PDF could not be loaded", error);
       return;
     }
@@ -157,9 +162,21 @@ export class PdfView implements DocView {
     eventBus.on("scalechanging", () => this.#onChange(), opts);
     eventBus.on("updateviewarea", ({ location }: { location: PdfLocation }) => {
       if (!this.#restored || !this.#isActive()) return;
+      // A refit under way: pdf.js lays the pages out again and scrolls on
+      // its own (to a page's top, a frame or more later) — back to the kept
+      // spot, as often as it moves away. A no-op once the view is there.
+      if (this.#refit) {
+        this.#location = this.#refit;
+        this.restore();
+        return;
+      }
       this.#location = { pageNumber: location.pageNumber, top: location.top, left: location.left };
       this.#onChange();
     }, opts);
+    // The reader's own move ends a refit: theirs is the spot from then on.
+    for (const type of ["wheel", "pointerdown", "keydown", "touchstart"] as const) {
+      this.#element.addEventListener(type, () => this.#readerMoves(), { passive: true, signal: this.#abort.signal });
+    }
     eventBus.on("updatefindmatchescount", ({ matchesCount }: { matchesCount: { current: number; total: number } }) => {
       this.count = { current: matchesCount.current, total: matchesCount.total, pending: false };
       this.#onChange();
@@ -194,12 +211,23 @@ export class PdfView implements DocView {
     this.#onChange();
   }
 
-  /** The width changed (a panel, a full screen, a window): refit, then back to the kept spot. */
+  /**
+   * The width changed (a panel, a full screen, a window): refit, then back to
+   * the kept spot — and keep it there until the reader moves (`#refit`).
+   */
   #relayout(): void {
     const viewer = this.#parts?.viewer;
     if (!viewer?.pagesCount) return;
+    const kept = this.#refit ?? this.#location;
+    this.#refit = kept;
     if (typeof this.#scale === "string") viewer.currentScaleValue = this.#scale;
+    this.#location = kept;
     this.restore();
+  }
+
+  /** The reader moves the view (the page, the toolbar): a refit under way ends. */
+  #readerMoves(): void {
+    this.#refit = null;
   }
 
   restore(): void {
@@ -220,16 +248,19 @@ export class PdfView implements DocView {
   // -- page
 
   goToPage(page: number): void {
+    this.#readerMoves();
     const viewer = this.#parts?.viewer;
     if (!viewer?.pagesCount || !Number.isFinite(page)) return;
     viewer.currentPageNumber = Math.min(Math.max(1, Math.round(page)), this.pageCount);
   }
 
   previousPage(): void {
+    this.#readerMoves();
     this.#parts?.viewer.previousPage();
   }
 
   nextPage(): void {
+    this.#readerMoves();
     this.#parts?.viewer.nextPage();
   }
 
@@ -250,11 +281,13 @@ export class PdfView implements DocView {
   }
 
   zoom(dir: 1 | -1): void {
+    this.#readerMoves();
     const scale = this.zoomValue;
     if (scale !== null) this.#setScale(zoomStep(PDF_ZOOMS, scale, dir));
   }
 
   fitWidth(): void {
+    this.#readerMoves();
     this.#setScale("page-width");
   }
 
@@ -269,6 +302,7 @@ export class PdfView implements DocView {
   // -- search
 
   search(query: string): void {
+    this.#readerMoves();
     this.#quietFind = false;
     this.query = query;
     if (!query.trim()) {
@@ -281,6 +315,7 @@ export class PdfView implements DocView {
   }
 
   findAgain(previous: boolean): void {
+    this.#readerMoves();
     if (!this.query.trim()) return;
     this.#quietFind = false;
     this.#dispatchFind("again", previous);
@@ -339,6 +374,7 @@ export class PdfView implements DocView {
   }
 
   goToOutline(index: number): void {
+    this.#readerMoves();
     const dest = this.#outlineDests[index];
     if (dest) void this.#parts?.linkService.goToDestination(dest as never);
   }

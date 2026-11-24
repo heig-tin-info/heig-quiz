@@ -46,6 +46,7 @@ import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import { ModeBanner } from "../Shell";
+import { courseDocumentRoutes } from "../student/DocumentsPanel";
 import { PlayerView } from "../student/Player";
 import { Alert, Button, Card, EmptyState, QueryError, Spinner } from "../ui";
 import { PreviewCorrectionView } from "./PreviewCorrection";
@@ -272,6 +273,7 @@ function PreviewWalk({
     if (ok) onBack();
   };
   const edit = usePreviewEdit({ subject, preview: walk.preview, session, askRestart });
+  const courseId = subject.usePaper()?.courseId;
 
   return (
     // No Restart while the grading runs: it would land on the new walk.
@@ -279,6 +281,12 @@ function PreviewWalk({
       <PlayerView
         initial={walk.preview.view}
         session={session}
+        // ADR-144 §7: the selection, read through the course's staff routes — the walk has no attempt.
+        documents={
+          courseId
+            ? { list: walk.preview.view.documents, routes: courseDocumentRoutes(courseId) }
+            : undefined
+        }
         onHome={() => void askLeave()}
         homeLabel={t(subject.copy.back)}
         banner={

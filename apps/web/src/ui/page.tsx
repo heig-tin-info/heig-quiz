@@ -626,6 +626,11 @@ export function revealInStrip(box: HTMLElement, item: HTMLElement): void {
  * On a narrow viewport the strip scrolls: the hidden side is faded out so the
  * fourth tab announces itself instead of just ending at the screen edge, and
  * scroll snapping stops a drag between two tabs.
+ *
+ * `truncate` caps each label (12 rem) with an ellipsis and its whole text as
+ * the tab's `title`: names a teacher wrote (the documents of an evaluation).
+ * `trailing` draws beside the strip, told whether the strip overflows — a
+ * menu of every tab once they do not all fit (the player's documents).
  */
 export function Tabs<V extends string>({
   value,
@@ -634,6 +639,8 @@ export function Tabs<V extends string>({
   className = "",
   idPrefix,
   label,
+  truncate = false,
+  trailing,
 }: {
   value: V;
   onChange: (v: V) => void;
@@ -643,6 +650,10 @@ export function Tabs<V extends string>({
   idPrefix?: string;
   /** Accessible name of the tablist when the surrounding heading is not enough. */
   label?: string;
+  /** Labels cut at 12 rem with an ellipsis, the whole one in the tab's `title`. */
+  truncate?: boolean;
+  /** Beside the strip, given whether the strip overflows. */
+  trailing?: (overflows: boolean) => ReactNode;
 }) {
   const refs = useRef<Partial<Record<V, HTMLButtonElement | null>>>({});
   const strip = useRef<HTMLDivElement>(null);
@@ -680,7 +691,7 @@ export function Tabs<V extends string>({
   return (
     // The hairline lives on the wrapper, so the mask fades the tabs without
     // eating the border that separates them from the panel below.
-    <div className={cx("border-b border-line", className)}>
+    <div className={cx("border-b border-line", trailing && "flex items-center gap-1", className)}>
       <div
         ref={strip}
         role="tablist"
@@ -690,7 +701,7 @@ export function Tabs<V extends string>({
         // hangs one pixel below the strip (`-mb-px`, so its indicator covers
         // the hairline), and an `overflow-x-auto` strip alone answers that
         // pixel with a vertical scrollbar on hosts that draw them.
-        className="flex snap-x snap-proximity gap-1 overflow-x-auto overflow-y-hidden"
+        className={cx("flex snap-x snap-proximity gap-1 overflow-x-auto overflow-y-hidden", trailing && "min-w-0 flex-1")}
         style={mask}
       >
         {items.map((it, i) => {
@@ -711,6 +722,7 @@ export function Tabs<V extends string>({
               aria-controls={idPrefix && active ? `${idPrefix}-panel-${it.value}` : undefined}
               aria-selected={active}
               data-coach={it.coach}
+              title={truncate ? it.label : undefined}
               tabIndex={i === roving ? 0 : -1}
               onClick={() => onChange(it.value)}
               className={cx(
@@ -719,8 +731,8 @@ export function Tabs<V extends string>({
                 active && "after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-fg",
               )}
             >
-              {Icon ? <Icon className="size-4" /> : null}
-              {it.label}
+              {Icon ? <Icon className={cx("size-4", truncate && "shrink-0")} /> : null}
+              {truncate ? <span className="max-w-48 truncate">{it.label}</span> : it.label}
               {it.count != null ? (
                 <span className={cx("text-xs tabular-nums", active ? "text-fg-muted" : "text-fg-faint")}>
                   {it.count}
@@ -730,6 +742,7 @@ export function Tabs<V extends string>({
           );
         })}
       </div>
+      {trailing?.(mask !== undefined)}
     </div>
   );
 }

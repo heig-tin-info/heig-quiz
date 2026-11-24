@@ -321,4 +321,12 @@ export const student = {
   "docs.search.next": "Next result",
   "docs.loading": "Loading the document",
   "docs.failed": "This document could not be loaded.",
+  "docs.player.open": "Documents",
+  "docs.player.close": "Close the documents",
+  "docs.player.title": "Documents",
+  "docs.player.full": "Full screen",
+  "docs.player.back": "Back to the questions",
+  "docs.player.resize": "Width of the documents",
+  "docs.player.gone": "This document is not available.",
+  "docs.player.all": "All documents",
 };

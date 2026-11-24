@@ -12,7 +12,8 @@ Scope: the `library` module (`apps/api/src/modules/library/`), the table
 `course_documents` and the column `courses.documents_quota_bytes` (migration
 `0159_course_documents`), the store `ASSETS_DIR/documents/`, the course
 page's Documents tab; from PR2 the viewer; from PR3 an evaluation's provided
-documents and the player's panel. F-ORG-18, F-ADMIN-10, N-SEC-24.
+documents (`evaluation_provided_documents`, migration `0160`) and the
+player's panel. F-ORG-18, F-ADMIN-10, N-SEC-24, F-EVAL-37, F-LIVE-15.
 
 Relations: amends [ADR-003](ADR-003-postgresql-drizzle.md) §1 and
 [ADR-110](ADR-110-version-du-client-apres-un-deploiement.md) §1–2 (scoped
@@ -172,25 +173,108 @@ The PDF viewer is pdf.js, pinned, hardened:
 ### 7. Documents provided by an evaluation (PR3, product owner)
 
 - An exam or an exercise may provide documents of its course's library,
-  at most 10, ticked in its advanced options; a poll is refused. The
-  evaluation's conditions ([ADR-079](ADR-079-conditions-de-l-evaluation.md))
-  gain an imposed line of kind *provided* naming them.
-- The selection is frozen like every setting once an attempt exists.
-- A document is not deleted while a non-finished evaluation or a template
-  of the course references it.
-- A copy of an evaluation into another course drops the selection, and
-  the copy dialog says so.
-- On an exam, the documents are served only for the official attempt
-  while the exam runs; on an exercise, while an attempt is open. "Not in
-  the lobby, not during a pause, not to a blank practice after the
-  release" is the orchestrator's reading of the owner's "nothing
-  afterwards", stated to the product owner on 2026-11-24 and not objected
-  to.
-- The student reads them in a panel of the player. Invariant 4 of
-  `CLAUDE.md` gains a named exit for provided documents: the student
-  reaches a document only through it, under the rules above.
-- A copy made from the in-page viewer is one of the page's own copies for
-  the integrity journal (ADR-088), as the notepad's is (ADR-090 §6).
+  at most 10 (`MAX_PROVIDED_DOCUMENTS`), in the order ticked in its
+  advanced options; a poll is refused `422 documents_not_allowed` (an
+  empty list passes); a document of another course is `422
+  document_unknown`, as an unknown id. The selection is the join table
+  `evaluation_provided_documents` (migration `0160`), written by the
+  `evaluation` module alone (`providedDocuments.ts`), the patch field
+  `documents`, replaced whole.
+- The selection is frozen like every setting once an attempt exists or the
+  evaluation runs (`configLock`: the field is writable under no lock).
+- The evaluation's conditions ([ADR-079](ADR-079-conditions-de-l-evaluation.md))
+  gain an imposed line of kind *provided*, after the notepad's: `{ key:
+  "documents", count }`, a count and never the titles. `imposedConditions`
+  takes `documentCount` from every caller; an exam's blank practice counts
+  none.
+- A document is not deleted while a template of the course or an
+  evaluation that is not over (`isEvaluationOver`: closed, grading,
+  released) provides it: `409 document_in_use { evaluations }`, decided
+  under the document's row lock; a selection being written reads the
+  document `FOR SHARE`. Once only finished evaluations provide it, the
+  delete goes and their rows go by cascade, their ids in the audit row's
+  payload. The library lists where each document is used (`usedBy`).
+- A duplicate within the course, *Save as template* and an instance copy
+  the selection; a copy into another course drops it (no screen copies
+  across courses yet: the API's duplicate does, and drops). A change of a
+  template's selection moves its revision; a pull leaves the instance's
+  documents alone, like its settings.
+- **The student's exit** (invariant 4): the student view of the `library`
+  module, `library/studentView.ts`, the one reader of a document toward a
+  student. It applies one pure rule, `providedDocumentsReadable`
+  (`@quiz/domain`), built on the write gate of an answer
+  (`attemptClosedReason`, moved there from `live/gates.ts`): never a poll,
+  never during a pause; on an exam the official attempt in progress while
+  the exam is `running` — not the lobby — and the server's clock before
+  the attempt's deadline plus the grace; never a blank practice after the
+  release ([ADR-142](ADR-142-entrainement-sur-un-examen-publie.md)); on an
+  exercise an open attempt, its practice after the due date included
+  ([ADR-122](ADR-122-entrainement-apres-l-echeance.md)). "Not in the lobby,
+  not during a pause, not to a blank practice after the release" is the
+  orchestrator's reading of the owner's "nothing afterwards", stated to the
+  product owner on 2026-11-24 and not objected to. Two sitting routes
+  (`SITTING`): `GET /app/api/attempts/:id/documents/:documentId/file` (a
+  PDF, `sendRanged`, named after its title) and `…/html` (a Markdown
+  document's `DocumentHtml`, `{ html, toc }`: the caller holds the title);
+  every refusal is the 404 of a missing document, save the IP rule's `403
+  ip_not_allowed` on the caller's own attempt, which does not depend on the
+  document. Nothing leaves beyond the title, the kind and the bytes or the
+  HTML. An impersonation of the attempt's holder is served, read-only,
+  like every student payload ([ADR-034](ADR-034-agir-en-tant-qu-etudiant.md); the
+  orchestrator's decision, 2026-11-24). `AttemptView.documents` lists them
+  while the rule holds, `[]` otherwise; the conditions state their number
+  only, outside the rule.
+- The teacher's stateless preview (ADR-018) has no attempt: it lists the
+  selection, and reads the files through the course's staff routes. The
+  preview's builder loads the selection for it alone (`withDocuments`):
+  the hand-out a student prints (ADR-122 §9) and the paper copies never
+  load it. A
+  teacher on a staff seat has a real attempt and reads through the
+  student's routes.
+- No audit row and no attempt event for a reading. A copy made from the
+  in-page viewer is one of the page's own copies for the integrity journal
+  (ADR-088), as the notepad's is (ADR-090 §6). A paper copy (ADR-125)
+  gets nothing.
+- **The player's panel** (PR3, second half; `student/DocumentsPanel.tsx`,
+  DESIGN.md "The documents panel"), as the validated mockup: a
+  **Documents** dock above the calculator's and the notepad's (it closes
+  neither); a split view from 900 px with a separator (360 px and 420 px
+  kept, 46 % by default), an overlay under it; full screen a CSS layer on
+  the same node with the clock, the save state and "Back to the
+  questions"; one tab per document, a menu of them once the strip
+  overflows; Ctrl/⌘+F to the search of the document on screen; Escape
+  from the search to the document to full screen (or the overlay). What
+  the student set is kept per attempt in `sessionStorage` (memory only for
+  the preview and an impersonation), each document's state read back only
+  by the viewer's `readViewState`, and gone at every end of the attempt,
+  at sign-out and when a kiosk station loads. The viewers are mounted when
+  first shown and unmounted when the panel closes or hides: the panel
+  follows the attempt view's list and the evaluation's pause, and a 404
+  from either route hides it and reads the attempt view again. The
+  preview reads the course's staff routes. A 404 from a document's route
+  marks that document "not available" in its tab and reads the attempt
+  view again: a list without it drops the tab, an empty one hides the
+  panel, a list that still holds it (a missing file, as on staging) keeps
+  the mark beside the other documents. The resume reads the attempt view
+  at once. What the device keeps of an attempt goes through one module
+  (`attempt/localState.ts`). A refit of the PDF viewer (a full screen, a
+  resize) keeps the view on the kept spot against pdf.js's own late
+  scrolls until the reader moves (`PdfView.#refit`): a wheel, a pointer,
+  a key or a toolbar step ends it.
+- **The notepad's blocked clipboard** (ADR-090 §6) stays the rule:
+  `provided_no_clipboard` refuses a paste or a drop INTO the notepad, a
+  document's text included, and nothing is journaled for it (the text is
+  one of the page's own copies). A copy FROM a document is free, as from
+  a question; the answer fields keep their clipboard. Nothing to build:
+  the notepad's own handlers already refuse it, tested with the real
+  viewer and journal.
+- **Safe Exam Browser and the kiosk.** The `.seb` file's URL filter admits
+  Quiz's host whole (`URLFilterRules`, host patterns), so `/pdfjs/<version>/`
+  and the worker under `/assets/` are admitted, as every route of the app;
+  pdf.js fetches the file from the page (not the worker), so the requests
+  carry SEB's Config Key header. The kiosk extension restricts no URL;
+  the station's allowed URLs are ChromeOS policy, outside the repository.
+  Both stay owed in a real client (§11).
 
 ### 8. Licensing
 
@@ -224,10 +308,18 @@ text layer.
 
 ### 11. Owed before production
 
-pdf.js inside a real Safe Exam Browser on Windows and on macOS with
-`SEB_CONFIG_KEY_ENFORCE=1` (its range requests must carry the Config Key
-header); on a kiosk station; and a load test of 30 simultaneous searches
-in a document.
+- **A real Safe Exam Browser**, on Windows and on macOS, with
+  `SEB_CONFIG_KEY_ENFORCE=1`: the worker and the `/pdfjs/<version>/` files
+  admitted by the URL filter; the range requests passing the Config Key
+  check; no download prompt; a copy from a document pasted into an answer
+  and into the code editor raising no incident (Windows' isolated
+  clipboard included); Ctrl/Cmd+F reaching the page; no "left the page"
+  incident from the panel; the pause and the deadline.
+- **A kiosk station**: the station's policy admitting those files; range
+  requests across a re-attestation; no state of the previous student left.
+- **A load test on production-like PostgreSQL** (the local one, on PGlite,
+  is an indication only: 30 clients reading a 29 MB PDF whole while one
+  autosaves, autosave p50 11 → 31 ms).
 
 ## Consequences
 

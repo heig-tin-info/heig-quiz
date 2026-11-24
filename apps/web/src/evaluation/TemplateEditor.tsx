@@ -248,6 +248,7 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
             <ConfigSettings
               config={template}
               courseId={template.courseId}
+              documents={data.documents}
               patch={patch}
               summary={clockSummary(template, t, isoDateTime)}
               holdsCategorize={data.items.some((i) => i.type === "categorize")}

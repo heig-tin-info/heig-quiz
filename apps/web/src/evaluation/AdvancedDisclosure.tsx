@@ -1,4 +1,13 @@
-import { CategorizePolicy, categorizePolicyOf, McqPolicy, negativeMarkingOf, retakesOf, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
+import {
+  CategorizePolicy,
+  categorizePolicyOf,
+  McqPolicy,
+  negativeMarkingOf,
+  retakesOf,
+  type EvaluationSettings,
+  type FeedbackPolicy,
+  type ProvidedDocument,
+} from "@quiz/contracts";
 import {
   allowedFeedbackWhen,
   CALCULATOR_MODES,
@@ -12,6 +21,7 @@ import {
   notepadAllowedFor,
   notepadOn,
   partialRetakesOn,
+  providedDocumentsAllowedFor,
   trustedClientsAllowedFor,
 } from "@quiz/domain";
 
@@ -23,6 +33,7 @@ import { useT } from "../i18n";
 import { Disclosure, Section, Segmented, Select, SettingRow, Switch } from "../ui";
 import { EvaluationDevices } from "./AllowedDevices";
 import { ContestationSetting } from "./ContestationSetting";
+import { DocumentsSetting } from "./DocumentsSetting";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 
 /** The choice of the multiple-answer select that stands for negative marking. */
@@ -48,6 +59,7 @@ export function AdvancedDisclosure({
   holdsCategorize = false,
   feedbackExtra,
   windowSet = false,
+  documents,
 }: {
   config: ConfigView;
   patch: ConfigPatch;
@@ -73,6 +85,8 @@ export function AdvancedDisclosure({
   feedbackExtra?: ReactNode;
   /** A release stored the contestation window's closing instant: its row is locked (ADR-139). */
   windowSet?: boolean;
+  /** ADR-144 §7: the course whose library is offered, and the selection in its order. */
+  documents: { courseId: string; selected: readonly ProvidedDocument[] };
 }) {
   const t = useT();
   const { settings, feedbackPolicy, mode, mcqPolicy } = config;
@@ -188,7 +202,8 @@ export function AdvancedDisclosure({
         ) : null}
       </Section>
 
-      {calculatorAllowedFor(mode) || notepadAllowedFor(mode) ? (
+      {/* The aids share one rule: a poll provides none (ADR-069, ADR-090, ADR-144). */}
+      {calculatorAllowedFor(mode) ? (
         <Section title={t("eval.adv.aids")} className="py-3" divided>
           {/* ADR-069: the calculator the student's screen provides. A poll has
               nothing to compute. */}
@@ -222,6 +237,10 @@ export function AdvancedDisclosure({
                 }))}
               />
             </SettingRow>
+          ) : null}
+          {/* ADR-144 §7: the course's documents it provides — on the same modes. */}
+          {providedDocumentsAllowedFor(mode) ? (
+            <DocumentsSetting courseId={documents.courseId} selected={documents.selected} patch={patch} disabled={disabled} />
           ) : null}
         </Section>
       ) : null}

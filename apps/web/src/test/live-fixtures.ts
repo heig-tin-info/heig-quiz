@@ -209,6 +209,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
     templateRevision: null,
     courseId: "c1",
     exports: { document: null, handout: null, paper: "paper_not_started" },
+    documents: [],
     ...overrides,
   };
 }

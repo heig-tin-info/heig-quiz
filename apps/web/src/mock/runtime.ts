@@ -180,6 +180,8 @@ export const FLAG_NAMES = [
   "components",
   // F-GBOOK-05: PRG1-2026's gradebook starts with its mean not published (the student's tab without means).
   "unpublished",
+  // ADR-144 §7: the student's exam provides ten documents (the tabs' strip).
+  "tendocs",
 ] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 export const flags = {} as Record<FlagName, boolean>;

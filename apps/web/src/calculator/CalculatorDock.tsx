@@ -30,7 +30,6 @@ export function CalculatorDock({ kind, seat }: { kind: CalculatorKind; seat: Too
       icon={CalculatorIcon}
       openLabel={t("calc.open")}
       closeLabel={t("calc.close")}
-      offset="var(--player-footer-h,0px)"
       panelClassName={`overflow-y-auto p-3 ${kind === "scientific" ? "w-[22rem]" : "w-[18rem]"}`}
       keepMounted
       {...seat}

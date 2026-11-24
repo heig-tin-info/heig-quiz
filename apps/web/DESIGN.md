@@ -3312,6 +3312,40 @@ copy made in it is a copy of the page (ADR-088).
   Ctrl+F (⌘+F) inside the viewer goes to its search; Escape there hands the
   focus back to the document, query and highlights kept.
 
+## The documents panel (ADR-144 §7)
+
+The documents an evaluation provides, beside the questions
+(`student/DocumentsPanel.tsx`), as the product owner's validated mockup
+does it.
+
+- **The button**: a tool dock of its own (`ToolDockButton`), above the
+  calculator's and the notepad's in the stack (each tool on takes the next
+  slot), a book; it closes neither of them. Shown only while the attempt
+  view lists documents and the evaluation is not paused.
+- **Split view** (900 px and up): the panel is a fixed column on the right,
+  under the player's bar — which keeps the clock and "Hand in" across the
+  window — a hairline on its left; the questions, the footer and the docks
+  move left of it (`--tool-dock-inset`). The
+  separator is a 5 px grip on that hairline, `line-strong`, `fg-faint`
+  and taller under the pointer or a drag, the accent with its ring when
+  focused; 46 % of the window by default, the panel at least 360 px, the
+  questions at least 420 px.
+- **Overlay** (under 900 px): the panel covers the page under the player's
+  bar, with the overlay shadow; Escape puts it away.
+- **The header**: the app's `Tabs` (`truncate`: the kind's icon and the
+  title cut at 12 rem, the whole one its tooltip), a strip that scrolls,
+  with a menu of every document beside it once they do not all fit
+  (`trailing`); then full screen and close, two icon buttons, the hairline
+  running on under them. The viewer's toolbar sits under it, its tooltips
+  opening downward (`tipSide="bottom"`), clear of the bar above.
+- **A document not available** (its route answered 404 and the attempt
+  still lists it: a missing file): its tab stays, its panel an empty state
+  with the one sentence; the other documents read on.
+- **Full screen**: the same node as the expand layer's recipe — 16 px of
+  air, the sheet radius, the overlay shadow over the dimmed page — the bar
+  holding the countdown, the save state and the layer's ONE primary
+  action, "Back to the questions". Never the browser's Fullscreen API.
+
 ## The help assistant (ADR-080)
 
 A chat docked on every teacher screen (`apps/web/src/assist/`), the

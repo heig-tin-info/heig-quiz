@@ -12,6 +12,7 @@ import {
   type EvaluationConditions,
   type EvaluationRules,
   type LobbyView,
+  type ProvidedDocument,
   type ReadyView,
 } from "@quiz/contracts";
 import {
@@ -23,6 +24,7 @@ import {
   practiceDurationS,
   practiceIgnoresSittingConditions,
   practiceOwnLimit,
+  practiceProvidesDocuments,
 } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
@@ -31,10 +33,12 @@ import type { Db } from "../../db/client.js";
 import {
   feedbackOf,
   joinedItems,
+  providedDocumentCount,
   settingsOf,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
+import { providedDocuments } from "../library/service.js";
 import { validatedOfAttempt, type GradingRecord } from "../grading/service.js";
 import type { InstanceAttempt } from "../pool/service.js";
 import { presence } from "../realtime/presence.js";
@@ -182,10 +186,16 @@ export async function attemptView(
   const corrected =
     checkAllowed(evaluation.mode) &&
     (isFinishedAttempt(attempt.state) || [...answered.values()].some((a) => a.checkedAt !== null));
+  // ADR-144 §7: through the library's student view, the one exit, which
+  // answers `[]` while the attempt may not read them; the conditions count
+  // the selection all the same, read apart only then.
+  const documents = await providedDocuments(db, { evaluation, attempt }, now);
   return viewOf(db, evaluation, {
     seed: attempt.seed,
     timeBonusPercent: participant.timeBonusPercent,
     practice: attempt.afterDue,
+    documents,
+    documentCount: documents.length > 0 ? documents.length : await providedDocumentCount(db, evaluation.id),
     instances: attempt.instances,
     acquired: attempt.acquiredItemIds,
     answered,
@@ -210,6 +220,11 @@ export async function attemptView(
  * attempt row anywhere. Seed 0 by default, so it is stable between reloads;
  * the stateless preview of issue #75 passes the seed it drew instead, and
  * gets exactly the order and the shuffles an attempt of that seed would.
+ * Its documents are what the caller hands it (ADR-144 §7): the teacher's
+ * stateless preview loads the selection as the staff read it, whose files
+ * the staff routes of the course's library serve; the hand-out a student
+ * prints (ADR-122 §9), the paper copies and the preview's correction show
+ * none, and count none.
  */
 export async function previewView(
   db: Db,
@@ -218,11 +233,15 @@ export async function previewView(
   seed = 0,
   /** The evaluation's items when the caller already read them, not read twice. */
   items?: readonly JoinedItem[],
+  /** The selection, the teacher's stateless preview's alone; its length is the conditions' count. */
+  documents: ProvidedDocument[] = [],
 ): Promise<AttemptView> {
   return viewOf(db, evaluation, {
     seed,
     timeBonusPercent: 0,
     practice: false,
+    documents,
+    documentCount: documents.length,
     instances: {},
     acquired: [],
     items,
@@ -257,6 +276,9 @@ async function viewOf(
     timeBonusPercent: number;
     /** ADR-122: a practice attempt, whose conditions are the practice's. */
     practice: boolean;
+    /** ADR-144 §7: what the attempt may read now, and how many documents the conditions count. */
+    documents: ProvidedDocument[];
+    documentCount: number;
     /** The attempt's stored values (ADR-056); `{}` for a preview, which draws them from `seed`. */
     instances: Readonly<Record<string, StoredInstance>>;
     /** ADR-091: the items a partial retake carried over; none in a preview. */
@@ -281,8 +303,8 @@ async function viewOf(
   return {
     attempt: input.header,
     conditions: input.practice
-      ? practiceConditions(evaluation, input.timeBonusPercent)
-      : conditionsFor(evaluation, input.timeBonusPercent),
+      ? practiceConditions(evaluation, input.timeBonusPercent, input.documentCount)
+      : conditionsFor(evaluation, input.timeBonusPercent, input.documentCount),
     evaluation: {
       id: evaluation.id,
       title: evaluation.title,
@@ -299,20 +321,27 @@ async function viewOf(
       state: input.state,
       graded: input.graded,
     }),
+    documents: input.documents,
   };
 }
 
 /**
  * The conditions a student reads (ADR-079): the announced ones and the lines
- * the platform derives from the settings, with this participant's extra time.
+ * the platform derives from the settings, with this participant's extra time
+ * and the count of the documents the evaluation provides (ADR-144 §7).
  */
-export function conditionsFor(evaluation: EvaluationRecord, timeBonusPercent: number): EvaluationConditions {
+export function conditionsFor(
+  evaluation: EvaluationRecord,
+  timeBonusPercent: number,
+  documentCount: number,
+): EvaluationConditions {
   return evaluationConditionsOf({
     mode: evaluation.mode,
     settings: settingsOf(evaluation),
     durationS: evaluation.durationS,
     closesAt: isoOrNull(evaluation.closesAt),
     timeBonusPercent,
+    documentCount,
   });
 }
 
@@ -320,9 +349,14 @@ export function conditionsFor(evaluation: EvaluationRecord, timeBonusPercent: nu
  * The conditions of a practice attempt (ADR-122): the evaluation's own, with
  * the practice's clock — its time limit, or eight hours, never its passed
  * closing — unlimited attempts, and no integrity journal. An exam's trusted
- * clients are not a practice's (ADR-142 §4): they protect the sitting.
+ * clients are not a practice's (ADR-142 §4): they protect the sitting, and
+ * neither are its documents (ADR-144 §7); an exercise's practice keeps them.
  */
-export function practiceConditions(evaluation: EvaluationRecord, timeBonusPercent: number): EvaluationConditions {
+export function practiceConditions(
+  evaluation: EvaluationRecord,
+  timeBonusPercent: number,
+  documentCount: number,
+): EvaluationConditions {
   const settings = settingsOf(evaluation);
   const limit = { timing: settings.timing, durationS: evaluation.durationS };
   return evaluationConditionsOf({
@@ -340,12 +374,15 @@ export function practiceConditions(evaluation: EvaluationRecord, timeBonusPercen
     // The accommodation stretches the evaluation's own limit, not the eight hours.
     timeBonusPercent: practiceOwnLimit(limit) ? timeBonusPercent : 0,
     maxAttempts: null,
+    documentCount: practiceProvidesDocuments(evaluation.mode) ? documentCount : 0,
   });
 }
 
 /** What both the waiting room and the ready screen state (`EvaluationRules`). */
-function rulesOf(evaluation: EvaluationRecord, participant: Participant): EvaluationRules {
-  return { conditions: conditionsFor(evaluation, participant.timeBonusPercent) };
+async function rulesOf(db: Db, evaluation: EvaluationRecord, participant: Participant): Promise<EvaluationRules> {
+  return {
+    conditions: conditionsFor(evaluation, participant.timeBonusPercent, await providedDocumentCount(db, evaluation.id)),
+  };
 }
 
 /**
@@ -361,7 +398,7 @@ export async function lobbyView(
   now: Date,
 ): Promise<LobbyView> {
   return {
-    ...rulesOf(evaluation, participant),
+    ...(await rulesOf(db, evaluation, participant)),
     evaluation: {
       id: evaluation.id,
       title: evaluation.title,
@@ -374,9 +411,9 @@ export async function lobbyView(
 }
 
 /** What the ready screen says (ADR-076): the rules and what Start announces, no content. */
-export function readyView(evaluation: EvaluationRecord, participant: Participant): ReadyView {
+export async function readyView(db: Db, evaluation: EvaluationRecord, participant: Participant): Promise<ReadyView> {
   return {
-    ...rulesOf(evaluation, participant),
+    ...(await rulesOf(db, evaluation, participant)),
     evaluation: {
       id: evaluation.id,
       title: evaluation.title,
