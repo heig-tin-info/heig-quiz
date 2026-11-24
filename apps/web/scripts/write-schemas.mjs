@@ -6,7 +6,7 @@
  * — the `$id` of each. They are generated from their zod definitions
  * (`publishedSchemas` of `@quiz/contracts`), never edited, and NOT in git
  * (`.gitignore`): this script runs before `dev` and `build`, like
- * `copy-blockly-media.mjs`. `@quiz/contracts` must be built first, as for
+ * `copy-vendor-assets.mjs`. `@quiz/contracts` must be built first, as for
  * the rest of the app.
  */
 import { mkdir, rm, writeFile } from "node:fs/promises";

@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "runtimes": "node scripts/fetch-runtimes.mjs",
-    "dev": "node scripts/fetch-runtimes.mjs && node scripts/copy-blockly-media.mjs && node scripts/write-schemas.mjs && vite",
-    "build": "node scripts/fetch-runtimes.mjs && node scripts/copy-blockly-media.mjs && node scripts/write-schemas.mjs && vite build",
+    "dev": "node scripts/fetch-runtimes.mjs && node scripts/copy-vendor-assets.mjs && node scripts/write-schemas.mjs && vite",
+    "build": "node scripts/fetch-runtimes.mjs && node scripts/copy-vendor-assets.mjs && node scripts/write-schemas.mjs && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "dev:mock": "node scripts/fetch-runtimes.mjs && node scripts/copy-blockly-media.mjs && node scripts/write-schemas.mjs && VITE_MOCK=1 vite",
+    "dev:mock": "node scripts/fetch-runtimes.mjs && node scripts/copy-vendor-assets.mjs && node scripts/write-schemas.mjs && VITE_MOCK=1 vite",
     "screenshots": "node scripts/screenshots.mjs",
     "docs:screenshots": "node scripts/docs-screenshots.mjs"
   },
@@ -59,6 +59,7 @@
     "lucide-react": "^1.23.0",
     "marked": "^18.0.13",
     "mathlive": "^0.110.0",
+    "pdfjs-dist": "6.5.438",
     "qrcode": "^1.5.4",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",

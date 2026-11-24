@@ -14,6 +14,9 @@
  *   - `GET    /app/api/courses/:id/documents/:documentId/file` — the bytes,
  *     always as an attachment, with `Range`; `404 file_missing` when the
  *     row outlived its file (a staging copy holds the rows only);
+ *   - `GET    /app/api/courses/:id/documents/:documentId/html` — a Markdown
+ *     document as rendered at upload ({@link DocumentHtml}), for the viewer;
+ *     a PDF has none (the 404 of a missing document);
  *   - `PATCH  /app/api/admin/courses/:id/documents-quota` — the course's
  *     quota, an administrator's alone.
  *
@@ -24,7 +27,7 @@ import { z } from "zod";
 
 import { DOCUMENT_KINDS } from "@quiz/domain";
 
-import { JournalWarning } from "./journal.js";
+import { JournalTocEntry, JournalWarning } from "./journal.js";
 
 /** The longest title a document may carry: what students will read. */
 export const DOCUMENT_TITLE_MAX = 120;
@@ -87,6 +90,18 @@ export const CourseLibrary = z.object({
   quotaBytes: z.number().int().nonnegative(),
 });
 export type CourseLibrary = z.infer<typeof CourseLibrary>;
+
+/**
+ * `GET /courses/:id/documents/:documentId/html`: a Markdown document as the
+ * server rendered it (`@quiz/docrender`, raw HTML escaped, no image), and
+ * the table of contents the viewer's outline reads. The title is the
+ * caller's already (the library's row).
+ */
+export const DocumentHtml = z.object({
+  html: z.string(),
+  toc: z.array(JournalTocEntry),
+});
+export type DocumentHtml = z.infer<typeof DocumentHtml>;
 
 /** The body of `409 quota_exceeded`, beside `error` and `message`. */
 export const QuotaExceeded = z.object({

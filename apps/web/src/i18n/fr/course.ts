@@ -60,6 +60,7 @@ export const course: Record<keyof typeof en, string> = {
   "courses.docs.kind.markdown": "Markdown",
   "courses.docs.missing": "Fichier absent",
   "courses.docs.missing.hint": "Le serveur a perdu ce fichier. Supprimez le document, puis ajoutez-le à nouveau.",
+  "courses.docs.preview": "Aperçu",
   "courses.docs.download": "Télécharger",
   "courses.docs.rename": "Renommer",
   "courses.docs.renameTitle": "Renommer le document",

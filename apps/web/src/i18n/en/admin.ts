@@ -495,8 +495,8 @@ export const admin = {
   "admin.revokeQuotaConfirm": "Remove the workspace quota of {email}? It goes back to the default.",
   "admin.task.paper.scan_sweep": "Paper scans sweep",
   "admin.task.paper.scan_sweep.desc": "Deletes the scans of paper copies whose attempt was deleted.",
-  "admin.task.library.blob_sweep": "Document files sweep",
-  "admin.task.library.blob_sweep.desc": "Deletes the document files no course holds any more, 48 hours after their last use.",
+  "admin.task.library.blob_sweep": "Documents upkeep",
+  "admin.task.library.blob_sweep.desc": "Renders older Markdown documents again and deletes the files no course holds, 48 hours after their last use.",
   "admin.task.accounts.lifecycle": "Account lifecycle",
   "admin.task.accounts.lifecycle.desc": "Warns the accounts unused for two years, then anonymizes them a year later.",
 };

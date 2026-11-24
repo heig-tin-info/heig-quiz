@@ -129,6 +129,17 @@ export async function libraryPlugin(
     ),
   );
 
+  /**
+   * A Markdown document's HTML, as rendered at upload, for the staff's
+   * preview (ADR-144 §6); a PDF has none, and answers the 404 of a missing
+   * document.
+   */
+  app.get(
+    "/app/api/courses/:id/documents/:documentId/html",
+    { preHandler: requireTeacher },
+    teacher(onDocument, async ({ reply, scope }) => service.documentHtml(scope.row) ?? notFound(reply)),
+  );
+
   /** F-ADMIN-10: the course's quota, an administrator's alone, on a course they reach. */
   app.patch(
     "/app/api/admin/courses/:id/documents-quota",

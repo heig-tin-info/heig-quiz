@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { badge, buttonClass, controlSize, cx, inputClass, inputSize, textareaClass } from "./styles.js";
+import { badge, buttonClass, controlSize, cx, fieldPillClass, inputClass, inputSize, textareaClass } from "./styles.js";
 
 describe("cx", () => {
   it("joins the truthy parts and skips the rest", () => {
@@ -42,6 +42,14 @@ describe("badge", () => {
   });
 });
 
+describe("fieldPillClass", () => {
+  it("rings the pill while the focus is inside it, the field's chrome otherwise", () => {
+    expect(fieldPillClass).toContain("focus-within:border-accent");
+    expect(fieldPillClass).toContain("border-line-strong");
+    expect(fieldPillClass).not.toMatch(/(^| )(h|w|py)-/);
+  });
+});
+
 describe("inputClass", () => {
   it("carries no height, width or vertical padding: inputSize and the caller give them", () => {
     expect(inputClass).not.toMatch(/(^| )(h|w|py)-/);
@@ -65,6 +73,7 @@ describe("the control scale", () => {
 
   it("makes every single-line control a pill and a multi-line field a soft square", () => {
     expect(inputClass).toContain("rounded-control");
+    expect(fieldPillClass).toContain("rounded-control");
     expect(buttonClass()).toContain("rounded-control");
     expect(textareaClass).toContain("rounded-field");
     expect(textareaClass).not.toContain("rounded-control");
@@ -73,7 +82,7 @@ describe("the control scale", () => {
 
 describe("tokens", () => {
   it("never carries a dark: variant or a raw radius", () => {
-    for (const cls of [inputClass, textareaClass, buttonClass(), buttonClass("secondary", "lg"), badge()]) {
+    for (const cls of [inputClass, fieldPillClass, textareaClass, buttonClass(), buttonClass("secondary", "lg"), badge()]) {
       expect(cls).not.toMatch(/\bdark:/);
       expect(cls).not.toMatch(/\brounded-(xl|lg|md)\b/);
     }

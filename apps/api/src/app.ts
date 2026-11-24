@@ -85,6 +85,10 @@ import { startJobs, type JobQueue } from "./jobs.js";
 import { startTicker } from "./ticker.js";
 import { PdfService } from "./typst/service.js";
 
+
+/** A file of pdf.js's data, under `pdfjs/<version>/` (ADR-144 §6). */
+const PDFJS_FILE = /[\\/]pdfjs[\\/][^\\/]+[\\/]/;
+
 export interface AppDeps {
   config: AppConfig;
   /**
@@ -377,9 +381,10 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
       root: roots,
       // ADR-110: Vite names every file of `assets/` after its content, so it
       // never changes; `index.html` names the build, and is asked again each time.
+      // pdf.js's data sits in a folder of its version (ADR-144 §6): it never changes either.
       setHeaders: (reply, path) => {
         if (path.endsWith("index.html")) reply.header("cache-control", "no-cache");
-        else if (basename(dirname(path)) === "assets") {
+        else if (basename(dirname(path)) === "assets" || PDFJS_FILE.test(path)) {
           reply.header("cache-control", "public, max-age=31536000, immutable");
         }
       },
@@ -387,7 +392,9 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     app.setNotFoundHandler((req, reply) => {
       // SPA fallback for navigation; API surfaces keep their JSON 404, and so
       // does a missing chunk: HTML in its place crashes the tab that asked.
-      const notPage = ["/app/", "/api/", "/assets/"].some((p) => req.url.startsWith(p));
+      // So does a missing file of pdf.js's data (`/pdfjs/`, a character map,
+      // a font): HTML in its place would be parsed as one.
+      const notPage = ["/app/", "/api/", "/assets/", "/pdfjs/"].some((p) => req.url.startsWith(p));
       if (req.method === "GET" && !notPage) return reply.sendFile("index.html", build);
       return reply.code(404).send({ error: "not_found" });
     });

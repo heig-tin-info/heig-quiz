@@ -58,7 +58,9 @@ extracts of a standard, formula sheets. **Add a document** takes one file or
 several. Any member of the staff adds and renames a document; its uploader
 or a teacher of the course deletes it. The course's documents share a quota,
 shown above the list; an administrator sets it. A Markdown file shows no
-image. Upload only what you may hand out to your students.
+image. A document's title opens it in a viewer, with its outline, a search
+and a zoom; **Close** or Escape brings you back. Upload only what you may
+hand out to your students.
 
 ## Evaluation templates
 

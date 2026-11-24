@@ -35,6 +35,9 @@
     "onlyBuiltDependencies": [
       "better-sqlite3",
       "esbuild"
+    ],
+    "ignoredOptionalDependencies": [
+      "@napi-rs/canvas"
     ]
   },
   "devDependencies": {

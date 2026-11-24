@@ -6,6 +6,12 @@
  * empties PRG1's too, `?many=1` fills its quota. The refusals follow the
  * API's (`library/service.ts`): the kind by the name here, the mock having
  * no bytes to read, and the quota.
+ *
+ * The preview reads a document: every PDF serves one small fictitious sample
+ * (`samples/formulaire.pdf`, from its `.typ`), whole — the mock answers no
+ * `Range`, and a file under 2 MiB is one request for pdf.js anyway — and
+ * every Markdown document the HTML of `samples/aide-memoire.md`, rendered
+ * by `@quiz/docrender` as the API renders an upload.
  */
 import {
   DEFAULT_DOCUMENTS_QUOTA_BYTES,
@@ -14,10 +20,15 @@ import {
   DocumentsQuotaPatch,
   type CourseDocument,
   type CourseLibrary,
+  type DocumentHtml,
 } from "@quiz/contracts";
+
+import { renderStandalone } from "@quiz/docrender";
 
 import { courseOr404, ME_TEACHER, myRoleOn } from "./org";
 import { D, flags, H, iso, MockError, on, refuse } from "./runtime";
+import markdownSample from "./samples/aide-memoire.md?raw";
+import pdfSample from "./samples/formulaire.pdf?url";
 
 
 const me = { id: ME_TEACHER.userId, name: `${ME_TEACHER.givenName} ${ME_TEACHER.familyName}` };
@@ -153,6 +164,25 @@ on("DELETE", "/app/api/courses/:id/documents/:documentId", (m) => {
   }
   library.documents.splice(library.documents.indexOf(document), 1);
   return undefined;
+});
+
+/** The file: the sample PDF, whole, for any PDF whose file is there; `404 file_missing` otherwise. */
+on("GET", "/app/api/courses/:id/documents/:documentId/file", async (m) => {
+  const { document } = documentOr404(m);
+  if (document.missing) throw refuse(404, "file_missing", "the document's file is missing");
+  if (document.kind !== "pdf") return new Response(markdownSample, { headers: { "content-type": "text/markdown; charset=utf-8" } });
+  const bytes = await (await fetch(pdfSample)).arrayBuffer();
+  return new Response(bytes, {
+    headers: { "content-type": "application/pdf", "content-length": String(bytes.byteLength) },
+  });
+});
+
+/** A Markdown document's HTML: the sample, rendered as an upload is; a PDF has none. */
+on("GET", "/app/api/courses/:id/documents/:documentId/html", (m): DocumentHtml => {
+  const { document } = documentOr404(m);
+  if (document.kind !== "markdown") throw new MockError(404, "not_found");
+  const { html, toc } = renderStandalone(markdownSample);
+  return { html, toc };
 });
 
 on("PATCH", "/app/api/admin/courses/:id/documents-quota", (m, body) => {

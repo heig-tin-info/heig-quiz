@@ -60,7 +60,9 @@ prend un fichier ou plusieurs. Tout membre de l'équipe ajoute et renomme un
 document ; la personne qui l'a déposé ou un enseignant du cours le
 supprime. Les documents du cours partagent un quota, affiché au-dessus de la
 liste ; l'administration le fixe. Un fichier Markdown n'affiche aucune
-image. Déposez uniquement ce que vous pouvez distribuer à vos étudiants.
+image. Le titre d'un document l'ouvre dans un lecteur, avec son sommaire,
+une recherche et un zoom ; **Fermer** ou Échap ramène à la liste. Déposez
+uniquement ce que vous pouvez distribuer à vos étudiants.
 
 ## Modèles d'évaluation
 

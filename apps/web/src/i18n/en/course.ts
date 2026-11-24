@@ -63,6 +63,7 @@ export const course = {
   "courses.docs.kind.markdown": "Markdown",
   "courses.docs.missing": "File missing",
   "courses.docs.missing.hint": "The server has lost this file. Delete the document and add it again.",
+  "courses.docs.preview": "Preview",
   "courses.docs.download": "Download",
   "courses.docs.rename": "Rename",
   "courses.docs.renameTitle": "Rename document",

@@ -87,7 +87,7 @@ built with Vite. `src/router.ts` is the route union, `src/api.ts` the typed
 client over the contracts, `src/i18n/` the dictionaries, `src/mock/` the
 in-browser API used by `pnpm dev:mock`. Feature directories (`activities`,
 `assist`, `attempt`, `calculator`, `changelog`, `coach`, `concepts`,
-`course`, `discover`, `drill`, `evaluation`, `github`, `gradebook`,
+`course`, `discover`, `documents`, `drill`, `evaluation`, `github`, `gradebook`,
 `grading`, `group`, `help`, `journal`, `kiosk`, `library`, `live`, `markdown`,
 `notepad`, `notifications`, `oauth`, `pair`, `poll`, `pool`, `preview`,
 `project`, `question`, `realtime`, `results`, `runner`, `student`) hold the

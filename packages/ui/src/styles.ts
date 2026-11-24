@@ -115,6 +115,15 @@ const fieldChrome =
 /** A one-line field: the chrome and the pill. Pair it with an {@link inputSize}. */
 export const inputClass = `rounded-control ${fieldChrome}`;
 
+/**
+ * A pill that holds a field and more (the document viewer's search: an icon,
+ * the input, a count, two arrows): the field's border, ink and hover, with
+ * the focus ring shown while the focus is anywhere inside it. The input
+ * inside wears no chrome of its own. Pair it with a control height.
+ */
+export const fieldPillClass =
+  "rounded-control border border-line-strong bg-surface text-fg transition-colors hover:border-fg-faint focus-within:border-accent focus-within:ring-3 focus-within:ring-accent/20";
+
 /** Builds one value per step of the scale, so no row of the table is spelled twice. */
 const bySize = <T>(pick: (size: ControlSize) => T): Record<ControlSize, T> => ({
   sm: pick("sm"),

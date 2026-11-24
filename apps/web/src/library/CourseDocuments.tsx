@@ -10,10 +10,12 @@
  * being sent, what was refused and why, the space the course uses (an
  * administrator sets the quota inline), and the documents — each with its
  * kind, size, who added it and when, what its Markdown rendering reported,
- * and its download, rename and delete. A delete is offered to the uploader
- * and to an owner of the course, as the server allows. No preview yet.
+ * and its preview, download, rename and delete. The preview (its title, or
+ * the first row action) opens the document viewer in the expand layer
+ * (`DocumentPreview`), unless the file is missing. A delete is offered to
+ * the uploader and to an owner of the course, as the server allows.
  */
-import { AlertTriangle, Download, FileCode2, FileText, Pencil, Trash2, X } from "lucide-react";
+import { AlertTriangle, Download, Eye, FileCode2, FileText, Pencil, Trash2, X } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 
 import {
@@ -57,6 +59,7 @@ import {
   useSetDocumentsQuota,
   type UploadRefusal,
 } from "./api";
+import { DocumentPreview } from "./DocumentPreview";
 
 /** The quota is typed in MB, the unit `formatBytes` shows it in. */
 const MB = 1_000_000;
@@ -319,6 +322,7 @@ function DocumentRow({ courseId, document }: { courseId: string; document: Cours
   const toast = useToast();
   const toastError = useErrorToast();
   const [renaming, setRenaming] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const rename = useRenameDocument(courseId);
   const remove = useDeleteDocument(courseId);
   const Icon = document.kind === "pdf" ? FileText : FileCode2;
@@ -343,7 +347,18 @@ function DocumentRow({ courseId, document }: { courseId: string; document: Cours
       <Icon className="mt-0.5 size-5 shrink-0 text-fg-faint" aria-hidden />
       <div className="min-w-0 flex-1 space-y-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="min-w-0 truncate font-medium">{document.title}</span>
+          {document.missing ? (
+            <span className="min-w-0 truncate font-medium">{document.title}</span>
+          ) : (
+            // The title opens the preview: the row's first action, in reach of the eye.
+            <button
+              type="button"
+              onClick={() => setPreviewing(true)}
+              className="min-w-0 truncate text-left font-medium hover:underline hover:underline-offset-2"
+            >
+              {document.title}
+            </button>
+          )}
           {document.missing ? (
             <Badge tone="amber" icon={AlertTriangle}>
               {t("courses.docs.missing")}
@@ -374,13 +389,17 @@ function DocumentRow({ courseId, document }: { courseId: string; document: Cours
         items={[
           ...(document.missing
             ? []
-            : [{ label: t("courses.docs.download"), icon: Download, href: documentFileUrl(courseId, document.id) }]),
+            : [
+                { label: t("courses.docs.preview"), icon: Eye, onSelect: () => setPreviewing(true) },
+                { label: t("courses.docs.download"), icon: Download, href: documentFileUrl(courseId, document.id) },
+              ]),
           { label: t("courses.docs.rename"), icon: Pencil, onSelect: () => setRenaming(true) },
           ...(document.canDelete
             ? [{ label: t("courses.docs.delete"), icon: Trash2, danger: true, onSelect: () => void confirmDelete() }]
             : []),
         ]}
       />
+      {previewing ? <DocumentPreview courseId={courseId} document={document} onClose={() => setPreviewing(false)} /> : null}
       {renaming ? (
         <TextFieldDialog
           title={t("courses.docs.renameTitle")}

@@ -11,13 +11,16 @@ import { mkdir, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/p
 import { dirname, join } from "node:path";
 
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { CourseDocument, CourseLibrary, DEFAULT_DOCUMENTS_QUOTA_BYTES } from "@quiz/contracts";
+import { CourseDocument, CourseLibrary, DEFAULT_DOCUMENTS_QUOTA_BYTES, DocumentHtml } from "@quiz/contracts";
+import { RENDERER_VERSION, renderStandalone } from "@quiz/docrender";
 
 import { auditLog, courseDocuments, courseStaff, courses } from "../../db/schema.js";
 import { testServer, type Actor, type TestServer } from "../../test/http.js";
-import { documentPath, removeIfUnnamed, sweepCandidates, sweepDocumentFiles, SWEEP_GRACE_MS } from "./service.js";
+import type { AppConfig } from "../../config.js";
+import { LIBRARY_TASKS } from "./jobs.js";
+import { documentPath, removeIfUnnamed, rerenderDocuments, sweepCandidates, sweepDocumentFiles, SWEEP_GRACE_MS } from "./service.js";
 
 const MAX = 8192;
 
@@ -383,12 +386,136 @@ describe("the file (Range, inert headers)", () => {
   });
 });
 
+describe("a Markdown document's HTML (the viewer, ADR-144 §6)", () => {
+  const source = "# Formulaire\n\n## Lois\n\n<b>gras</b> et $U = RI$.\n\n## Unités\n";
+
+  it("answers the staff the stored rendering and its table of contents", async () => {
+    const id = await course();
+    const doc = CourseDocument.parse((await upload(id, Buffer.from(source), "formulaire.md")).json());
+    for (const who of [owner, assistant]) {
+      const res = await get(`${base(id)}/${doc.id}/html`, who);
+      expect(res.statusCode, res.body).toBe(200);
+      const body = DocumentHtml.strict().parse(res.json());
+      expect(body.html).toContain('<h2 id="lois">Lois</h2>');
+      // Raw HTML stays text, as rendered at upload.
+      expect(body.html).toContain("&lt;b&gt;");
+      expect(body.toc.map((e) => e.text)).toEqual(["Formulaire", "Lois", "Unités"]);
+    }
+  });
+
+  it("has none for a PDF: the 404 of a missing document", async () => {
+    const id = await course();
+    const doc = (await upload(id, pdf())).json();
+    const res = await get(`${base(id)}/${doc.id}/html`);
+    expect({ status: res.statusCode, body: res.body }).toEqual({ status: 404, body: JSON.stringify({ error: "not_found" }) });
+  });
+
+  it("answers a document of another course, through a course the caller reaches, the 404 of a missing one", async () => {
+    const id = await course();
+    const other = await course();
+    const doc = (await upload(id, Buffer.from(source), "formulaire.md")).json();
+    const res = await get(`${base(other)}/${doc.id}/html`);
+    expect({ status: res.statusCode, body: res.body }).toEqual({ status: 404, body: JSON.stringify({ error: "not_found" }) });
+  });
+});
+
+describe("the re-rendering (library.blob_sweep, ADR-144 §3)", () => {
+  /** A Markdown row as an older renderer left it: its file on disk, an old stamp and old HTML. */
+  async function stale(courseId: string, source: string, renderedWith: number | null, withFile = true) {
+    const doc = CourseDocument.parse((await upload(courseId, Buffer.from(source), `${randomUUID()}.md`)).json());
+    const [row] = await db().select().from(courseDocuments).where(eq(courseDocuments.id, doc.id));
+    await db()
+      .update(courseDocuments)
+      .set({ html: "<p>old</p>", toc: [], warnings: [], renderedWith })
+      .where(eq(courseDocuments.id, doc.id));
+    if (!withFile) await rm(fileOf(row!.sha256));
+    return doc.id;
+  }
+  const rowOf = async (id: string) => (await db().select().from(courseDocuments).where(eq(courseDocuments.id, id)))[0]!;
+
+  it("renders again, from the file, the Markdown an older renderer rendered; leaves the rest", async () => {
+    const id = await course();
+    const older = await stale(id, "# Old\n\n<i>x</i>\n", RENDERER_VERSION - 1);
+    const unstamped = await stale(id, "# Unstamped\n", null);
+    const current = await stale(id, "# Current\n", RENDERER_VERSION);
+    const fileless = await stale(id, "# Gone\n", RENDERER_VERSION - 1, false);
+    const pdfDoc = (await upload(id, pdf())).json();
+
+    expect(await rerenderDocuments(db(), server.assetsDir, server.app.log)).toBeGreaterThanOrEqual(2);
+    expect(await rowOf(older)).toMatchObject({ renderedWith: RENDERER_VERSION, toc: [{ id: "old", depth: 1, text: "Old" }] });
+    expect((await rowOf(older)).html).toContain("&lt;i&gt;");
+    expect((await rowOf(older)).warnings).toEqual([{ code: "raw_html" }]);
+    expect(await rowOf(unstamped)).toMatchObject({ renderedWith: RENDERER_VERSION });
+    // Current already: not touched. Its file gone: kept as it was, tried again next time.
+    expect(await rowOf(current)).toMatchObject({ html: "<p>old</p>", renderedWith: RENDERER_VERSION });
+    expect(await rowOf(fileless)).toMatchObject({ html: "<p>old</p>", renderedWith: RENDERER_VERSION - 1 });
+    expect(await rowOf(pdfDoc.id)).toMatchObject({ html: null, renderedWith: null });
+    // Once caught up, nothing more to do.
+    const again = await stale(id, "# Again\n", RENDERER_VERSION - 1);
+    expect(await rerenderDocuments(db(), server.assetsDir, server.app.log)).toBe(1);
+    expect(await rowOf(again)).toMatchObject({ renderedWith: RENDERER_VERSION });
+  });
+
+  it("goes on past a document whose rendering throws, keeping that one's", async () => {
+    const id = await course();
+    const broken = await stale(id, "# Broken\n", RENDERER_VERSION - 1);
+    const fine = await stale(id, "# Fine\n", RENDERER_VERSION - 1);
+    const warn = vi.fn();
+    const render = (source: string) => {
+      if (source.includes("Broken")) throw new Error("renderer crashed");
+      return renderStandalone(source);
+    };
+    expect(await rerenderDocuments(db(), server.assetsDir, { warn }, render)).toBeGreaterThanOrEqual(1);
+    expect(await rowOf(broken)).toMatchObject({ html: "<p>old</p>", renderedWith: RENDERER_VERSION - 1 });
+    expect(await rowOf(fine)).toMatchObject({ renderedWith: RENDERER_VERSION });
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({ documentId: broken, error: "renderer crashed" }), "document re-rendering failed");
+  });
+
+  it("sweeps the files even when the re-rendering cannot run at all", async () => {
+    const orphan = join(server.assetsDir, documentPath("f".repeat(64)));
+    await mkdir(dirname(orphan), { recursive: true });
+    await writeFile(orphan, "orphan");
+    const longAgo = new Date(server.app.clock.now().getTime() - 2 * SWEEP_GRACE_MS);
+    await utimes(orphan, longAgo, longAgo);
+    const task = LIBRARY_TASKS.find((t) => t.key === "library.blob_sweep")!;
+    // A database the re-rendering's first query fails on, the sweep's own reads intact.
+    const db = server.app.db;
+    const select = db.select.bind(db);
+    let calls = 0;
+    const spy = vi.spyOn(db, "select").mockImplementation(((...args: Parameters<typeof select>) => {
+      calls += 1;
+      if (calls === 1) throw new Error("database gone");
+      return select(...args);
+    }) as typeof db.select);
+    try {
+      const summary = await task.run(server.app, { ASSETS_DIR: server.assetsDir } as AppConfig);
+      expect(summary).toMatch(/^documents not rendered again, \d+ document files swept$/);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await stat(orphan).catch(() => null)).toBeNull();
+  });
+
+  it("is a step of the library's daily task, never of a read", async () => {
+    const id = await course();
+    const doc = await stale(id, "# Daily\n", RENDERER_VERSION - 1);
+    // A read serves what is stored.
+    expect(DocumentHtml.parse((await get(`${base(id)}/${doc}/html`)).json()).html).toBe("<p>old</p>");
+    const task = LIBRARY_TASKS.find((t) => t.key === "library.blob_sweep")!;
+    const summary = await task.run(server.app, { ASSETS_DIR: server.assetsDir } as AppConfig);
+    expect(summary).toMatch(/documents rendered again, \d+ document files swept$/);
+    expect(DocumentHtml.parse((await get(`${base(id)}/${doc}/html`)).json()).html).toContain('<h1 id="daily">Daily</h1>');
+  });
+});
+
 describe("who reaches the library (invariant 6)", () => {
   it("answers a teacher off the staff the 404 of a missing course or document, on every route", async () => {
     const id = await course();
     const doc = (await upload(id, pdf())).json();
+    const sheet = (await upload(id, Buffer.from("# Sheet\n"), "sheet.md")).json();
     const missing = randomUUID();
     const pairs: [string, string, string][] = [
+      ["GET", `${base(id)}/${sheet.id}/html`, `${base(missing)}/${sheet.id}/html`],
       ["GET", base(id), base(missing)],
       ["POST", base(id), base(missing)],
       ["PATCH", `${base(id)}/${doc.id}`, `${base(missing)}/${doc.id}`],
@@ -411,7 +538,7 @@ describe("who reaches the library (invariant 6)", () => {
       const absentSeen = await ask(absent, stranger);
       expect(absentSeen.statusCode).toBe(404);
     }
-    expect((await library(id)).documents).toHaveLength(1);
+    expect((await library(id)).documents).toHaveLength(2);
     // A document of another course, through a course the caller does reach: the 404 of a missing document.
     const other = await course();
     const elsewhere = await get(`${base(other)}/${doc.id}/file`);

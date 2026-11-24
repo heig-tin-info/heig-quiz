@@ -128,6 +128,18 @@
      1 rem of air: the toasts, the docked tools and the page's end spacer
      rise by it. Zero unless a FAB is up. */
   --fab-h: 0px;
+  /* The document viewer's search (DESIGN.md, "The document viewer"): every
+     match a soft amber, the current one the full amber with the ink on it,
+     so the two read apart without the accent (red is the thing to click).
+     The text stays readable through the soft tone (it is translucent), and
+     the ink holds 9:1 on the full one. The PDF's text layer lies over the
+     drawn page, so its two tones are translucent (`.doc-pdf`). */
+  --match: rgb(240 160 75 / 0.38);
+  --match-current: #f0a04b;
+  --match-current-ink: #1a1917;
+  /* The current match over a drawn PDF page, whose text layer lies on top of
+     the word: translucent, with an outline in `--match-current`. */
+  --match-current-over: rgb(240 160 75 / 0.62);
 }
 :root:has([data-tool-dock]) {
   --tool-dock-h: 4rem;
@@ -252,6 +264,8 @@ html.dark {
   --shadow-overlay: 0 16px 48px -16px rgb(0 0 0 / 0.7), 0 1px 3px rgb(0 0 0 / 0.4);
   --shadow-popover: 0 10px 32px -12px rgb(0 0 0 / 0.65), 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-sheet: -12px 0 48px -16px rgb(0 0 0 / 0.7);
+  /* The amber of a match is the same; the soft one a little lighter on the dark surface. */
+  --match: rgb(240 160 75 / 0.30);
 }
 
 @theme inline {
@@ -734,6 +748,9 @@ span.md-body:not(.md-inline) { display: block; }
 /* One heading scale (DESIGN.md, MarkdownView): 24 / 20 / 16 / 14. Product
    owner's gallery review of 2026-10-10: the `#` title was a little too close
    to the subtitle and the body. `.md-sm` steps down one. */
+/* The size scale of rendered markdown. The document viewer's zoomed
+   article (`.doc-md`, `documents/viewer.css`) re-declares it in em: a change
+   here goes there too. */
 .md-body h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
 .md-body h2 { font-size: 20px; font-weight: 700; }
 .md-body h3 { font-size: 16px; }
@@ -884,6 +901,9 @@ span.md-body:not(.md-inline) { display: block; }
 /* After the heading rules, which would otherwise outrank `.md-body > :first-child`. */
 .md-body.md-doc > :first-child { margin-top: 0; }
 .md-body.md-doc > :last-child { margin-bottom: 0; }
+
+/* The document viewer's own rules (`.doc-md`, `.doc-pdf`, the search's
+   tones) live beside it, in `documents/viewer.css`; its tokens are above. */
 
 /* A journal's task list, read as a course plan (`packages/docrender/src/tasks.ts`).
    The box is the marker, so the bullet goes. Three tones for a state the
