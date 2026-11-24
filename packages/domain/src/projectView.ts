@@ -159,9 +159,9 @@ export interface PrimaryActionInput {
    */
   unvalidated?: number;
   /**
-   * An `online_seb` project whose course owner may open the repositories now
-   * (`reposOpeningRefusal` null, ADR-145): at least one may be opened.
-   * Absent (false) for any other project.
+   * An `online_seb` project whose repositories are closed and whose course
+   * owner may open them now (`reposOpeningRefusal` null, ADR-145): at least
+   * one may be opened. Absent (false) for any other project.
    */
   reposOpenable?: boolean;
 }

@@ -1309,8 +1309,8 @@ export { REPOS_OPENING_REFUSALS };
 
 /**
  * The opening of an `online_seb` project's repositories to its students,
- * read-only (ADR-145), for the staff — also the answer of `POST
- * /app/api/projects/:id/repos/open` and `…/repos/close`. `openedAt`: since
+ * read-only (ADR-145), for the staff (`POST
+ * /app/api/projects/:id/repos/open` and `…/repos/close` answer 204). `openedAt`: since
  * when they are open (the server's clock), null while closed. `openable`:
  * the student repositories the opening reaches (frozen for good, holding
  * their student's work); `nothingToOpen`: those frozen with none, left
