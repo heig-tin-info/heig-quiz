@@ -48,6 +48,7 @@ import {
   PROJECT_STATES,
   PUBLISH_MODES,
   REPO_ACCESS_STATES,
+  REPOS_OPENING_REFUSALS,
   STUDENT_PROJECT_STATUSES,
   SYNC_CHANGES,
   slugify,
@@ -669,6 +670,11 @@ export const PROJECT_REFUSALS = [
   // ADR-141: a delete of a project holding a graded repository or released
   // (409); the body is `StudentWorkRefusal`.
   "holds_student_work",
+  // ADR-145 §8: a deadline move — the project's or a repository's own — that
+  // would reopen a repository while the repositories are open to the
+  // students (409): the access is closed first. The opening's own refusals
+  // are `REPOS_OPENING_REFUSALS` ({@link ReposOpeningRefusal}).
+  "repos_open",
 ] as const;
 export const ProjectErrorCode = z.enum(PROJECT_REFUSALS);
 export type ProjectErrorCode = z.infer<typeof ProjectErrorCode>;
@@ -1120,6 +1126,12 @@ export const ProjectRepoView = ProjectRepoDeadlineState.extend({
   accessToRevoke: z.boolean(),
   /** The online workspace's last collection at a deadline (ADR-130 §7); null when none was ordered. */
   collection: ProjectRepoCollection.nullable(),
+  /**
+   * An `online_seb` repository frozen for good that holds no work of its
+   * student (ADR-145 §7, `nothingToOpen` of `@quiz/domain`): the opening
+   * of the repositories leaves it closed. False in any other mode.
+   */
+  nothingToOpen: z.boolean(),
 });
 export type ProjectRepoView = z.infer<typeof ProjectRepoView>;
 
@@ -1290,6 +1302,31 @@ export type ProjectSyncAccepted = z.infer<typeof ProjectSyncAccepted>;
  * M3-16b): a confirmed resync is not fully applied by the `group.sync` job
  * yet — the release answers `409 group_sync_pending` meanwhile.
  */
+/** Why the course owner may not open the repositories now (ADR-145 §1, `reposOpeningRefusal` of `@quiz/domain`): 409, `owner_required` aside. */
+export const ReposOpeningRefusal = z.enum(REPOS_OPENING_REFUSALS);
+export type ReposOpeningRefusal = z.infer<typeof ReposOpeningRefusal>;
+export { REPOS_OPENING_REFUSALS };
+
+/**
+ * The opening of an `online_seb` project's repositories to its students,
+ * read-only (ADR-145), for the staff — also the answer of `POST
+ * /app/api/projects/:id/repos/open` and `…/repos/close`. `openedAt`: since
+ * when they are open (the server's clock), null while closed. `openable`:
+ * the student repositories the opening reaches (frozen for good, holding
+ * their student's work); `nothingToOpen`: those frozen with none, left
+ * closed. `sameSource`: the names of the course's other projects, not
+ * archived, built on the same source repository and not locked yet — a
+ * sitting still to come, which the opening would hand the subject — for
+ * the confirmation to name.
+ */
+export const ProjectReposAccess = z.object({
+  openedAt: z.iso.datetime().nullable(),
+  openable: z.number().int().nonnegative(),
+  nothingToOpen: z.number().int().nonnegative(),
+  sameSource: z.array(z.string()),
+});
+export type ProjectReposAccess = z.infer<typeof ProjectReposAccess>;
+
 export const ProjectDetail = ProjectSummary.extend({
   phase: ProjectPhase,
   releasedAt: z.iso.datetime().nullable(),
@@ -1303,6 +1340,8 @@ export const ProjectDetail = ProjectSummary.extend({
   }),
   liveStale: z.boolean(),
   rows: z.array(ProjectDetailRow),
+  /** The opening of the repositories (ADR-145): an `online_seb` project's; null in any other mode. */
+  reposAccess: ProjectReposAccess.nullable(),
 });
 export type ProjectDetail = z.infer<typeof ProjectDetail>;
 // ---------------------------------------------------------- review checkpoints (M3-05b)
@@ -1610,7 +1649,8 @@ export type StudentProjectWork = z.infer<typeof StudentProjectWork>;
  * never the group's (an expired one is `pending`: theirs to resend; none
  * recorded is null), never a teammate's (ADR-070's amendment of
  * 2026-11-19) — null when nobody is invited, an `online_seb`
- * project's (ADR-047 §2) —, whether GitHub lost it (`deleted`) or holds it
+ * project's (ADR-047 §2) until the course owner opens its repositories, and
+ * again once closed (ADR-145) —, whether GitHub lost it (`deleted`) or holds it
  * locked, its {@link StudentProjectWork}, and the run their score comes
  * from. Before the deadline, `lastCommit` and
  * `ciStatus` are the last push of theirs and its checks as the webhooks
