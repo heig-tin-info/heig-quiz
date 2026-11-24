@@ -1,3 +1,5 @@
+import { createRequire } from "node:module";
+
 import { describe, expect, it } from "vitest";
 
 import { documentParams, pdfjsAssets, RANGE_CHUNK } from "./pdfjs";
@@ -31,5 +33,13 @@ describe("how a PDF is fetched and read (the viewer's hardening)", () => {
     for (const key of ["cMapUrl", "standardFontDataUrl", "iccUrl", "wasmUrl"] as const) {
       expect(params[key]).toMatch(/^\/pdfjs\/6\.5\.438\/[a-z_]+\/$/);
     }
+  });
+
+  // The copy script names the folder after the package's version and the
+  // viewer asks for the library's own: apart, fonts and character maps 404.
+  it("finds that folder under the version the copy script reads", async () => {
+    const lib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const manifest = createRequire(import.meta.url)("pdfjs-dist/package.json") as { version: string };
+    expect(lib.version).toBe(manifest.version);
   });
 });
