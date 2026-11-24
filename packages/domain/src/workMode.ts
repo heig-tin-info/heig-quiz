@@ -11,6 +11,7 @@ import { acceptsKiosk, deviceLevelClients, type DeviceLevel, type SupervisedDevi
 import type { TrustedClient } from "./evaluationConfig.js";
 import { isLiveIndividualRepo, isLiveRepo, type RepoLifeLike } from "./groupRepo.js";
 import { effectiveDeadline, writableUnderCommit, type DeadlineStrategyName } from "./projectRuns.js";
+import { repoOpenable, type OpenableRepo } from "./reposOpening.js";
 
 /** Where the students work: their own tools, the portal's workspace, the workspace under Safe Exam Browser. */
 export const WORK_MODES = ["free", "online", "online_seb"] as const;
@@ -43,14 +44,29 @@ export function isOnlineMode(mode: WorkModeName): mode is Exclude<WorkModeName, 
 }
 
 /**
- * The GitHub permission a student's invitation carries (ADR-047 §2):
- * `push` in their own tools (unchanged), `pull` in the online workspace —
- * only the portal writes —, and no invitation at all under Safe Exam
- * Browser (null): no access before grading.
+ * What the invitation of an `online_seb` repository reads (ADR-145): the
+ * project's opened fact, whether the project is archived, and the
+ * repository ({@link OpenableRepo}); absent for a repository not made yet.
  */
-export function collaboratorPermission(mode: WorkModeName): "push" | "pull" | null {
+export interface OpenedAccess {
+  reposOpen: boolean;
+  projectArchived: boolean;
+  repo: OpenableRepo;
+}
+
+/**
+ * THE GitHub permission an invitation carries (ADR-047 §2 as amended by
+ * ADR-145): `push` in the students' own tools (unchanged), `pull` in the
+ * online workspace — only the portal writes —, and under Safe Exam Browser
+ * nothing (null) until the course owner opens the repositories: then
+ * `pull`, never more, on a repository that may be opened
+ * ({@link repoOpenable}) of a project not archived. Every invitation — an
+ * Accept, a resend, the reconciliation, the opening's job — asks this.
+ */
+export function collaboratorPermission(mode: WorkModeName, access?: OpenedAccess): "push" | "pull" | null {
   if (mode === "free") return "push";
-  return mode === "online" ? "pull" : null;
+  if (mode === "online") return "pull";
+  return access !== undefined && access.reposOpen && !access.projectArchived && repoOpenable(access.repo) ? "pull" : null;
 }
 
 /**
