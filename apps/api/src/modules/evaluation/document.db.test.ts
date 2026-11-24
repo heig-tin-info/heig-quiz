@@ -82,6 +82,14 @@ const SECRETS = [
   "INTERNAL_NAME",
 ];
 
+/**
+ * A Markdown export without the two random hex strings of its front matter,
+ * the evaluation's id and the body's digest: a short all-digit secret turns
+ * up in them by chance (about one run in 900 for four digits), and that is
+ * not a leak. Everything else of the front matter is still searched.
+ */
+const withoutRandomHex = (markdown: string) => markdown.replace(/^(\s*(?:evaluationId|sha256)):.*$/gm, "$1:");
+
 let server: TestServer;
 let teacher: { id: string; headers: Record<string, string> };
 let other: { id: string; headers: Record<string, string> };
@@ -215,7 +223,7 @@ describe("the hand-out (ADR-125)", () => {
     // The choice question is its own zone: a task list of empty boxes, none ticked.
     expect(text).toMatch(/^- \[ \] \*\*A\.\*\* MCQ_/m);
     expect(text).not.toContain("- [x]");
-    expect(findStudentLeaks(text, { secrets: SECRETS })).toEqual([]);
+    expect(findStudentLeaks(withoutRandomHex(text), { secrets: SECRETS })).toEqual([]);
     // The front matter names the evaluation and no seed.
     const seed = (await storedSeed(evaluation.id))!;
     expect(seed).not.toBeNull();
@@ -607,7 +615,7 @@ describe("circuit and logic documents", () => {
       for (const prompt of ["CIRCUIT_PROMPT", "LOGIC_PROMPT", "LOGIC_MAJORITY_PROMPT", "VISIBLE_STIM", "Stimuli cachés"]) {
         expect(res.body).toContain(prompt);
       }
-      expect(findStudentLeaks(res.body, { secrets: SECRETS })).toEqual([]);
+      expect(findStudentLeaks(withoutRandomHex(res.body), { secrets: SECRETS })).toEqual([]);
     });
 
     it("give the staff the reference designators and the equations in the statement with key", async () => {
@@ -737,7 +745,7 @@ describe("diagram documents", () => {
       for (const text of ["DIAGRAM_PROMPT_CLASS", "DIAGRAM_PROMPT_STATE", "Diagramme de classes UML", "Machine d'états"]) {
         expect(md.body).toContain(text);
       }
-      expect(findStudentLeaks(md.body, { secrets: SECRETS })).toEqual([]);
+      expect(findStudentLeaks(withoutRandomHex(md.body), { secrets: SECRETS })).toEqual([]);
     });
 
     it.skipIf(!pdfTools)("serves the hand-out as a PDF whose text holds the starter and no key", async () => {
