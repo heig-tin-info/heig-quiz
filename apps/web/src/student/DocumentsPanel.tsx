@@ -6,8 +6,8 @@
  * A **Documents** button in the player's dock, above the calculator's and
  * the notepad's (it closes neither), opens the panel:
  *   - from 900 px, a SPLIT view: the questions on the left, the panel a
- *     fixed column on the right under the player's bar, which keeps the
- *     clock and "Hand in" across the window (the player scrolls the
+ *     fixed column on the right under the player's bar, whose clock and
+ *     "Hand in" stay over the questions (the player scrolls the
  *     window, so the column is fixed, not a flex sibling), a draggable
  *     separator between — pointer, ←/→ (Shift for larger steps), Home/End,
  *     a double click back to 46 % of the window; the panel keeps 360 px, the

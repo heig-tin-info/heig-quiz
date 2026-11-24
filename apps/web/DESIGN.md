@@ -3323,10 +3323,11 @@ does it.
   slot), a book; it closes neither of them. Shown only while the attempt
   view lists documents and the evaluation is not paused.
 - **Split view** (900 px and up): the panel is a fixed column on the right,
-  under the player's bar — which keeps the clock and "Hand in" across the
-  window — a hairline on its left; the questions, the footer and the docks
-  move left of it (`--tool-dock-inset`), the question's column centered in
-  the room that is left, with or without the side column. The
+  under the player's bar, a hairline on its left. The bar's surface runs
+  across the window; its content, the player's frame and the docks move
+  left of the panel (`--tool-dock-inset`), the frame centered in the room
+  that is left, so the title, the clock and "Hand in" stay over the
+  questions. The
   separator is a 5 px grip on that hairline, `line-strong`, `fg-faint`
   and taller under the pointer or a drag, the accent with its ring when
   focused; 46 % of the window by default, the panel at least 360 px, the
