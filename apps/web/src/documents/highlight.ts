@@ -12,8 +12,6 @@
  * elements, which {@link MatchPainter.clear} takes out again, leaving the
  * text nodes as they were.
  */
-import "./highlight.css";
-
 import type { TextMatch } from "./search";
 
 export const MATCH_HIGHLIGHT = "doc-match";

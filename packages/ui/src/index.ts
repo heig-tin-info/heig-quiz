@@ -32,6 +32,7 @@ export {
   cx,
   gripClass,
   hint,
+  fieldPillClass,
   inputClass,
   inputSize,
   label,

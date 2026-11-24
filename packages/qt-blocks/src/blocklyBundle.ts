@@ -20,7 +20,7 @@
  *    `unsafe-eval`, and the grade is the domain interpreter's).
  *
  * Self-hosted: the media come from our own origin (`/blockly-media/`, copied
- * by `apps/web/scripts/copy-blockly-media.mjs`), and sounds are off.
+ * by `apps/web/scripts/copy-vendor-assets.mjs`), and sounds are off.
  * Keyboard navigation is Blockly 13's own, in core.
  */
 import * as Blockly from "blockly/core";

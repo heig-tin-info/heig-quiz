@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderWithProviders } from "../test/render";
 import { DocumentViewer, type DocumentViewerHandle } from "./DocumentViewer";
-import { loadPdfjs } from "./pdfjs";
+import { documentParams, loadPdfjs } from "./pdfjs";
 
 /*
  * pdf.js itself is not run here (no canvas, no worker in jsdom): `loadPdfjs`
@@ -120,6 +120,7 @@ function makeFake(numPages = 3) {
   };
   state.getDocument.mockImplementation(() => ({ promise: Promise.resolve(doc), destroy: vi.fn(async () => {}) }));
   const lib = {
+    version: "6.5.438",
     getDocument: state.getDocument,
     AnnotationMode: { DISABLE: 0, ENABLE: 1, ENABLE_FORMS: 2, ENABLE_STORAGE: 3 },
     AnnotationEditorType: { DISABLE: -1, NONE: 0 },
@@ -168,19 +169,8 @@ describe("the PDF viewer", () => {
 
   it("opens the document by ranges from our origin, with scripting, forms, editing and external links off", async () => {
     await renderPdf();
-    expect(fake.getDocument).toHaveBeenCalledWith(
-      expect.objectContaining({
-        url: "/files/datasheet.pdf",
-        disableAutoFetch: true,
-        disableStream: true,
-        rangeChunkSize: 1048576,
-        enableXfa: false,
-        withCredentials: false,
-        cMapUrl: "/pdfjs/cmaps/",
-        standardFontDataUrl: "/pdfjs/standard_fonts/",
-        wasmUrl: "/pdfjs/wasm/",
-      }),
-    );
+    // The options themselves are `pdfjs.test.ts`'s: here, that they are the ones used.
+    expect(fake.getDocument).toHaveBeenCalledWith(documentParams("/files/datasheet.pdf", "6.5.438"));
     expect(fake.viewerOptions).toMatchObject({ annotationMode: 1, annotationEditorMode: -1, enableAutoLinking: false });
     expect(fake.viewerOptions).not.toHaveProperty("scriptingManager");
     expect(fake.viewer!.enableScripting).toBe(false);
@@ -210,7 +200,7 @@ describe("the PDF viewer", () => {
     await user.clear(pageField());
     await user.type(pageField(), "9{Enter}");
     await waitFor(() => expect(fake.viewer!.currentPageNumber).toBe(3));
-    expect(next).toBeDisabled();
+    await waitFor(() => expect(next).toBeDisabled());
     // Escape puts the current page back and the focus on the document.
     await user.type(pageField(), "x{Escape}");
     expect(pageField()).toHaveValue("3");
@@ -362,7 +352,8 @@ describe("the Markdown viewer", () => {
     renderWithProviders(<DocumentViewer source={markdown} title="Cheat sheet" />);
     const area = screen.getByRole("region", { name: "Cheat sheet" });
     await waitFor(() => expect(area.querySelector("article.md-body.md-doc")).not.toBeNull());
-    expect(area.querySelector("h2#basics")).toHaveTextContent("Basics");
+    // Its ids are scoped to the viewer (`doc<n>-basics`).
+    expect(area.querySelector("h2[id$='-basics']")).toHaveTextContent("Basics");
     expect(screen.queryByRole("textbox", { name: "Page" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Fit to width" })).not.toBeInTheDocument();
   });
@@ -409,14 +400,47 @@ describe("the Markdown viewer", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Limits" })).toHaveAttribute("aria-current", "true"));
   });
 
-  it("keeps every link inside the document", async () => {
+  it("keeps every link inside the document: nothing to follow, a link within moves the viewer", async () => {
     renderWithProviders(<DocumentViewer source={markdown} title="Cheat sheet" />);
     await waitFor(() => expect(document.querySelector("article a")).not.toBeNull());
-    const [external, anchor] = [...document.querySelectorAll("article a")];
-    // `fireEvent` returns false when the default was prevented.
-    expect(fireEvent.click(external!)).toBe(false);
-    expect(fireEvent.click(anchor!)).toBe(false);
+    const links = [...document.querySelectorAll<HTMLAnchorElement>("article a")];
+    for (const link of links) {
+      expect(link.hasAttribute("href")).toBe(false);
+      expect(link.hasAttribute("target")).toBe(false);
+    }
+    const [external, anchor] = links as [HTMLAnchorElement, HTMLAnchorElement];
+    expect(external.title).toBe("https://example.com/x");
+    // A middle click opens nothing: there is no address left to open.
+    expect(fireEvent(external, new MouseEvent("auxclick", { bubbles: true, cancelable: true, button: 1 }))).toBe(true);
+    expect(anchor).toHaveAttribute("role", "link");
+    const region = screen.getByRole("region", { name: "Cheat sheet" });
+    const heading = region.querySelector<HTMLElement>("h2[id$='limits']")!;
+    Object.defineProperty(heading, "offsetTop", { configurable: true, value: 400 });
+    fireEvent.keyDown(anchor, { key: "Enter" });
+    expect(region.scrollTop).toBe(400 - 12);
     expect(window.location.hash).toBe("");
+  });
+
+  it("scopes the document's ids to its viewer: two documents with one heading, each its own", async () => {
+    renderWithProviders(
+      <>
+        <DocumentViewer source={markdown} title="One" />
+        <DocumentViewer source={markdown} title="Two" />
+      </>,
+    );
+    await waitFor(() => expect(document.querySelectorAll("article")).toHaveLength(2));
+    const ids = [...document.querySelectorAll("article h2")].map((h) => h.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).not.toContain("limits");
+    expect(document.getElementById("limits")).toBeNull();
+    // Each one's link within reaches its own heading.
+    for (const name of ["One", "Two"]) {
+      const region = screen.getByRole("region", { name });
+      const heading = region.querySelector<HTMLElement>("h2[id$='limits']")!;
+      Object.defineProperty(heading, "offsetTop", { configurable: true, value: 300 });
+      fireEvent.click(region.querySelector("a[role='link']")!);
+      expect(region.scrollTop).toBe(300 - 12);
+    }
   });
 
   it("starts a new source from its own state", async () => {

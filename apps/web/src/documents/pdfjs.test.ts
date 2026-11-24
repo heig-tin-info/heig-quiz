@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { documentParams, PDFJS_ASSETS, RANGE_CHUNK } from "./pdfjs";
+import { documentParams, pdfjsAssets, RANGE_CHUNK } from "./pdfjs";
 
+/*
+ * The one place these options are written down: the viewer's test checks
+ * that a PDF is opened with `documentParams`, this one what they are.
+ */
 describe("how a PDF is fetched and read (the viewer's hardening)", () => {
-  const params = documentParams("/app/api/courses/c/documents/d/file");
+  const params = documentParams("/app/api/courses/c/documents/d/file", "6.5.438");
 
   it("reads by 1 MiB ranges, only what is shown", () => {
     expect(RANGE_CHUNK).toBe(1048576);
@@ -22,10 +26,10 @@ describe("how a PDF is fetched and read (the viewer's hardening)", () => {
     expect(params.useSystemFonts).toBe(false);
   });
 
-  it("takes every resource from our own origin", () => {
-    expect(PDFJS_ASSETS).toBe("/pdfjs/");
+  it("takes every resource from our own origin, in the folder of the pdf.js version loaded", () => {
+    expect(pdfjsAssets("6.5.438")).toBe("/pdfjs/6.5.438/");
     for (const key of ["cMapUrl", "standardFontDataUrl", "iccUrl", "wasmUrl"] as const) {
-      expect(params[key]).toMatch(/^\/pdfjs\/[a-z_]+\/$/);
+      expect(params[key]).toMatch(/^\/pdfjs\/6\.5\.438\/[a-z_]+\/$/);
     }
   });
 });

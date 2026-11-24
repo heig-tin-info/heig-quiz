@@ -3298,7 +3298,14 @@ copy made in it is a copy of the page (ADR-088).
 - **The search's two tones**: every match in a soft amber (`--match`), the
   current one in the full amber with the ink on it (`--match-current`,
   `--match-current-ink`): two tones apart without the accent. Over a PDF
-  page both are translucent, since the text layer lies over the drawn word.
+  page the current one is translucent (`--match-current-over`) with an
+  outline in the full tone, since the text layer lies over the drawn word.
+  One set of tokens for both kinds, in `style.css`; every rule of the
+  viewer in `documents/viewer.css`.
+- **Links**: a link of a document opens nothing. One that leaves it reads as
+  text with a dotted underline, no pointer, its address as its tooltip; one
+  within it (a heading, a page) keeps the link's look, a pointer and the
+  keyboard (Tab, Enter).
 - **Focus**: the document itself takes the focus (arrows and Page Up/Down
   scroll it); its ring is drawn 2 px INSIDE the edge, the one place the ring
   is inset, because the viewer fills a panel that would clip it outside.

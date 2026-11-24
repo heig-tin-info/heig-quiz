@@ -1,0 +1,66 @@
+/* The document viewer (`DocumentViewer.tsx`, DESIGN.md "The document
+   viewer"): every rule of its own, on the tokens of `style.css` (`--match`,
+   `--match-current`, `--match-current-ink`, `--match-current-over`, the
+   surfaces). Imported by the viewer, so its chunk carries it. */
+
+/* Markdown: the journal's long-form type at the reader's text size. The
+   sizes `.md-body` writes in px (`style.css`, its size scale) are written
+   again in em of the zoomed body, so one variable scales the text; the
+   spacing stays. */
+.md-body.md-doc.doc-md {
+  --doc-zoom: 1;
+  font-size: calc(14px * var(--doc-zoom));
+  padding: 24px 32px 96px;
+  /* The journal's 48 rem column, centred, growing with the text size. */
+  max-width: calc(48rem * var(--doc-zoom));
+  margin-inline: auto;
+}
+.md-body.md-doc.doc-md h1 { font-size: 2em; }
+.md-body.md-doc.doc-md h2 { font-size: calc(20em / 14); }
+.md-body.md-doc.doc-md h3 { font-size: calc(16em / 14); }
+.md-body.md-doc.doc-md :is(h4, h5, h6) { font-size: 1em; }
+.md-body.md-doc.doc-md pre,
+.md-body.md-doc.doc-md table { font-size: calc(13em / 14); }
+/* A panel beside the questions is narrow: the article keeps 16 px of air. */
+@container doc-viewer (max-width: 30rem) {
+  .md-body.md-doc.doc-md { padding: 16px 16px 72px; }
+}
+/* A link of the document is text that shows its address (`inert.ts`); one
+   within the document is still a link for the keyboard and the eye. */
+.md-body.md-doc.doc-md a:not([role="link"]) { color: inherit; text-decoration: underline dotted; cursor: default; }
+.md-body.md-doc.doc-md a[role="link"] { cursor: pointer; }
+
+/* The search's two tones: highlights where the browser has the CSS Custom
+   Highlight API, `<mark>` elements where it does not (`highlight.ts`). In a
+   stylesheet of its own rather than in `style.css`: the minifier Tailwind
+   runs over `style.css` does not know `::highlight()` yet and warns on
+   every build; Vite's own, which handles this file, does. */
+::highlight(doc-match) { background-color: var(--match); }
+::highlight(doc-current) { background-color: var(--match-current); color: var(--match-current-ink); }
+mark.doc-match { background-color: var(--match); color: inherit; border-radius: 2px; }
+mark.doc-match.doc-current { background-color: var(--match-current); color: var(--match-current-ink); }
+
+/* PDF: the pages stay white paper in both themes, as printed; the desk
+   around them follows the theme. A hairline, not a shadow, sets a page off
+   the desk (DESIGN.md, Shape and elevation). pdf.js's stylesheet loads after
+   this one, hence the selectors one class stronger than its own. */
+.doc-pdf .pdfViewer { padding: 12px 0 72px; }
+.doc-pdf .pdfViewer.removePageBorders .page {
+  margin: 0 auto 12px;
+  border: 0;
+  background-color: #fff;
+  box-shadow: 0 0 0 1px var(--line-strong);
+}
+/* The same tones as the Markdown search. The text layer lies OVER the drawn
+   page, so the current one is the translucent `--match-current-over`, with
+   an outline in the full tone: the word stays visible under both. */
+.doc-pdf .pdfViewer .textLayer .highlight {
+  --highlight-bg-color: var(--match);
+  --highlight-selected-bg-color: var(--match-current-over);
+  border-radius: 2px;
+}
+.doc-pdf .pdfViewer .textLayer .highlight.selected { outline: 2px solid var(--match-current); }
+/* pdf.js's link of the document (`inert.ts`): a pointer for one that moves
+   the viewer, none for a web address, which opens nothing. */
+.doc-pdf .annotationLayer a[role="link"] { cursor: pointer; }
+.doc-pdf .annotationLayer a:not([role="link"]) { cursor: default; }

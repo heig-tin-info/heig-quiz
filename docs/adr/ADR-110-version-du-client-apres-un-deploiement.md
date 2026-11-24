@@ -3,6 +3,9 @@
 ## Status
 
 Accepted (2026-10-14, product owner decisions after a report of stale tabs).
+Amended 2026-11-24 by [ADR-144](ADR-144-documents-fournis.md) §6, scope §1–2
+only: `pdfjs/` (pdf.js's data, one folder per pdf.js version) is kept and
+cached like `assets/`.
 
 Scope: how a browser tab opened before a deploy keeps working, learns that
 the server runs a newer build, and when it may switch to it.

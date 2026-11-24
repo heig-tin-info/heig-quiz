@@ -137,6 +137,9 @@
   --match: rgb(240 160 75 / 0.38);
   --match-current: #f0a04b;
   --match-current-ink: #1a1917;
+  /* The current match over a drawn PDF page, whose text layer lies on top of
+     the word: translucent, with an outline in `--match-current`. */
+  --match-current-over: rgb(240 160 75 / 0.62);
 }
 :root:has([data-tool-dock]) {
   --tool-dock-h: 4rem;
@@ -745,6 +748,9 @@ span.md-body:not(.md-inline) { display: block; }
 /* One heading scale (DESIGN.md, MarkdownView): 24 / 20 / 16 / 14. Product
    owner's gallery review of 2026-10-10: the `#` title was a little too close
    to the subtitle and the body. `.md-sm` steps down one. */
+/* The size scale of rendered markdown. The document viewer's zoomed
+   article (`.doc-md`, `documents/viewer.css`) re-declares it in em: a change
+   here goes there too. */
 .md-body h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; }
 .md-body h2 { font-size: 20px; font-weight: 700; }
 .md-body h3 { font-size: 16px; }
@@ -896,50 +902,8 @@ span.md-body:not(.md-inline) { display: block; }
 .md-body.md-doc > :first-child { margin-top: 0; }
 .md-body.md-doc > :last-child { margin-bottom: 0; }
 
-/* The document viewer (`src/documents/`, DESIGN.md "The document viewer").
-   Markdown: the journal's long-form type at the reader's text size. The
-   sizes `.md-body` writes in px are written again in em of the zoomed body,
-   so one variable scales the text; the spacing stays. */
-.md-body.md-doc.doc-md {
-  --doc-zoom: 1;
-  font-size: calc(14px * var(--doc-zoom));
-  padding: 24px 32px 96px;
-  /* The journal's 48 rem column, centred, growing with the text size. */
-  max-width: calc(48rem * var(--doc-zoom));
-  margin-inline: auto;
-}
-.md-body.md-doc.doc-md h1 { font-size: 2em; }
-.md-body.md-doc.doc-md h2 { font-size: calc(20em / 14); }
-.md-body.md-doc.doc-md h3 { font-size: calc(16em / 14); }
-.md-body.md-doc.doc-md :is(h4, h5, h6) { font-size: 1em; }
-.md-body.md-doc.doc-md pre,
-.md-body.md-doc.doc-md table { font-size: calc(13em / 14); }
-/* A panel beside the questions is narrow: the article keeps 16 px of air. */
-@container doc-viewer (max-width: 30rem) {
-  .md-body.md-doc.doc-md { padding: 16px 16px 72px; }
-}
-/* The search's two tones (`--match`, `--match-current`) are painted by
-   `documents/highlight.css`, beside the code that registers them. */
-
-/* PDF: the pages stay white paper in both themes, as printed; the desk
-   around them follows the theme. A hairline, not a shadow, sets a page off
-   the desk (DESIGN.md, Shape and elevation). pdf.js's stylesheet loads after
-   this one, hence the selectors one class stronger than its own. */
-.doc-pdf .pdfViewer { padding: 12px 0 72px; }
-.doc-pdf .pdfViewer.removePageBorders .page {
-  margin: 0 auto 12px;
-  border: 0;
-  background-color: #fff;
-  box-shadow: 0 0 0 1px var(--line-strong);
-}
-/* The text layer lies OVER the drawn page: its tones are translucent, the
-   same amber as the Markdown search, so the word stays visible under them. */
-.doc-pdf .pdfViewer .textLayer .highlight {
-  --highlight-bg-color: rgb(240 160 75 / 0.35);
-  --highlight-selected-bg-color: rgb(235 120 0 / 0.45);
-  border-radius: 2px;
-}
-.doc-pdf .pdfViewer .textLayer .highlight.selected { outline: 2px solid rgb(205 95 0); }
+/* The document viewer's own rules (`.doc-md`, `.doc-pdf`, the search's
+   tones) live beside it, in `documents/viewer.css`; its tokens are above. */
 
 /* A journal's task list, read as a course plan (`packages/docrender/src/tasks.ts`).
    The box is the marker, so the bullet goes. Three tones for a state the

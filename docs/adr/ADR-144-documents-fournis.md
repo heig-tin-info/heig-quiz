@@ -14,8 +14,9 @@ Scope: the `library` module (`apps/api/src/modules/library/`), the table
 page's Documents tab; from PR2 the viewer; from PR3 an evaluation's provided
 documents and the player's panel. F-ORG-18, F-ADMIN-10, N-SEC-24.
 
-Relations: amends [ADR-003](ADR-003-postgresql-drizzle.md) §1 (scoped
-amendment below); extends the provided tools of an evaluation, after the
+Relations: amends [ADR-003](ADR-003-postgresql-drizzle.md) §1 and
+[ADR-110](ADR-110-version-du-client-apres-un-deploiement.md) §1–2 (scoped
+amendments below); extends the provided tools of an evaluation, after the
 calculator ([ADR-069](ADR-069-calculatrice-fournie.md)) and the notepad
 ([ADR-090](ADR-090-calepin-fourni.md)); reads [ADR-088](ADR-088-journal-d-integrite.md) (the integrity
 journal), [ADR-068](ADR-068-roles-de-l-equipe-du-cours.md) (the roles of a course) and [ADR-117](ADR-117-pseudonymisation-d-un-compte-sur-demande.md) (an account is
@@ -142,17 +143,31 @@ The PDF viewer is pdf.js, pinned, hardened:
   navigate.
 - **Our origin only.** The worker is a build asset of Quiz's origin (a
   module worker, never `blob:`); the character maps, standard fonts, ICC
-  profiles and decoders are copied under `/pdfjs/`. `useSystemFonts` is
-  off: a font a PDF does not embed comes from those standard fonts, so a
-  page reads the same on every machine.
+  profiles and decoders are copied under `/pdfjs/<pdf.js version>/`, and
+  the viewer asks for the folder of the version it loaded. `useSystemFonts`
+  is off: a font a PDF does not embed comes from those standard fonts, so
+  a page reads the same on every machine. *Scoped amendment of ADR-110
+  §1–2*: `pdfjs/` is kept across deploys and cached like `assets/` (its
+  files never change under their version), so a tab opened before an
+  upgrade of pdf.js keeps its worker and its own data.
 - **Ranges.** `disableAutoFetch`, `disableStream`, chunks of 1 MiB: only
   what the pages on screen or a search need. pdf.js merges adjacent chunks
   into one request, and reads a file of 2 MiB or less in one request.
 
-The links of a Markdown document are inert in the viewer, as a PDF's are,
-in-page anchors excepted: an external link must never take the exam's tab
-away. The viewer is never an `iframe`: a copy made in it is a copy of the
-page (ADR-088).
+- **Links navigate nothing.** No link of a document, PDF or Markdown,
+  keeps an `href` or a `target`: a click, a middle click, the context menu
+  or a drag opens nothing, and a web address shows itself as a tooltip. A
+  link within the document (a heading, a page, an outline entry) stays a
+  keyboard link and moves the viewer.
+- **A copy is the page's.** The viewer is never an `iframe`, and a copy
+  made in it is one of the page's own copies (ADR-088): the viewer takes
+  the copy from pdf.js's text layer, so the clipboard gets the selection as
+  the journal reads it and the event reaches the journal's listeners, and
+  pdf.js's "copy all" (a hidden element and a document-wide listener that
+  writes the whole PDF's text after Ctrl+A) is taken out of the page.
+- **Ids are the viewer's.** A Markdown document's ids are prefixed per
+  viewer, so a heading never collides with an id of the page, nor with one
+  of another document mounted beside it.
 
 ### 7. Documents provided by an evaluation (PR3, product owner)
 

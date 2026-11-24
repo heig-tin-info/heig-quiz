@@ -5,11 +5,14 @@
  * A PDF is active content, and what it may do here is decided once, below:
  * no document script (no scripting manager is given, so `enableScripting` is
  * false), no XFA, no form field and no annotation editing (annotations are
- * drawn, never filled nor added), and an external link is inert — it shows
- * its address but never navigates, so a link in a datasheet cannot take the
- * exam's tab away. Internal links and outline entries navigate. pdf.js 6
- * compiles no font with `new Function` any more (it has no `isEvalSupported`
- * to turn off), and the CSP refuses any eval anyway.
+ * drawn, never filled nor added), and no link navigates the browser
+ * (`inert.ts`): a web address shows itself and opens nothing, so a link in
+ * a datasheet cannot take the exam's tab away; internal links and outline
+ * entries move the viewer. A copy in the text layer is the page's own, as
+ * the integrity journal sees it, and pdf.js's "copy all" is taken out
+ * (`inert.ts`). pdf.js 6 compiles no font with `new Function` any more (it
+ * has no `isEvalSupported` to turn off), and the CSP refuses any eval
+ * anyway.
  *
  * The position is kept as a destination (a page and a point of it, in PDF
  * units), so a remount at another width shows the same spot.
@@ -17,6 +20,7 @@
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { EventBus, PDFFindController, PDFLinkService, PDFViewer } from "pdfjs-dist/legacy/web/pdf_viewer.mjs";
 
+import { dropCopyAll, inertPdfLinks, ownTextLayerCopies, pdfLinkAttributes } from "./inert";
 import { currentEntry, type OutlineItem } from "./outline";
 import { documentParams, loadPdfjs, type Pdfjs } from "./pdfjs";
 import { type DocView, type SearchCount, type ViewOptions, type ViewStatus, watchSize } from "./view";
@@ -85,7 +89,7 @@ export class PdfView implements DocView {
       const { lib, viewer: components } = await loadPdfjs();
       if (this.#destroyed) return;
       this.#build(lib, components);
-      this.#task = lib.getDocument(documentParams(this.#url));
+      this.#task = lib.getDocument(documentParams(this.#url, lib.version));
       this.#doc = await this.#task.promise;
     } catch (error) {
       if (this.#destroyed) return;
@@ -114,6 +118,7 @@ export class PdfView implements DocView {
     // A destination's zoom never changes the student's.
     const linkService = new PDFLinkService({ eventBus, ignoreDestinationZoom: true });
     linkService.externalLinkEnabled = false;
+    linkService.addLinkAttributes = pdfLinkAttributes;
     const findController = new PDFFindController({ eventBus, linkService });
     quietScroll(findController, () => this.#quietFind);
     // `abortSignal` (read by pdf.js, missing from its types) takes the
@@ -140,7 +145,11 @@ export class PdfView implements DocView {
     this.#parts = { eventBus, linkService, findController, viewer };
 
     const opts = { signal: this.#abort.signal };
+    ownTextLayerCopies(this.#element, this.#abort.signal);
     eventBus.on("pagesinit", () => this.#onPagesInit(), opts);
+    eventBus.on("annotationlayerrendered", ({ source }: { source: { div?: HTMLElement } }) => {
+      inertPdfLinks(source.div ?? this.#element);
+    }, opts);
     eventBus.on("pagechanging", ({ pageNumber }: { pageNumber: number }) => {
       this.page = pageNumber;
       this.#onChange();
@@ -174,6 +183,8 @@ export class PdfView implements DocView {
   }
 
   #onPagesInit(): void {
+    // pdf.js put its "copy all" element in the page just before this event.
+    dropCopyAll(this.#element);
     const { viewer } = this.#parts!;
     viewer.currentScaleValue = String(this.#scale);
     this.restore();
@@ -388,9 +399,11 @@ export const SCROLL_FLAG = "_scrollMatches";
  * a query restored on load must leave the reader where they were, so while
  * `quiet()` holds the scroll is skipped and its pending flag cleared (else
  * pdf.js would scroll at the next page drawn). Without the flag (another
- * pdf.js) nothing is changed: the restored query scrolls to its match, and
- * the view goes back to the kept position once the search settles
- * (`updatefindcontrolstate`), as before. Returns whether it took effect.
+ * pdf.js) nothing is changed and a restored query moves the view: the
+ * viewer puts it back once the search settles (`updatefindcontrolstate`),
+ * but pdf.js may still scroll to the match when its page is first drawn,
+ * later. A warning says so; the test of this file fails first. Returns
+ * whether it took effect.
  */
 export function quietScroll(findController: PDFFindController, quiet: () => boolean): boolean {
   const controller = findController as unknown as Record<string, unknown> & PDFFindController;

@@ -219,7 +219,7 @@ const scenes = [
     await p.getByRole("button", { name: /^(formulaire d'électronique)$/i }).first().click();
     await p.locator(".doc-pdf .page canvas").first().waitFor();
     await p.getByRole("dialog").getByRole("searchbox").fill("résistance");
-    await p.waitForTimeout(1500); // pdf.js searches page by page
+    await p.locator(".doc-pdf .textLayer .highlight.selected").first().waitFor();
   } },
   { name: "course-documents-preview-md", role: "teacher", path: "/courses/c1/documents", fold: true, act: async (p) => {
     await p.getByRole("button", { name: /^(aide-mémoire du langage c)$/i }).first().click();

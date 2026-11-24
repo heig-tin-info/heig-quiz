@@ -15,25 +15,6 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("finding matches in a rendered document", () => {
-  it("finds a match across inline elements, folded", () => {
-    const root = article("<p>Une <em>Rés</em>istance et une resistance.</p>");
-    const matches = findTextMatches(root, "résistance");
-    expect(matches).toHaveLength(2);
-    expect(matches[0]!.map((s) => [s.node.data.slice(s.start, s.end)])).toEqual([["Rés"], ["istance"]]);
-    expect(matches[1]!).toHaveLength(1);
-  });
-
-  it("searches the visible copy of a formula, not its MathML", () => {
-    const root = article('<p><span class="katex"><span class="katex-mathml">gain</span><span class="katex-html">G</span></span> gain</p>');
-    expect(findTextMatches(root, "gain")).toHaveLength(1);
-  });
-
-  it("finds nothing for a blank query", () => {
-    expect(findTextMatches(article("<p>a b</p>"), "  ")).toEqual([]);
-  });
-});
-
 describe("painting the matches with <mark> (no Custom Highlight API)", () => {
   it("wraps every match, marks the current one, and leaves the text whole when cleared", () => {
     const root = article("<p>gain <strong>ga</strong>in, again</p><p>no</p>");

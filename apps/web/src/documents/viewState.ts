@@ -8,45 +8,13 @@
  * So a viewer mounted again at another width — a full screen, a narrower
  * panel, a reload — puts the same passage back on top. The host may keep it
  * anywhere (PR3 keeps it per attempt in `sessionStorage`), so what comes back
- * is read through {@link readViewState}, which never trusts its shape.
+ * is read through {@link readViewState}, which never trusts its shape: one
+ * schema gives the type and the reader, each field falling back to its
+ * default and every number clamped.
  */
+import { z } from "zod";
 
 export type DocumentKind = "pdf" | "markdown";
-
-/** A point of a PDF page, in PDF units (pdf.js's `XYZ` destination). */
-export interface PdfLocation {
-  pageNumber: number;
-  top: number | null;
-  left: number | null;
-}
-
-/** The first Markdown block not yet scrolled past, and how far into it the top of the view is. */
-export interface MarkdownAnchor {
-  block: number;
-  fraction: number;
-}
-
-/** `page-width` follows the viewer's width; a number is a fixed scale. */
-export type PdfScale = "page-width" | number;
-
-export interface PdfViewState {
-  kind: "pdf";
-  location: PdfLocation | null;
-  scale: PdfScale;
-  query: string;
-  outline: boolean;
-}
-
-export interface MarkdownViewState {
-  kind: "markdown";
-  anchor: MarkdownAnchor | null;
-  /** The text size, 1 being the journal's. */
-  zoom: number;
-  query: string;
-  outline: boolean;
-}
-
-export type DocumentViewState = PdfViewState | MarkdownViewState;
 
 /** The scales a PDF steps through; fit-width may land between two of them. */
 export const PDF_ZOOMS = [0.5, 0.67, 0.75, 0.85, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3] as const;
@@ -58,15 +26,66 @@ export const MAX_QUERY = 200;
 
 const EPSILON = 0.001;
 
+const clamp = (min: number, max: number) => (value: number) => Math.min(Math.max(value, min), max);
+const lowest = (ladder: readonly number[]) => ladder[0]!;
+const highest = (ladder: readonly number[]) => ladder[ladder.length - 1]!;
+
+const Query = z.string().transform((query) => query.slice(0, MAX_QUERY)).catch("");
+const Outline = z.boolean().catch(false);
+/** A coordinate of a PDF point: a finite number (zod refuses NaN and the infinities), else none. */
+const Coordinate = z.number().nullable().catch(null);
+
+/** A point of a PDF page, in PDF units (pdf.js's `XYZ` destination). */
+const PdfLocation = z.object({
+  pageNumber: z.number().min(1).transform(Math.floor),
+  top: Coordinate,
+  left: Coordinate,
+});
+export type PdfLocation = z.infer<typeof PdfLocation>;
+
+/** The first Markdown block not yet scrolled past, and how far into it the top of the view is (negative above the first). */
+const MarkdownAnchor = z.object({
+  block: z.number().min(0).transform(Math.floor),
+  fraction: z.number().transform(clamp(-1, 1)),
+});
+export type MarkdownAnchor = z.infer<typeof MarkdownAnchor>;
+
+const PdfViewState = z.object({
+  kind: z.literal("pdf"),
+  location: PdfLocation.nullable().catch(null),
+  /** `page-width` follows the viewer's width; a number is a fixed scale. */
+  scale: z
+    .union([z.literal("page-width"), z.number().transform(clamp(lowest(PDF_ZOOMS), highest(PDF_ZOOMS)))])
+    .catch("page-width"),
+  query: Query,
+  outline: Outline,
+});
+
+const MarkdownViewState = z.object({
+  kind: z.literal("markdown"),
+  anchor: MarkdownAnchor.nullable().catch(null),
+  /** The text size, 1 being the journal's. */
+  zoom: z.number().transform(clamp(lowest(MARKDOWN_ZOOMS), highest(MARKDOWN_ZOOMS))).catch(1),
+  query: Query,
+  outline: Outline,
+});
+
+/** The reading state of a viewer, as a host keeps it. */
+export const DocumentViewState = z.discriminatedUnion("kind", [PdfViewState, MarkdownViewState]);
+export type DocumentViewState = z.infer<typeof DocumentViewState>;
+export type PdfViewState = z.infer<typeof PdfViewState>;
+export type MarkdownViewState = z.infer<typeof MarkdownViewState>;
+export type PdfScale = PdfViewState["scale"];
+
 /** One step along `ladder` from `current` (which may sit between two rungs), towards `dir`. */
 export function zoomStep(ladder: readonly number[], current: number, dir: 1 | -1): number {
-  if (dir > 0) return ladder.find((z) => z > current + EPSILON) ?? ladder[ladder.length - 1]!;
-  return [...ladder].reverse().find((z) => z < current - EPSILON) ?? ladder[0]!;
+  if (dir > 0) return ladder.find((rung) => rung > current + EPSILON) ?? highest(ladder);
+  return [...ladder].reverse().find((rung) => rung < current - EPSILON) ?? lowest(ladder);
 }
 
 /** Whether a step towards `dir` changes anything. */
 export function canZoom(ladder: readonly number[], current: number, dir: 1 | -1): boolean {
-  return dir > 0 ? current < ladder[ladder.length - 1]! - EPSILON : current > ladder[0]! + EPSILON;
+  return dir > 0 ? current < highest(ladder) - EPSILON : current > lowest(ladder) + EPSILON;
 }
 
 /**
@@ -81,62 +100,19 @@ export function parsePageInput(text: string, pageCount: number): number | null {
   return Math.min(Math.max(1, Number.parseInt(trimmed, 10)), pageCount);
 }
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
-const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
-
-function readQuery(value: unknown): string {
-  return typeof value === "string" ? value.slice(0, MAX_QUERY) : "";
-}
-
-function readLocation(value: unknown): PdfLocation | null {
-  if (!isRecord(value) || !finite(value["pageNumber"]) || value["pageNumber"] < 1) return null;
-  const coordinate = (v: unknown) => (finite(v) ? v : null);
-  return { pageNumber: Math.floor(value["pageNumber"]), top: coordinate(value["top"]), left: coordinate(value["left"]) };
-}
-
-function readAnchor(value: unknown): MarkdownAnchor | null {
-  if (!isRecord(value) || !finite(value["block"]) || !finite(value["fraction"]) || value["block"] < 0) return null;
-  // Negative above the first block (the article's top padding); at most the whole block.
-  return { block: Math.floor(value["block"]), fraction: clamp(value["fraction"], -1, 1) };
-}
-
 /** The state a viewer starts from when nothing was kept. */
 export function initialViewState(kind: DocumentKind): DocumentViewState {
-  return kind === "pdf"
-    ? { kind, location: null, scale: "page-width", query: "", outline: false }
-    : { kind, anchor: null, zoom: 1, query: "", outline: false };
+  return DocumentViewState.parse({ kind });
 }
 
 /**
  * A kept state, read back for a document of `kind`: every field checked and
  * clamped, anything missing or malformed replaced by its default. A state of
- * the other kind is ignored entirely.
+ * the other kind, or no state at all, is the initial one.
  */
 export function readViewState(kind: DocumentKind, raw: unknown): DocumentViewState {
-  const base = initialViewState(kind);
-  if (!isRecord(raw) || raw["kind"] !== kind) return base;
-  const query = readQuery(raw["query"]);
-  const outline = raw["outline"] === true;
-  if (base.kind === "pdf") {
-    const scale = raw["scale"];
-    return {
-      ...base,
-      location: readLocation(raw["location"]),
-      scale: finite(scale) ? clamp(scale, PDF_ZOOMS[0], PDF_ZOOMS[PDF_ZOOMS.length - 1]!) : "page-width",
-      query,
-      outline,
-    };
-  }
-  const zoom = raw["zoom"];
-  return {
-    ...base,
-    anchor: readAnchor(raw["anchor"]),
-    zoom: finite(zoom) ? clamp(zoom, MARKDOWN_ZOOMS[0], MARKDOWN_ZOOMS[MARKDOWN_ZOOMS.length - 1]!) : 1,
-    query,
-    outline,
-  };
+  const read = DocumentViewState.safeParse(raw);
+  return read.success && read.data.kind === kind ? read.data : initialViewState(kind);
 }
 
 /** Whether two states are the same (a host is told only of a change). */

@@ -172,6 +172,14 @@ describe("app (serving the built SPA)", () => {
     await writeFile(join(history, "assets", "page-GONE.js"), "export const page = 0;\n");
     const longAgo = new Date(Date.now() - 40 * 24 * 3_600_000);
     await utimes(join(history, "assets", "page-GONE.js"), longAgo, longAgo);
+    // ADR-144 §6: pdf.js's data, one folder per version; an earlier version is kept, a long-gone one pruned.
+    await mkdir(join(dir, "pdfjs", "6.5.438", "cmaps"), { recursive: true });
+    await writeFile(join(dir, "pdfjs", "6.5.438", "cmaps", "NEW.bcmap"), "new");
+    await mkdir(join(history, "pdfjs", "6.4.0", "cmaps"), { recursive: true });
+    await writeFile(join(history, "pdfjs", "6.4.0", "cmaps", "OLD.bcmap"), "old");
+    await mkdir(join(history, "pdfjs", "5.0.0", "wasm"), { recursive: true });
+    await writeFile(join(history, "pdfjs", "5.0.0", "wasm", "GONE.wasm"), "gone");
+    await utimes(join(history, "pdfjs", "5.0.0", "wasm", "GONE.wasm"), longAgo, longAgo);
     app = await buildApp({
       config: loadConfig({
         NODE_ENV: "test",
@@ -261,6 +269,19 @@ describe("app (serving the built SPA)", () => {
     expect(existsSync(join(history, "assets", "page-NEW.js"))).toBe(true);
     expect(existsSync(join(history, "assets", "page-GONE.js"))).toBe(false);
     expect((await app.inject({ method: "GET", url: "/assets/page-GONE.js" })).statusCode).toBe(404);
+  });
+
+  it("keeps an earlier pdf.js version's data beside the current one, caches both for good, prunes the long-gone", async () => {
+    for (const [url, body] of [["/pdfjs/6.5.438/cmaps/NEW.bcmap", "new"], ["/pdfjs/6.4.0/cmaps/OLD.bcmap", "old"]] as const) {
+      const res = await app.inject({ method: "GET", url });
+      expect(res.statusCode, url).toBe(200);
+      expect(res.body).toBe(body);
+      expect(res.headers["cache-control"]).toBe("public, max-age=31536000, immutable");
+    }
+    expect(existsSync(join(history, "pdfjs", "6.5.438", "cmaps", "NEW.bcmap"))).toBe(true);
+    // The file and the folders it emptied.
+    expect(existsSync(join(history, "pdfjs", "5.0.0"))).toBe(false);
+    expect((await app.inject({ method: "GET", url: "/pdfjs/5.0.0/wasm/GONE.wasm" })).statusCode).toBe(404);
   });
 
   // Audit L21: the commit is named to a signed-in caller only.

@@ -2,6 +2,7 @@
  * The outline of a document: its entries in reading order, two levels deep,
  * and the nesting the outline panel draws them with.
  */
+import type { JournalTocEntry } from "@quiz/contracts";
 
 export interface OutlineItem {
   title: string;
@@ -9,12 +10,6 @@ export interface OutlineItem {
   level: 1 | 2;
 }
 
-/** A heading of a rendered Markdown document, as `packages/docrender` lists it (`toc`). */
-export interface TocEntry {
-  id: string;
-  depth: number;
-  text: string;
-}
 
 /**
  * The outline of a Markdown document, from its table of contents: the two
@@ -22,7 +17,7 @@ export interface TocEntry {
  * title, which the reader already sees on top: it is left out when the
  * document has other headings.
  */
-export function markdownOutline(toc: readonly TocEntry[]): { items: OutlineItem[]; ids: string[] } {
+export function markdownOutline(toc: readonly JournalTocEntry[]): { items: OutlineItem[]; ids: string[] } {
   let entries = toc.filter((e) => e.text.trim() !== "");
   const titles = entries.filter((e) => e.depth === 1);
   if (titles.length === 1 && entries.length > 1) entries = entries.filter((e) => e !== titles[0]);

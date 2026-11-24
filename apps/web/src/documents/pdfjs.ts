@@ -15,7 +15,9 @@
  * started by pdf.js as a module worker from a same-origin URL (no `blob:`
  * wrapper, which pdf.js only makes for a foreign one); the character maps,
  * the standard fonts, the ICC profiles and the WebAssembly decoders are
- * copied into `/pdfjs/` by `scripts/copy-pdfjs-assets.mjs`.
+ * copied into `/pdfjs/<version>/` by `scripts/copy-vendor-assets.mjs`, and
+ * the viewer asks for the folder of the version it loaded: a tab opened
+ * before an upgrade keeps reading its own (ADR-110 keeps that folder).
  */
 import { installPdfPolyfills } from "./polyfills";
 import workerUrl from "./pdfWorker?worker&url";
@@ -28,8 +30,8 @@ export interface Pdfjs {
   viewer: PdfjsViewer;
 }
 
-/** Where `scripts/copy-pdfjs-assets.mjs` puts what pdf.js fetches at run time. */
-export const PDFJS_ASSETS = "/pdfjs/";
+/** Where `scripts/copy-vendor-assets.mjs` puts what pdf.js `version` fetches at run time. */
+export const pdfjsAssets = (version: string) => `/pdfjs/${version}/`;
 
 /**
  * Each range request is authenticated by the API (the file route checks the
@@ -42,7 +44,8 @@ export const RANGE_CHUNK = 1 << 20;
  * How a document is fetched and read. Exported for its test: these options
  * are the viewer's hardening, not a matter of taste.
  */
-export function documentParams(url: string) {
+export function documentParams(url: string, version: string) {
+  const assets = pdfjsAssets(version);
   return {
     url,
     // Same-origin cookies, as every fetch of the app (`api.ts`); `true`
@@ -54,14 +57,14 @@ export function documentParams(url: string) {
     rangeChunkSize: RANGE_CHUNK,
     // No XFA form is rendered: a form is no part of a document provided to read.
     enableXfa: false,
-    cMapUrl: `${PDFJS_ASSETS}cmaps/`,
+    cMapUrl: `${assets}cmaps/`,
     cMapPacked: true,
-    standardFontDataUrl: `${PDFJS_ASSETS}standard_fonts/`,
+    standardFontDataUrl: `${assets}standard_fonts/`,
     // A font the PDF does not embed is drawn from the standard fonts we
     // serve, never from the machine's own: the same page on every machine.
     useSystemFonts: false,
-    iccUrl: `${PDFJS_ASSETS}iccs/`,
-    wasmUrl: `${PDFJS_ASSETS}wasm/`,
+    iccUrl: `${assets}iccs/`,
+    wasmUrl: `${assets}wasm/`,
   };
 }
 

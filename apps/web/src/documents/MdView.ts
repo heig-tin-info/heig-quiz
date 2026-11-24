@@ -9,11 +9,20 @@
  * past, and the fraction of it above the top of the view — so after a
  * reflow (another width, another text size) the same passage is on top.
  *
- * A link in the document never leaves it: an in-page anchor scrolls the
- * viewer, any other link is inert. The viewer may sit in an exam's tab.
+ * A link in the document never leaves it (`inert.ts`): an in-page anchor
+ * scrolls the viewer, any other link keeps its text and opens nothing. The
+ * ids of the document are its own: each viewer prefixes them, so a heading
+ * never collides with an id of the page around it, nor with the same
+ * heading of another document mounted beside it.
+ *
+ * The search runs once the reader pauses ({@link SEARCH_DELAY}); until then
+ * its count says it is pending.
  */
+import type { JournalTocEntry } from "@quiz/contracts";
+
 import { createPainter, type MatchPainter } from "./highlight";
-import { currentEntry, markdownOutline, type OutlineItem, type TocEntry } from "./outline";
+import { inertLink, inPageLink } from "./inert";
+import { currentEntry, markdownOutline, type OutlineItem } from "./outline";
 import { findTextMatches } from "./search";
 import { type DocView, type SearchCount, type ViewOptions, type ViewStatus, watchSize } from "./view";
 import { canZoom, MARKDOWN_ZOOMS, type MarkdownAnchor, type MarkdownViewState, zoomStep } from "./viewState";
@@ -22,6 +31,20 @@ import { canZoom, MARKDOWN_ZOOMS, type MarkdownAnchor, type MarkdownViewState, z
 const MATCH_MARGIN = 24;
 /** A heading reached from the outline sits this far under the top. */
 const HEADING_GAP = 12;
+/** A search runs once the reader has stopped typing for this long. */
+export const SEARCH_DELAY = 120;
+
+/** Each viewer's prefix of the document's ids. */
+let viewers = 0;
+
+/** An id from an in-page `href` ("#a%C3%A9" → "aé"). */
+function decodeId(hash: string): string {
+  try {
+    return decodeURIComponent(hash);
+  } catch {
+    return hash;
+  }
+}
 
 export class MdView implements DocView {
   readonly kind = "markdown";
@@ -34,7 +57,8 @@ export class MdView implements DocView {
   outline: OutlineItem[] | null = null;
 
   readonly #html: string;
-  readonly #toc: readonly TocEntry[];
+  readonly #toc: readonly JournalTocEntry[];
+  readonly #prefix = `doc${++viewers}-`;
   readonly #element: HTMLDivElement;
   readonly #onChange: () => void;
   readonly #isActive: () => boolean;
@@ -50,8 +74,9 @@ export class MdView implements DocView {
   #frame = 0;
   /** Where `restore` last put the scroll, until the reader moves it. */
   #placed: number | null = null;
+  #searchTimer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(html: string, toc: readonly TocEntry[], { element, onChange, isActive }: ViewOptions, saved: MarkdownViewState) {
+  constructor(html: string, toc: readonly JournalTocEntry[], { element, onChange, isActive }: ViewOptions, saved: MarkdownViewState) {
     this.#html = html;
     this.#toc = toc;
     this.#element = element;
@@ -69,15 +94,27 @@ export class MdView implements DocView {
     const article = this.#article;
     // The server's rendering, as the journal's reader shows it (`JournalArticle`).
     article.innerHTML = this.#html;
+    for (const element of article.querySelectorAll<HTMLElement>("[id]")) element.id = this.#prefix + element.id;
+    for (const link of article.querySelectorAll<HTMLAnchorElement>("a")) {
+      const href = link.getAttribute("href") ?? "";
+      if (href.startsWith("#") && href.length > 1) {
+        const id = decodeId(href.slice(1));
+        inPageLink(link, () => {
+          const target = this.#byId(id);
+          if (target) this.#scrollToElement(target);
+        });
+      } else {
+        inertLink(link, href || null);
+      }
+    }
     article.style.setProperty("--doc-zoom", String(this.#zoom));
     this.#element.append(article);
     const { items, ids } = markdownOutline(this.#toc);
     this.outline = items;
-    this.#headings = ids.map((id) => article.querySelector<HTMLElement>(`#${CSS.escape(id)}`));
+    this.#headings = ids.map((id) => this.#byId(id));
 
     const signal = this.#abort.signal;
     this.#element.addEventListener("scroll", () => this.#onScroll(), { passive: true, signal });
-    article.addEventListener("click", (event) => this.#onClick(event), { signal });
     this.#unwatch = watchSize(this.#element, () => this.restore());
 
     if (this.query) this.#find(false);
@@ -99,20 +136,9 @@ export class MdView implements DocView {
     });
   }
 
-  #onClick(event: MouseEvent): void {
-    const link = (event.target as Element | null)?.closest?.("a");
-    if (!link || !this.#article.contains(link)) return;
-    event.preventDefault();
-    const href = link.getAttribute("href") ?? "";
-    if (!href.startsWith("#")) return;
-    let id = href.slice(1);
-    try {
-      id = decodeURIComponent(id);
-    } catch {
-      // Not encoded: the id as written.
-    }
-    const target = id ? this.#article.querySelector<HTMLElement>(`#${CSS.escape(id)}`) : null;
-    if (target) this.#scrollToElement(target);
+  /** The element of the document's own id `id` (as the server wrote it, unprefixed). */
+  #byId(id: string): HTMLElement | null {
+    return this.#article.querySelector<HTMLElement>(`#${CSS.escape(this.#prefix + id)}`);
   }
 
   /** The first block not yet scrolled past, and how far into it the top of the view is. */
@@ -174,7 +200,22 @@ export class MdView implements DocView {
 
   search(query: string): void {
     this.query = query;
+    clearTimeout(this.#searchTimer);
+    this.count = { ...this.count, pending: true };
+    this.#onChange();
+    this.#searchTimer = setTimeout(() => {
+      this.#searchTimer = undefined;
+      this.#find(true);
+    }, SEARCH_DELAY);
+  }
+
+  /** Runs a search still waiting for the reader's pause; true when there was one. */
+  #flush(): boolean {
+    if (this.#searchTimer === undefined) return false;
+    clearTimeout(this.#searchTimer);
+    this.#searchTimer = undefined;
     this.#find(true);
+    return true;
   }
 
   #find(scroll: boolean): void {
@@ -191,6 +232,8 @@ export class MdView implements DocView {
   }
 
   findAgain(previous: boolean): void {
+    // Enter before the pause: the search itself, on its first match.
+    if (this.#flush()) return;
     const n = this.#ranges.length;
     if (!n) return;
     this.#select((this.#current + (previous ? n - 1 : 1)) % n, true);
@@ -234,6 +277,7 @@ export class MdView implements DocView {
   }
 
   destroy(): void {
+    clearTimeout(this.#searchTimer);
     this.#abort.abort();
     this.#unwatch?.();
     cancelAnimationFrame(this.#frame);

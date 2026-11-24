@@ -24,19 +24,23 @@
  */
 import { useCallback, useEffect, useId, useImperativeHandle, useMemo, useRef, useState, type KeyboardEvent, type Ref } from "react";
 
+import type { JournalTocEntry } from "@quiz/contracts";
+
+import "./viewer.css";
+
 import { useT } from "../i18n";
 import { Button, cx, Spinner } from "../ui";
 import { DocumentToolbar } from "./DocumentToolbar";
 import { MdView } from "./MdView";
-import { outlineTree, type OutlineNode, type TocEntry } from "./outline";
+import { outlineTree, type OutlineNode } from "./outline";
 import { PdfView } from "./PdfView";
 import type { DocView } from "./view";
-import { MAX_QUERY, parsePageInput, readViewState, sameViewState, type DocumentViewState } from "./viewState";
+import { MAX_QUERY, readViewState, sameViewState, type DocumentViewState } from "./viewState";
 
 export type DocumentSource =
   | { kind: "pdf"; url: string }
   /** HTML rendered and made safe by `packages/docrender`, and its table of contents. */
-  | { kind: "markdown"; html: string; toc: readonly TocEntry[] };
+  | { kind: "markdown"; html: string; toc: readonly JournalTocEntry[] };
 
 export interface DocumentViewerHandle {
   /** Focuses the search field and selects its text (a host's Ctrl+F). */
@@ -46,11 +50,6 @@ export interface DocumentViewerHandle {
   /** The reading state now. */
   state(): DocumentViewState;
 }
-
-/** A Markdown search runs once the reader pauses; pdf.js waits on its own. */
-const MARKDOWN_SEARCH_DELAY = 120;
-/** At this width or under, the outline covers the document, and folds once used. */
-const NARROW_OUTLINE = 520;
 
 export interface DocumentViewerProps {
   source: DocumentSource;
@@ -76,10 +75,9 @@ function Viewer({ source, title, initialState, onStateChange, active = true, onS
   const t = useT();
   const ids = useId();
   const outlineId = `${ids}-outline`;
-  const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const pageRef = useRef<HTMLInputElement>(null);
+  const navRef = useRef<HTMLElement>(null);
   const viewRef = useRef<DocView | null>(null);
 
   // The kept state is read once: a host that passes back what it was told
@@ -88,7 +86,6 @@ function Viewer({ source, title, initialState, onStateChange, active = true, onS
 
   const [outlineOpen, setOutlineOpen] = useState(initial.outline);
   const [query, setQuery] = useState(initial.query);
-  const [pageText, setPageText] = useState<string | null>(null);
   const [, setTick] = useState(0);
 
   const tRef = useRef(t);
@@ -163,17 +160,12 @@ function Viewer({ source, title, initialState, onStateChange, active = true, onS
 
   useEffect(report, [outlineOpen, report]);
 
-  // The reader types; the search follows (at once for a PDF, after a pause for Markdown).
-  const searchTimer = useRef(0);
-  useEffect(() => () => window.clearTimeout(searchTimer.current), []);
+  // The reader types; the view searches when it sees fit (pdf.js and
+  // `MdView` both wait for a pause, and say so in their count).
   const onQuery = (text: string) => {
     const value = text.slice(0, MAX_QUERY);
     setQuery(value);
-    window.clearTimeout(searchTimer.current);
-    const view = viewRef.current;
-    if (!view) return;
-    if (view.kind === "pdf") view.search(value);
-    else searchTimer.current = window.setTimeout(() => view.search(value), MARKDOWN_SEARCH_DELAY);
+    viewRef.current?.search(value);
   };
 
   const focusDocument = useCallback(() => scrollRef.current?.focus({ preventScroll: true }), []);
@@ -187,35 +179,15 @@ function Viewer({ source, title, initialState, onStateChange, active = true, onS
     const view = viewRef.current;
     if (event.key === "Enter") {
       event.preventDefault();
-      window.clearTimeout(searchTimer.current);
       if (!view) return;
       if (view.query !== query) view.search(query);
-      else view.findAgain(event.shiftKey);
+      view.findAgain(event.shiftKey);
     } else if (event.key === "Escape") {
       // Back to the document; the query and its highlights stay.
       event.preventDefault();
       event.stopPropagation();
       focusDocument();
       onSearchEscape?.();
-    }
-  };
-
-  const goToPageText = () => {
-    const view = viewRef.current;
-    const page = view ? parsePageInput(pageText ?? "", view.pageCount) : null;
-    if (view && page !== null) view.goToPage(page);
-    setPageText(null);
-  };
-  const onPageKey = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      goToPageText();
-      pageRef.current?.select();
-    } else if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      setPageText(null);
-      focusDocument();
     }
   };
 
@@ -230,10 +202,8 @@ function Viewer({ source, title, initialState, onStateChange, active = true, onS
   const status = view?.status ?? "loading";
   const outline = view?.outline ?? null;
   const tree = useMemo(() => (outline ? outlineTree(outline) : []), [outline]);
-  const narrow = () => {
-    const width = rootRef.current?.clientWidth ?? 0;
-    return width > 0 && width <= NARROW_OUTLINE;
-  };
+  // Narrow is what the stylesheet decided: the outline then covers the document.
+  const narrow = () => !!navRef.current && getComputedStyle(navRef.current).position === "absolute";
 
   const goToOutline = (index: number) => {
     viewRef.current?.goToOutline(index);
@@ -251,53 +221,25 @@ function Viewer({ source, title, initialState, onStateChange, active = true, onS
 
   return (
     <div
-      ref={rootRef}
       onKeyDown={onRootKey}
       inert={!active}
       className={cx("@container/doc-viewer flex h-full min-h-0 flex-col bg-surface", !active && "invisible")}
     >
       <DocumentToolbar
-        state={{
-          kind: source.kind,
-          page: view?.page ?? 0,
-          pageCount: view?.pageCount ?? 0,
-          zoomValue: view?.zoomValue ?? null,
-          canZoomIn: view?.canZoom(1) ?? false,
-          canZoomOut: view?.canZoom(-1) ?? false,
-          fitted: view?.fitted ?? false,
-          count: view?.count ?? { current: 0, total: 0, pending: false },
-          outlineOpen,
-        }}
-        actions={{
-          onToggleOutline: () => setOutlineOpen((open) => !open),
-          onPreviousPage: () => viewRef.current?.previousPage(),
-          onNextPage: () => viewRef.current?.nextPage(),
-          onZoom: (dir) => viewRef.current?.zoom(dir),
-          onFitWidth: () => viewRef.current?.fitWidth(),
-          onFindAgain: (previous) => viewRef.current?.findAgain(previous),
-        }}
-        fields={{
-          outlineId,
-          pageText: pageText ?? String(view?.page ?? ""),
-          onPageText: setPageText,
-          onPageKey,
-          onPageFocus: () => {
-            setPageText(String(viewRef.current?.page ?? ""));
-            requestAnimationFrame(() => pageRef.current?.select());
-          },
-          onPageBlur: goToPageText,
-          pageRef,
-          query,
-          searched: view?.query === query,
-          onQuery,
-          onSearchKey,
-          searchRef,
-          countId: `${ids}-count`,
-          pageTotalId: `${ids}-total`,
-        }}
+        kind={source.kind}
+        view={view}
+        outlineOpen={outlineOpen}
+        outlineId={outlineId}
+        onToggleOutline={() => setOutlineOpen((open) => !open)}
+        query={query}
+        onQuery={onQuery}
+        onSearchKey={onSearchKey}
+        searchRef={searchRef}
+        focusDocument={focusDocument}
       />
       <div className="relative flex min-h-0 flex-1">
         <nav
+          ref={navRef}
           id={outlineId}
           aria-label={t("docs.outline")}
           hidden={!outlineOpen}
