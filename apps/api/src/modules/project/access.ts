@@ -304,8 +304,10 @@ export async function inviteAccount(
       // Still let in: the grant live again — a revocation still asking will
       // not confirm it —, and a group's project due, for the `group.sync`
       // job to take this stray access (`STRAY_GRANT`) — under Safe Exam
-      // Browser, the `project.repos_access` job armed (an expired lease, unless
-      // one is held: the ticker claims it), whose next pass revokes it (ADR-145).
+      // Browser, the `project.repos_access` job armed, whose next pass revokes
+      // it (ADR-145): the revision moved, so a job holding the lease runs
+      // another pass instead of giving it back, and a free lease is left
+      // expired for the ticker to claim.
       await db.update(projectRepoAccess).set({ revokedAt: null, revokingAt: null }).where(eq(projectRepoAccess.id, grant.id));
       if (repo.groupId !== null) {
         await db
@@ -316,7 +318,10 @@ export async function inviteAccount(
         const expired = new Date(ctx.now.getTime() - LEASE_MS - 1);
         await db
           .update(projects)
-          .set({ reposAccessJobAt: sql`coalesce(${projects.reposAccessJobAt}, ${expired.toISOString()}::timestamptz)` })
+          .set({
+            reposAccessRev: sql`${projects.reposAccessRev} + 1`,
+            reposAccessJobAt: sql`coalesce(${projects.reposAccessJobAt}, ${expired.toISOString()}::timestamptz)`,
+          })
           .where(eq(projects.id, repo.projectId));
       }
       const { status, message } = err as { status?: number; message?: string };

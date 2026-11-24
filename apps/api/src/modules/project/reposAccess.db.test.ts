@@ -48,6 +48,7 @@ import {
   server,
   staff,
   useGroupWorld,
+  world,
   type Headers,
   type Room,
   type Student,
@@ -383,6 +384,40 @@ describe("convergence whatever lands while the job works (ADR-145)", () => {
     await close(lab);
     expect(resent).toBe(200);
     await closedForGood(lab);
+  });
+
+  it("an invitation GitHub would not take back while the close is revoking: the job holding the lease runs another pass", async () => {
+    const lab = await sebLab();
+    await open(lab);
+    const anaRepo = lab.repoOf(lab.ana).fullName!;
+    const collaborator = (method: string) => (url: URL, m: string) => m === method && url.pathname === `/repos/${anaRepo}/collaborators/${lab.ana.login}`;
+    // A staff resend records Ana's grant while open; its invitation is held on its way to GitHub.
+    let land!: () => void;
+    const held = new Promise<void>((resolve) => (land = resolve));
+    let waiting!: () => void;
+    const onItsWay = new Promise<void>((resolve) => (waiting = resolve));
+    on({
+      match: collaborator("PUT"),
+      run: () => {
+        waiting();
+        return held;
+      },
+    });
+    const resend = staff("POST", `/app/api/projects/${lab.project.id}/repos/${lab.repoOf(lab.ana).id}/invite`);
+    await onItsWay;
+    // The close's job is revoking Ana when the invitation lands; GitHub refuses the resend's take-back.
+    on({
+      match: collaborator("DELETE"),
+      run: async () => {
+        world.unrevokable.add(anaRepo);
+        land();
+        await resend;
+        world.unrevokable.delete(anaRepo);
+      },
+    });
+    await close(lab);
+    await closedForGood(lab);
+    expect((await stored(lab)).reposAccessRev).toBe(3);
   });
 });
 

@@ -112,9 +112,11 @@ The design:
   the closed fact it started from; a grant an Accept or a resend records in
   an open window is listed by the next pass. Whatever the interleaving,
   the last pass therefore leaves GitHub and the invitation states as the
-  fact says. A failure backdates the lease, a crash leaves it, and a
-  take-back of a raced invitation that GitHub refuses arms an expired one;
-  the ticker claims each. A project of another mode is never touched. A
+  fact says. A failure backdates the lease and a crash leaves it: the
+  ticker claims each. A take-back of a raced invitation that GitHub
+  refuses bumps the revision too, so a job holding the lease runs another
+  pass instead of giving it back, and arms an expired lease when none is
+  held. A project of another mode is never touched. A
   repository archived as its lock, a seat without a linked or with a stale
   account, a seat gone from the roster: skipped, never fatal for the
   others.
