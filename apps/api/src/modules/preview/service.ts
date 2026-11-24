@@ -65,6 +65,7 @@ import {
   gradeDefaults,
   joinedItem,
   joinedItems,
+  providedDocumentsOf,
   scaleOf,
   settingsOf,
   type EvaluationRecord,
@@ -160,7 +161,7 @@ export async function startPreview(
   // One read: the view and the versions it is checked against are the same items.
   const items = await joinedItems(db, evaluation.id);
   // ADR-144 §7: the stateless preview alone lists the selection.
-  const view = await live.previewView(db, evaluation, now, seed, items, true);
+  const view = await live.previewView(db, evaluation, now, seed, items, await providedDocumentsOf(db, evaluation.id));
   return {
     seed,
     durationS: previewDurationS({

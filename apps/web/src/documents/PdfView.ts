@@ -26,9 +26,6 @@ import { documentParams, loadPdfjs, type Pdfjs } from "./pdfjs";
 import { type DocView, type SearchCount, type ViewOptions, type ViewStatus, watchSize } from "./view";
 import { canZoom, PDF_ZOOMS, type PdfLocation, type PdfScale, type PdfViewState, zoomStep } from "./viewState";
 
-/** How long a refit's own scrolls go on (pdf.js's deferred re-layout); then the kept spot is put back. */
-const RELAYOUT_SETTLE_MS = 200;
-
 interface Parts {
   eventBus: EventBus;
   linkService: PDFLinkService;
@@ -69,8 +66,8 @@ export class PdfView implements DocView {
   #doc: PDFDocumentProxy | null = null;
   readonly #abort = new AbortController();
   #unwatch: (() => void) | null = null;
-  /** The timer that ends a refit (`#relayout`). */
-  #settle: ReturnType<typeof setTimeout> | undefined = undefined;
+  /** While a refit is under way, the spot it keeps the view on; null otherwise. */
+  #refit: PdfLocation | null = null;
   #destroyed = false;
 
   readonly #pageLabel: (page: number) => string;
@@ -165,9 +162,21 @@ export class PdfView implements DocView {
     eventBus.on("scalechanging", () => this.#onChange(), opts);
     eventBus.on("updateviewarea", ({ location }: { location: PdfLocation }) => {
       if (!this.#restored || !this.#isActive()) return;
+      // A refit under way: pdf.js lays the pages out again and scrolls on
+      // its own (to a page's top, a frame or more later) — back to the kept
+      // spot, as often as it moves away. A no-op once the view is there.
+      if (this.#refit) {
+        this.#location = this.#refit;
+        this.restore();
+        return;
+      }
       this.#location = { pageNumber: location.pageNumber, top: location.top, left: location.left };
       this.#onChange();
     }, opts);
+    // The reader's own move ends a refit: theirs is the spot from then on.
+    for (const type of ["wheel", "pointerdown", "keydown", "touchstart"] as const) {
+      this.#element.addEventListener(type, () => this.#readerMoves(), { passive: true, signal: this.#abort.signal });
+    }
     eventBus.on("updatefindmatchescount", ({ matchesCount }: { matchesCount: { current: number; total: number } }) => {
       this.count = { current: matchesCount.current, total: matchesCount.total, pending: false };
       this.#onChange();
@@ -202,36 +211,23 @@ export class PdfView implements DocView {
     this.#onChange();
   }
 
-  /** The width changed (a panel, a full screen, a window): refit, then back to the kept spot. */
+  /**
+   * The width changed (a panel, a full screen, a window): refit, then back to
+   * the kept spot — and keep it there until the reader moves (`#refit`).
+   */
   #relayout(): void {
     const viewer = this.#parts?.viewer;
     if (!viewer?.pagesCount) return;
-    // The refit scrolls, and pdf.js reports that intermediate spot as the
-    // reader's: the kept one is put back before the view returns to it
-    // (a full screen used to land a few lines off).
-    const kept = this.#location;
-    this.#restored = false;
+    const kept = this.#refit ?? this.#location;
+    this.#refit = kept;
     if (typeof this.#scale === "string") viewer.currentScaleValue = this.#scale;
     this.#location = kept;
     this.restore();
-    // pdf.js lays the pages out again and scrolls on its own a few frames
-    // later (to a page's top): back to the kept spot once it is done, and
-    // only then is a scroll the reader's again.
-    clearTimeout(this.#settle);
-    this.#settle = setTimeout(() => {
-      this.#settle = undefined;
-      this.#location = kept;
-      this.restore();
-      this.#restored = true;
-    }, RELAYOUT_SETTLE_MS);
   }
 
-  /** The reader moves the view: a refit under way must not put it back where it was. */
+  /** The reader moves the view (the page, the toolbar): a refit under way ends. */
   #readerMoves(): void {
-    if (this.#settle === undefined) return;
-    clearTimeout(this.#settle);
-    this.#settle = undefined;
-    this.#restored = true;
+    this.#refit = null;
   }
 
   restore(): void {
@@ -387,7 +383,6 @@ export class PdfView implements DocView {
     if (this.#destroyed) return;
     this.#destroyed = true;
     this.#unwatch?.();
-    clearTimeout(this.#settle);
     this.#abort.abort();
     this.#parts?.viewer.setDocument(null as never);
     this.#parts?.linkService.setDocument(null, null);

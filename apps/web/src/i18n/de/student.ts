@@ -329,6 +329,6 @@ export const student: Record<keyof typeof en, string> = {
   "docs.player.full": "Vollbild",
   "docs.player.back": "Zurück zu den Fragen",
   "docs.player.resize": "Breite der Dokumente",
-  "docs.player.gone": "Die Dokumente können nicht mehr gelesen werden.",
+  "docs.player.gone": "Dieses Dokument ist nicht verfügbar.",
   "docs.player.all": "Alle Dokumente",
 };

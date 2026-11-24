@@ -56,6 +56,8 @@ import { useLayer, usePhoneScreen, useScrollLock, Z } from "./layers";
 /** A dock's place in a group (ADR-090): what the group's owner hands each tool. */
 export interface ToolDockSeat {
   slot: number;
+  /** What the stack sits above (a footer, a bottom bar), a CSS length. */
+  offset: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }

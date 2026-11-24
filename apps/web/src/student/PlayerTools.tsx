@@ -24,6 +24,9 @@ import { DocumentsPanel, type PlayerDocuments } from "./DocumentsPanel";
 
 type Tool = "calculator" | "notepad";
 
+/** What the player's docks sit above: its footer, on a phone. */
+const DOCK_OFFSET = "var(--player-footer-h,0px)";
+
 export function PlayerTools({
   calculator,
   notepad,
@@ -37,7 +40,7 @@ export function PlayerTools({
   calculator: CalculatorMode;
   notepad: NotepadMode;
   attemptId: string;
-  /** The teacher's preview: the notepad lives in memory only. */
+  /** The teacher's preview: the notepad and the documents' state live in memory only. */
   preview: boolean;
   navigation: NavigationMode;
   /** The attempt's items in the student's order, for the checkpoint crossed. */
@@ -49,45 +52,43 @@ export function PlayerTools({
 }) {
   const [open, setOpen] = useState<Tool | null>(null);
   const me = useMe();
-  const seat = (tool: Tool, slot: number): ToolDockSeat => ({
-    slot,
+  // Where the notes and the documents' reading state may be kept is known
+  // once the session is: the preview and an impersonation session (ADR-034)
+  // keep them in memory; a failed /me never falls back to persisting.
+  const persist = me.isSuccess && !preview && me.data?.session?.kind !== "impersonation";
+  // Each tool on takes the next slot of the stack, from the bottom.
+  const stack = (
+    [calculator !== "none" && "calculator", notepad !== "none" && "notepad", documents && "documents"] as const
+  ).filter((tool): tool is Tool | "documents" => tool !== false && tool !== undefined);
+  const seat = (tool: Tool): ToolDockSeat => ({
+    slot: stack.indexOf(tool),
+    offset: DOCK_OFFSET,
     open: open === tool,
     onOpenChange: (next) => setOpen(next ? tool : (current) => (current === tool ? null : current)),
   });
-  const withCalculator = calculator !== "none";
-  const withNotepad = notepad !== "none";
-  // Each tool on takes the next slot, from the bottom.
-  const notepadSlot = withCalculator ? 1 : 0;
-  const documentsSlot = notepadSlot + (withNotepad ? 1 : 0);
   return (
     <>
-      {withCalculator ? <CalculatorDock kind={calculator} seat={seat("calculator", 0)} /> : null}
-      {/* Where the notes may be kept is known once the session is: an
-          impersonation session (ADR-034) keeps them in memory, like the preview. */}
-      {withNotepad && !me.isPending ? (
+      {calculator !== "none" ? <CalculatorDock kind={calculator} seat={seat("calculator")} /> : null}
+      {notepad !== "none" && !me.isPending ? (
         <PlayerNotepad
           attemptId={attemptId}
-          // A failed /me never falls back to persisting.
-          persist={me.isSuccess && !preview && me.data?.session?.kind !== "impersonation"}
+          persist={persist}
           checkpoint={furthestCheckpoint(
             navigation,
             items.map((item) => ({ milestone: item.milestone, validated: item.markedDone })),
           )}
           noClipboard={notepad === "provided_no_clipboard"}
-          seat={seat("notepad", notepadSlot)}
+          seat={seat("notepad")}
         />
       ) : null}
       {documents && !me.isPending ? (
         <DocumentsPanel
           attemptId={attemptId}
-          // A failed /me never falls back to persisting, as the notepad.
-          documents={{
-            ...documents,
-            persist: documents.persist && me.isSuccess && me.data?.session?.kind !== "impersonation",
-          }}
+          documents={documents}
+          persist={persist}
           hidden={paused}
-          slot={documentsSlot}
-          offset="var(--player-footer-h,0px)"
+          slot={stack.indexOf("documents")}
+          offset={DOCK_OFFSET}
         />
       ) : null}
     </>

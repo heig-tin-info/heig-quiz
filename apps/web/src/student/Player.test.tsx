@@ -1129,6 +1129,45 @@ describe("the zen player's connection", () => {
     },
   );
 
+  it("reads the attempt view again at the resume: the documents come back at once (ADR-144 §7)", async () => {
+    vi.stubGlobal("EventSource", FakeStream);
+    const view = attemptView();
+    let reads = 0;
+    mockFetch({
+      [`POST /app/api/evaluations/${EVAL}/attempt`]: ok(entry(view)),
+      [`GET /app/api/attempts/${ATTEMPT}`]: () => {
+        reads += 1;
+        return ok(entry(view));
+      },
+      [`POST /app/api/attempts/${ATTEMPT}/position`]: noContent(),
+      [`POST /app/api/attempts/${ATTEMPT}/events`]: noContent(),
+    });
+    render(view);
+    await screen.findByLabelText("Votre réponse");
+    const stream = FakeStream.last!;
+    act(() => stream.onopen?.());
+    const state = (value: "paused" | "running") =>
+      act(() =>
+        stream.onmessage?.(
+          new MessageEvent("message", {
+            data: JSON.stringify({
+              type: "evaluation.state",
+              // The frame's grammar wants a uuid; the player reads only the state.
+              evaluationId: "00000000-0000-4000-8000-0000000000e1",
+              state: value,
+              pausedAt: value === "paused" ? "2026-09-20T10:00:30.000Z" : null,
+              closesAt: null,
+              serverNow: "2026-09-20T10:00:30.000Z",
+            }),
+          }),
+        ),
+      );
+    state("paused");
+    const before = reads;
+    state("running");
+    await waitFor(() => expect(reads).toBe(before + 1));
+  });
+
   it("keeps what the student typed when a refetch lands before the autosave", async () => {
     vi.stubGlobal("EventSource", FakeStream);
     const view = attemptView();

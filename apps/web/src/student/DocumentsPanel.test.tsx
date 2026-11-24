@@ -57,7 +57,6 @@ function setWidth(width: number) {
 const docs = (over: Partial<PlayerDocuments> = {}): PlayerDocuments => ({
   list: [PDF, MD],
   routes: attemptDocumentRoutes(ATTEMPT),
-  persist: true,
   ...over,
 });
 
@@ -71,7 +70,7 @@ function world(extra: Record<string, ReturnType<typeof ok>> = {}) {
 
 function renderPanel(props: Partial<Parameters<typeof DocumentsPanel>[0]> = {}) {
   return renderWithProviders(
-    <DocumentsPanel attemptId={ATTEMPT} documents={docs()} hidden={false} slot={0} offset="0px" {...props} />,
+    <DocumentsPanel attemptId={ATTEMPT} documents={docs()} persist hidden={false} slot={0} offset="0px" {...props} />,
   );
 }
 
@@ -85,7 +84,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.stubGlobal("matchMedia", narrow);
-  document.documentElement.style.removeProperty("--docs-inset");
+  document.documentElement.style.removeProperty("--tool-dock-inset");
   document.documentElement.style.removeProperty("--tool-dock-inset");
 });
 
@@ -94,9 +93,9 @@ describe("the documents panel (ADR-144 §7)", () => {
     world();
     const { rerender } = renderPanel({ documents: docs({ list: [] }) });
     expect(screen.queryByRole("button", { name: "Documents" })).toBeNull();
-    rerender(<DocumentsPanel attemptId={ATTEMPT} documents={docs()} hidden slot={0} offset="0px" />);
+    rerender(<DocumentsPanel attemptId={ATTEMPT} documents={docs()} persist hidden slot={0} offset="0px" />);
     expect(screen.queryByRole("button", { name: "Documents" })).toBeNull();
-    rerender(<DocumentsPanel attemptId={ATTEMPT} documents={docs()} hidden={false} slot={2} offset="0px" />);
+    rerender(<DocumentsPanel attemptId={ATTEMPT} documents={docs()} persist hidden={false} slot={2} offset="0px" />);
     const button = screen.getByRole("button", { name: "Documents" });
     expect(button.closest("[data-tool-dock-slot]")).toHaveAttribute("data-tool-dock-slot", "2");
   });
@@ -106,7 +105,7 @@ describe("the documents panel (ADR-144 §7)", () => {
     renderPanel();
     await openPanel();
     expect(panel()).toHaveAttribute("data-docs-split");
-    expect(document.documentElement.style.getPropertyValue("--docs-inset")).toBe(`${Math.round(1440 * 0.46)}px`);
+    expect(document.documentElement.style.getPropertyValue("--tool-dock-inset")).toBe(`${Math.round(1440 * 0.46)}px`);
     expect(screen.getByTestId("viewer:Datasheet")).toHaveTextContent(`/app/api/attempts/${ATTEMPT}/documents/${PDF.id}/file`);
     const tabs = screen.getAllByRole("tab");
     expect(tabs.map((tab) => tab.textContent)).toEqual(["Datasheet", "Formulaire"]);
@@ -122,7 +121,7 @@ describe("the documents panel (ADR-144 §7)", () => {
     expect(screen.queryByRole("region", { name: "Documents" })).toBeNull();
     expect(screen.queryByTestId("viewer:Datasheet")).toBeNull();
     expect(screen.getByRole("button", { name: "Documents" })).toHaveFocus();
-    expect(document.documentElement.style.getPropertyValue("--docs-inset")).toBe("");
+    expect(document.documentElement.style.getPropertyValue("--tool-dock-inset")).toBe("");
   });
 
   it("moves its separator with the keyboard and a double click, within its bounds", async () => {
@@ -186,7 +185,7 @@ describe("the documents panel (ADR-144 §7)", () => {
     await openPanel();
     expect(panel()).not.toHaveAttribute("data-docs-split");
     expect(screen.queryByRole("separator")).toBeNull();
-    expect(document.documentElement.style.getPropertyValue("--docs-inset")).toBe("");
+    expect(document.documentElement.style.getPropertyValue("--tool-dock-inset")).toBe("");
     fireEvent.keyDown(screen.getByTestId("viewer:Datasheet"), { key: "Escape" });
     expect(screen.queryByRole("region", { name: "Documents" })).toBeNull();
   });
@@ -225,7 +224,7 @@ describe("the documents panel (ADR-144 §7)", () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
       world();
-      renderPanel({ attemptId: "b0000000-0000-4000-8000-000000000002", documents: docs({ persist: false }) });
+      renderPanel({ attemptId: "b0000000-0000-4000-8000-000000000002", documents: docs(), persist: false });
       await openPanel();
       await act(async () => void vi.advanceTimersByTime(300));
       expect(sessionStorage.getItem(documentsKey("b0000000-0000-4000-8000-000000000002"))).toBeNull();
@@ -235,23 +234,45 @@ describe("the documents panel (ADR-144 §7)", () => {
     }
   });
 
-  it("hides at once on a 404 from either route, and asks the attempt view again", async () => {
+  it("marks a document a route answers 404 for, asks the attempt view again, and follows the list it gets", async () => {
     const onGone = vi.fn();
     world();
     const { rerender } = renderPanel({ documents: docs({ onGone }) });
     await openPanel();
     act(() => viewers.props.get("Datasheet")!.onLoadError!({ name: "ResponseException", status: 404 }));
-    expect(screen.queryByRole("button", { name: "Documents" })).toBeNull();
-    expect(screen.queryByTestId("viewer:Datasheet")).toBeNull();
     expect(onGone).toHaveBeenCalledTimes(1);
-    // Another failure is the viewer's to retry; a fresh list brings the panel back where it was.
-    rerender(<DocumentsPanel attemptId={ATTEMPT} documents={docs({ onGone, list: [PDF, MD] })} hidden={false} slot={0} offset="0px" />);
-    expect(await screen.findByTestId("viewer:Datasheet")).toBeInTheDocument();
-    act(() => viewers.props.get("Datasheet")!.onLoadError!(new Error("network")));
-    expect(screen.getByTestId("viewer:Datasheet")).toBeInTheDocument();
+    // The document's own tab says so; its viewer and its bytes are gone, the other document is still there.
+    expect(screen.getByText("This document is not available.")).toBeInTheDocument();
+    expect(screen.queryByTestId("viewer:Datasheet")).toBeNull();
+    await userEvent.click(screen.getByRole("tab", { name: "Formulaire" }));
+    expect(await screen.findByTestId("viewer:Formulaire")).toBeInTheDocument();
+    // Another failure is the viewer's to retry.
+    act(() => viewers.props.get("Formulaire")!.onLoadError?.(new Error("network")));
+    expect(screen.getByTestId("viewer:Formulaire")).toBeInTheDocument();
+    // The list read again no longer holds it: its tab goes; an empty one hides the panel.
+    const panelProps = { attemptId: ATTEMPT, persist: true, hidden: false, slot: 0, offset: "0px" };
+    rerender(<DocumentsPanel {...panelProps} documents={docs({ onGone, list: [MD] })} />);
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["Formulaire"]);
+    rerender(<DocumentsPanel {...panelProps} documents={docs({ onGone, list: [] })} />);
+    expect(screen.queryByRole("button", { name: "Documents" })).toBeNull();
   });
 
-  it("hides on a Markdown document's 404 too", async () => {
+  it("keeps the panel and the other documents when the list still holds the missing one (a missing file)", async () => {
+    const onGone = vi.fn();
+    world();
+    const { rerender } = renderPanel({ documents: docs({ onGone }) });
+    await openPanel();
+    act(() => viewers.props.get("Datasheet")!.onLoadError!({ name: "ResponseException", status: 404 }));
+    rerender(
+      <DocumentsPanel attemptId={ATTEMPT} documents={docs({ onGone, list: [PDF, MD] })} persist hidden={false} slot={0} offset="0px" />,
+    );
+    expect(screen.getAllByRole("tab")).toHaveLength(2);
+    expect(screen.getByText("This document is not available.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("tab", { name: "Formulaire" }));
+    expect(await screen.findByTestId("viewer:Formulaire")).toHaveTextContent("<p>MD</p>");
+  });
+
+  it("marks a Markdown document's 404 too", async () => {
     const onGone = vi.fn();
     mockFetch({
       [`GET /app/api/attempts/${ATTEMPT}/documents/${MD.id}/html`]: fail(404, { error: "not_found" }),
@@ -259,12 +280,12 @@ describe("the documents panel (ADR-144 §7)", () => {
     renderPanel({ documents: docs({ onGone, list: [MD] }) });
     await openPanel();
     await waitFor(() => expect(onGone).toHaveBeenCalled());
-    expect(screen.queryByRole("button", { name: "Documents" })).toBeNull();
+    expect(await screen.findByText("This document is not available.")).toBeInTheDocument();
   });
 
   it("reads the course's staff routes in the teacher's stateless preview", async () => {
     mockFetch({ [`GET /app/api/courses/c1/documents/${MD.id}/html`]: ok({ html: "<p>STAFF</p>", toc: [] }) });
-    renderPanel({ documents: docs({ routes: courseDocumentRoutes("c1"), persist: false }) });
+    renderPanel({ documents: docs({ routes: courseDocumentRoutes("c1") }), persist: false });
     await openPanel();
     expect(screen.getByTestId("viewer:Datasheet")).toHaveTextContent(`/app/api/courses/c1/documents/${PDF.id}/file`);
     await userEvent.click(screen.getAllByRole("tab")[1]!);

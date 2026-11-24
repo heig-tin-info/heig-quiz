@@ -279,7 +279,6 @@ export function Player({
         documents={{
           list: (attempt.view ?? initial).documents,
           routes: attemptDocumentRoutes(attemptId),
-          persist: initial.attempt.preview !== true,
           onGone: () => void attempt.query.refetch(),
         }}
         onHome={() => void leave()}

@@ -80,7 +80,6 @@ export function NotepadDock({
       icon={NotebookPen}
       openLabel={t("notepad.open")}
       closeLabel={t("notepad.close")}
-      offset="var(--player-footer-h,0px)"
       panelClassName="flex h-[30rem] w-[22rem] flex-col p-3"
       keepMounted
       {...seat}

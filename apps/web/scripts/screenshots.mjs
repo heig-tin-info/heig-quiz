@@ -1393,7 +1393,7 @@ const scenes = [
   { name: "player-documents", role: "student", path: `${TAKE}?scene=running`, fold: true, act: openDocuments },
   { name: "player-documents-markdown", role: "student", path: `${TAKE}?scene=running`, fold: true, act: async (p) => { await openDocuments(p); await p.getByRole("tab").nth(1).click(); await p.waitForTimeout(800); } },
   { name: "player-documents-outline", role: "student", path: `${TAKE}?scene=running`, fold: true, act: async (p) => { await openDocuments(p); await p.getByRole("button", { name: /^(outline|sommaire)$/i }).click(); await p.waitForTimeout(500); } },
-  { name: "player-documents-full", role: "student", path: `${TAKE}?scene=running`, fold: true, act: async (p) => { await openDocuments(p); await p.getByRole("button", { name: /^(full screen|plein écran)$/i }).click(); await p.waitForTimeout(800); } },
+  { name: "player-documents-full", role: "student", path: `${TAKE}?scene=running`, fold: true, act: async (p) => { await openDocuments(p); await p.getByRole("button", { name: /^(full screen|plein écran)$/i }).click(); await p.mouse.move(2, 400); await p.waitForTimeout(800); } },
   { name: "player-documents-tabs", role: "student", path: `${TAKE}?scene=running&tendocs=1`, fold: true, ss: { "quiz.documents.22222222-2222-4222-8222-222222222222": JSON.stringify({ open: false, full: false, active: null, width: 400, docs: {} }) }, act: openDocuments },
   // F-EVAL-13: back on the page after leaving it, the integrity notice top right.
   { name: "player-left-notice", role: "student", path: `${TAKE}?scene=running`, fold: true, act: leaveAndReturn },
@@ -2701,6 +2701,8 @@ async function pasteFromOutside(page) {
 async function openDocuments(page) {
   await page.getByRole("button", { name: /^documents$/i }).click();
   await page.waitForTimeout(1500);
+  // Off the controls: a resting pointer's tooltip is not part of the scene.
+  await page.mouse.move(2, 400);
 }
 
 async function openQuestion(page, n) {

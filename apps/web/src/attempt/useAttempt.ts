@@ -41,8 +41,7 @@ import type {
 } from "@quiz/contracts";
 
 import { api } from "../api";
-import { endNotepad } from "../notepad/store";
-import { endDocumentStates } from "../student/documentsStore";
+import { endAttemptLocalState } from "./localState";
 import { useEventStream } from "../realtime/useEventStream";
 import { useServerClock } from "../realtime/useServerClock";
 import { Autosave, type SyncState } from "./autosave";
@@ -186,8 +185,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
   // what the documents panel kept of the attempt with it (ADR-144 §7).
   useEffect(() => {
     if (closed === null) return;
-    endNotepad(attemptId);
-    endDocumentStates(attemptId);
+    endAttemptLocalState(attemptId);
   }, [closed, attemptId]);
 
   // --- Adopting a fresh view ----------------------------------------------
@@ -245,6 +243,9 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
             setPaused(false);
             // D17: what was buffered during the pause goes out now.
             saver.resume();
+            // ADR-144 §7: the view read during the pause lists no documents;
+            // the resume gives them back at once, not at the next poll.
+            void query.refetch();
           } else if (!practice && evaluationOver(event.state)) {
             end("evaluation_closed");
           }

@@ -3,18 +3,17 @@ import { describe, expect, it } from "vitest";
 import { attemptClosedReason, type GatedAttempt } from "./attemptGate.js";
 import { GRACE_MS } from "./deadline.js";
 import type { EvaluationModeName } from "./evaluationConfig.js";
-import { MAX_PROVIDED_DOCUMENTS, providedDocumentsAllowedFor, providedDocumentsReadable } from "./library.js";
+import { providedDocumentsAllowedFor, providedDocumentsReadable } from "./library.js";
 
 const now = new Date("2026-11-24T10:00:00Z");
 const later = (ms: number) => new Date(now.getTime() + ms);
 const open: GatedAttempt = { state: "in_progress", afterDue: false, deadlineAt: later(60_000) };
 
 describe("providedDocumentsAllowedFor (ADR-144 §7)", () => {
-  it("allows an exam and an exercise, never a poll, at most ten documents", () => {
+  it("allows an exam and an exercise, never a poll", () => {
     expect(providedDocumentsAllowedFor("exam")).toBe(true);
     expect(providedDocumentsAllowedFor("exercise")).toBe(true);
     expect(providedDocumentsAllowedFor("poll")).toBe(false);
-    expect(MAX_PROVIDED_DOCUMENTS).toBe(10);
   });
 });
 

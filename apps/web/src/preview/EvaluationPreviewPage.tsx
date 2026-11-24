@@ -284,7 +284,7 @@ function PreviewWalk({
         // ADR-144 §7: the selection, read through the course's staff routes — the walk has no attempt.
         documents={
           courseId
-            ? { list: walk.preview.view.documents, routes: courseDocumentRoutes(courseId), persist: false }
+            ? { list: walk.preview.view.documents, routes: courseDocumentRoutes(courseId) }
             : undefined
         }
         onHome={() => void askLeave()}

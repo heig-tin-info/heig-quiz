@@ -19,7 +19,7 @@ const display = () => screen.getByRole("status");
 /** The dock alone, holding its own seat as the player's tool group would. */
 function Dock({ kind }: { kind: "standard" | "scientific" }) {
   const [open, setOpen] = useState(false);
-  return <CalculatorDock kind={kind} seat={{ slot: 0, open, onOpenChange: setOpen }} />;
+  return <CalculatorDock kind={kind} seat={{ slot: 0, offset: "0px", open, onOpenChange: setOpen }} />;
 }
 
 async function openDock(kind: "standard" | "scientific") {

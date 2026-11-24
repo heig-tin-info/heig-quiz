@@ -34,7 +34,6 @@ import {
   feedbackOf,
   joinedItems,
   providedDocumentCount,
-  providedDocumentsOf,
   settingsOf,
   type EvaluationRecord,
   type JoinedItem,
@@ -187,14 +186,16 @@ export async function attemptView(
   const corrected =
     checkAllowed(evaluation.mode) &&
     (isFinishedAttempt(attempt.state) || [...answered.values()].some((a) => a.checkedAt !== null));
+  // ADR-144 §7: through the library's student view, the one exit, which
+  // answers `[]` while the attempt may not read them; the conditions count
+  // the selection all the same, read apart only then.
+  const documents = await providedDocuments(db, { evaluation, attempt }, now);
   return viewOf(db, evaluation, {
     seed: attempt.seed,
     timeBonusPercent: participant.timeBonusPercent,
     practice: attempt.afterDue,
-    // ADR-144 §7: through the library's student view, the one exit, which
-    // answers `[]` while the attempt may not read them.
-    documents: await providedDocuments(db, { evaluation, attempt }, now),
-    documentCount: await providedDocumentCount(db, evaluation.id),
+    documents,
+    documentCount: documents.length > 0 ? documents.length : await providedDocumentCount(db, evaluation.id),
     instances: attempt.instances,
     acquired: attempt.acquiredItemIds,
     answered,
@@ -219,11 +220,11 @@ export async function attemptView(
  * attempt row anywhere. Seed 0 by default, so it is stable between reloads;
  * the stateless preview of issue #75 passes the seed it drew instead, and
  * gets exactly the order and the shuffles an attempt of that seed would.
- * Its documents are none, unless the caller is the teacher's stateless
- * preview (`withDocuments`, ADR-144 §7): then the selection as the staff
- * read it, whose files the staff routes of the course's library serve. The
- * hand-out and the paper copies, which a student may print (ADR-122 §9),
- * never load it.
+ * Its documents are what the caller hands it (ADR-144 §7): the teacher's
+ * stateless preview loads the selection as the staff read it, whose files
+ * the staff routes of the course's library serve; the hand-out a student
+ * prints (ADR-122 §9), the paper copies and the preview's correction show
+ * none, and count none.
  */
 export async function previewView(
   db: Db,
@@ -232,17 +233,15 @@ export async function previewView(
   seed = 0,
   /** The evaluation's items when the caller already read them, not read twice. */
   items?: readonly JoinedItem[],
-  /** The teacher's stateless preview only: the selection, and its count in the conditions. */
-  withDocuments = false,
+  /** The selection, the teacher's stateless preview's alone; its length is the conditions' count. */
+  documents: ProvidedDocument[] = [],
 ): Promise<AttemptView> {
-  const documents = withDocuments ? await providedDocumentsOf(db, evaluation.id) : [];
   return viewOf(db, evaluation, {
     seed,
     timeBonusPercent: 0,
     practice: false,
     documents,
-    // The conditions count the selection wherever the view is shown on a screen.
-    documentCount: withDocuments ? documents.length : await providedDocumentCount(db, evaluation.id),
+    documentCount: documents.length,
     instances: {},
     acquired: [],
     items,

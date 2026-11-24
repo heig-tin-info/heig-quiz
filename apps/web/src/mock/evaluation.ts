@@ -47,6 +47,7 @@ import {
   type EvaluationExports,
   type IntegrityIncident,
 } from "@quiz/contracts";
+import { MOCK_PROVIDED } from "./documentIds";
 // A cycle of functions only: `library.ts` reads the selections back (`usedBy`).
 import { mockProvided } from "./library";
 import {
@@ -741,9 +742,6 @@ evaluations.push(
     modifiedAfterRelease: true,
   }),
 );
-
-/** ADR-144 §7: two of PRG1's documents (`library.ts`, by id), provided by its draft exam. */
-export const MOCK_PROVIDED = ["5b0c8a1e-2f7d-4c3a-9e61-0d4b7a2c1f01", "5b0c8a1e-2f7d-4c3a-9e61-0d4b7a2c1f02"] as const;
 
 function seedEvaluations() {
   const room = rooms[0];
@@ -1487,7 +1485,6 @@ function assertConfigPatch(e: MockEvaluation, body: Record<string, unknown>): vo
   }
 }
 
-/** The fields an evaluation and a template share, written. */
 /** ADR-144 §7: every selected document is one of the course's, else the server's `422 document_unknown`. */
 function assertDocuments(courseId: string, body: Record<string, unknown>): void {
   if (!Array.isArray(body.documents)) return;
@@ -1519,6 +1516,7 @@ export function dropMockDocument(documentId: string): void {
   }
 }
 
+/** The fields an evaluation and a template share, written. */
 function applyConfigPatch(e: MockEvaluation, body: Record<string, unknown>): void {
   if (typeof body.title === "string") e.title = body.title;
   if (Array.isArray(body.documents)) e.documents = [...(body.documents as string[])];

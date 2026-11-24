@@ -327,6 +327,6 @@ export const student = {
   "docs.player.full": "Full screen",
   "docs.player.back": "Back to the questions",
   "docs.player.resize": "Width of the documents",
-  "docs.player.gone": "The documents can no longer be read.",
+  "docs.player.gone": "This document is not available.",
   "docs.player.all": "All documents",
 };

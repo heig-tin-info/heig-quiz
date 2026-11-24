@@ -48,23 +48,14 @@ import { RENDERER_VERSION, renderStandalone } from "@quiz/docrender";
 import { iso } from "../../clock.js";
 import type { Db, Tx } from "../../db/client.js";
 import { classrooms, courseDocuments, courses, evaluationProvidedDocuments, evaluations, users } from "../../db/schema.js";
-import { refusalClass, type Refusal } from "../http.js";
 import { dropTemp, pathForHash, placeTemp, safeJoin, streamToTemp, type TempFile } from "../pool/assets.js";
 
+import { documentPath, LibraryError, type DocumentRow } from "./files.js";
+
+type Row = DocumentRow;
+
+export { documentFile, documentPath, LibraryError } from "./files.js";
 export { providedDocument, providedDocuments, providedFile, providedHtml, type ReadingAttempt } from "./studentView.js";
-
-const REFUSALS = {
-  document_unsupported: [415, "a document is a PDF or a Markdown file"],
-  file_too_large: [413, "the file is too large"],
-  quota_exceeded: [409, "the course's documents would go past its quota"],
-  // The row outlived its file: a staging copy holds the rows only, or a disk was lost.
-  file_missing: [404, "the document's file is missing"],
-  // ADR-144 §7: a template of the course or an evaluation not yet over
-  // provides it; the body names them (`DocumentInUse`).
-  document_in_use: [409, "an evaluation or a template still provides this document"],
-} satisfies Record<DocumentUploadRefusal | "file_missing" | "document_in_use", Refusal>;
-
-export class LibraryError extends refusalClass("LibraryError", REFUSALS) {}
 
 /** The store's directory, under `ASSETS_DIR`: its own subtree, never the pool's images. */
 const DOCUMENTS_DIR = "documents";
@@ -72,17 +63,6 @@ const DOCUMENTS_DIR = "documents";
 const TMP_DIR = `${DOCUMENTS_DIR}/tmp`;
 /** How long a file no row names is kept: a delete racing an upload of the same bytes, a restored dump. */
 export const SWEEP_GRACE_MS = 48 * 60 * 60 * 1000;
-
-/** A document's file, relative to `ASSETS_DIR`, rebuilt from its hash. */
-export const documentPath = (sha256: string) => `${DOCUMENTS_DIR}/${pathForHash(sha256)}`;
-
-/** The type a document's bytes are served as. */
-const MIME: Record<DocumentKind, string> = {
-  pdf: "application/pdf",
-  markdown: "text/markdown; charset=utf-8",
-};
-
-type Row = typeof courseDocuments.$inferSelect;
 
 /** An upload written to its temporary file and recognised: {@link storeDocument} places it, or it is dropped. */
 export interface ReceivedDocument {
@@ -408,17 +388,6 @@ export async function deleteDocument(db: Db, assetsDir: string, row: Row, now: D
     await tx.delete(courseDocuments).where(eq(courseDocuments.id, row.id));
     return { released: uses.map((u) => u.evaluationId) };
   });
-}
-
-/** The document's file, to stream: its absolute path, size and type, or `404 file_missing`. */
-export async function documentFile(
-  assetsDir: string,
-  row: Row,
-): Promise<{ path: string; size: number; type: string; filename: string }> {
-  const path = safeJoin(assetsDir, documentPath(row.sha256));
-  const info = await stat(path).catch(() => null);
-  if (!info?.isFile()) throw new LibraryError("file_missing");
-  return { path, size: info.size, type: MIME[row.kind], filename: row.filename };
 }
 
 /** A Markdown document's rendering as stored at upload (or by the last re-rendering); null for a PDF. */

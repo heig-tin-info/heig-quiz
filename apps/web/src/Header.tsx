@@ -19,8 +19,7 @@ import {
 import type { Me } from "@quiz/contracts";
 
 import { api } from "./api";
-import { purgeAllNotepads } from "./notepad/store";
-import { purgeAllDocumentStates } from "./student/documentsStore";
+import { purgeDeviceLocalState } from "./attempt/localState";
 import quizLogo from "./assets/quiz.svg?raw";
 import type { Accessory } from "./festive/art";
 import { withAccessory } from "./festive/logo";
@@ -96,8 +95,7 @@ export function useSignOut(): () => void {
   return () => {
     // ADR-090: no student's notepad outlives their session on this device,
     // nor what the documents panel kept (ADR-144 §7).
-    purgeAllNotepads();
-    purgeAllDocumentStates();
+    purgeDeviceLocalState();
     logout.mutate();
   };
 }

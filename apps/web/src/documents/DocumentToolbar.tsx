@@ -74,6 +74,7 @@ export function DocumentToolbar({
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-line px-2 py-1.5">
       <IconButton
+        tipSide="bottom"
         size="md"
         label={t("docs.outline")}
         aria-expanded={outlineOpen}
@@ -87,6 +88,7 @@ export function DocumentToolbar({
       {pdf ? (
         <div className="flex items-center gap-0.5 border-l border-line pl-1">
           <IconButton
+            tipSide="bottom"
             size="md"
             label={t("docs.page.previous")}
             disabled={!view?.pageCount || view.page <= 1}
@@ -97,6 +99,7 @@ export function DocumentToolbar({
           </IconButton>
           <PageField view={view} focusDocument={focusDocument} />
           <IconButton
+            tipSide="bottom"
             size="md"
             label={t("docs.page.next")}
             disabled={!view?.pageCount || view.page >= view.pageCount}
@@ -110,6 +113,7 @@ export function DocumentToolbar({
 
       <div className="flex items-center gap-0.5 border-l border-line pl-1">
         <IconButton
+          tipSide="bottom"
           size="md"
           label={t(pdf ? "docs.zoom.out" : "docs.zoom.textOut")}
           disabled={!view?.canZoom(-1)}
@@ -121,6 +125,7 @@ export function DocumentToolbar({
           {zoomValue !== null ? percent(zoomValue, locale) : ""}
         </span>
         <IconButton
+          tipSide="bottom"
           size="md"
           label={t(pdf ? "docs.zoom.in" : "docs.zoom.textIn")}
           disabled={!view?.canZoom(1)}
@@ -130,6 +135,7 @@ export function DocumentToolbar({
         </IconButton>
         {pdf ? (
           <IconButton
+            tipSide="bottom"
             size="md"
             label={t("docs.zoom.fit")}
             aria-pressed={view?.fitted ?? false}
@@ -172,10 +178,10 @@ export function DocumentToolbar({
         >
           {count}
         </span>
-        <IconButton size="xs" label={t("docs.search.previous")} disabled={!total} onClick={() => view?.findAgain(true)}>
+        <IconButton tipSide="bottom" size="xs" label={t("docs.search.previous")} disabled={!total} onClick={() => view?.findAgain(true)}>
           <ChevronUp />
         </IconButton>
-        <IconButton size="xs" label={t("docs.search.next")} disabled={!total} onClick={() => view?.findAgain(false)}>
+        <IconButton tipSide="bottom" size="xs" label={t("docs.search.next")} disabled={!total} onClick={() => view?.findAgain(false)}>
           <ChevronDown />
         </IconButton>
       </div>

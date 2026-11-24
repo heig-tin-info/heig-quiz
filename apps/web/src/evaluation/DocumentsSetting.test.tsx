@@ -45,7 +45,7 @@ describe("the Documents provided setting", () => {
     const [a, b, c] = [document(1), document(2, "markdown"), document(3)];
     const detail = withDocuments(withMode("exam"), [b!]);
     const { calls } = world(detail, [a!, b!, c!]);
-    renderWithProviders(<Harness detail={detail} documents />);
+    renderWithProviders(<Harness detail={detail} />);
     await open();
     expect(screen.getByText("Sheet 2")).toBeInTheDocument();
     await userEvent.click(await screen.findByRole("button", { name: "Choose" }));
@@ -65,7 +65,7 @@ describe("the Documents provided setting", () => {
     const library = Array.from({ length: 11 }, (_, i) => document(i + 1));
     const detail = withDocuments(withMode("exercise"), library.slice(0, 10));
     world(detail, library);
-    renderWithProviders(<Harness detail={detail} documents />);
+    renderWithProviders(<Harness detail={detail} />);
     await open();
     await userEvent.click(await screen.findByRole("button", { name: "Choose" }));
     const dialog = await screen.findByRole("dialog", { name: "Documents provided" });
@@ -77,7 +77,7 @@ describe("the Documents provided setting", () => {
   it("is frozen with the other settings", async () => {
     const detail = withMode("exam");
     world(detail, [document(1)]);
-    renderWithProviders(<Harness detail={detail} documents disabled />);
+    renderWithProviders(<Harness detail={detail} disabled />);
     await open();
     expect(screen.getByText("No document on screen.")).toBeInTheDocument();
     expect(await screen.findByRole("button", { name: "Choose" })).toBeDisabled();
@@ -86,7 +86,7 @@ describe("the Documents provided setting", () => {
   it("leads to the Documents tab when the course's library is empty", async () => {
     const detail = withMode("exam");
     world(detail, []);
-    renderWithProviders(<Harness detail={detail} documents />);
+    renderWithProviders(<Harness detail={detail} />);
     await open();
     const link = await screen.findByRole("link", { name: "Add one in the Documents tab" });
     expect(link).toHaveAttribute("href", `/courses/${detail.courseId}/documents`);
@@ -96,7 +96,7 @@ describe("the Documents provided setting", () => {
   it("is not offered on a poll", async () => {
     const detail = withMode("poll");
     world(detail, [document(1)]);
-    renderWithProviders(<Harness detail={detail} documents />);
+    renderWithProviders(<Harness detail={detail} />);
     await open();
     expect(screen.queryByText("Documents provided")).toBeNull();
   });

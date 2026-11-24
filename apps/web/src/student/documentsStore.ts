@@ -13,9 +13,9 @@
  * by the viewer itself, through `readViewState` (`documents/viewState.ts`),
  * which trusts nothing of its shape. The rest is read here, field by field.
  *
- * Gone with the attempt: at every end `useAttempt` sees (beside the notepad's
- * `endNotepad`), at sign-out and when a kiosk station loads
- * (`purgeAllDocumentStates`).
+ * Gone with the attempt, beside the notepad, through `attempt/localState.ts`:
+ * at every end `useAttempt` sees, at sign-out, when a kiosk station loads and
+ * at an account's anonymization.
  */
 import { z } from "zod";
 

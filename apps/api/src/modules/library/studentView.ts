@@ -23,17 +23,14 @@
  * `evaluation` module does); it reads it by join.
  */
 import { and, asc, eq } from "drizzle-orm";
+import type { SelectedFields } from "drizzle-orm/pg-core";
 
 import type { DocumentHtml, ProvidedDocument } from "@quiz/contracts";
 import { providedDocumentsReadable, type EvaluationModeName, type GatedAttempt } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { classrooms, courseDocuments, evaluationProvidedDocuments, evaluations } from "../../db/schema.js";
-// The file store's reader; `service.ts` re-exports this file, a cycle of
-// function declarations only.
-import { documentFile } from "./service.js";
-
-type Row = typeof courseDocuments.$inferSelect;
+import { documentFile, type DocumentRow as Row } from "./files.js";
 
 /** The caller's own attempt and its evaluation, as the student route loaded them. */
 export interface ReadingAttempt {
@@ -45,27 +42,33 @@ const readable = ({ evaluation, attempt }: ReadingAttempt, now: Date) =>
   providedDocumentsReadable({ mode: evaluation.mode, evaluationState: evaluation.state, attempt }, now);
 
 /**
- * The provided documents of the evaluation, joined to its classroom's
- * course: a row whose document is of another course is never one (the
- * writer refuses it; this read does not trust it).
+ * The provided documents of the evaluation, in their order, joined to its
+ * classroom's course: a row whose document is of another course is never
+ * one (the writer refuses it; this read does not trust it). `documentId`
+ * narrows it to one. The one join both reads below build on.
  */
-const selection = (evaluationId: string) =>
-  and(
-    eq(evaluationProvidedDocuments.evaluationId, evaluationId),
-    eq(courseDocuments.courseId, classrooms.courseId),
-  );
-
-/** The documents the attempt may read now, in the teacher's order; `[]` while the rule is false. */
-export async function providedDocuments(db: Db, scope: ReadingAttempt, now: Date): Promise<ProvidedDocument[]> {
-  if (!readable(scope, now)) return [];
+function selection(db: Db, fields: SelectedFields, evaluationId: string, documentId?: string) {
   return db
-    .select({ id: courseDocuments.id, title: courseDocuments.title, kind: courseDocuments.kind })
+    .select(fields)
     .from(evaluationProvidedDocuments)
     .innerJoin(courseDocuments, eq(courseDocuments.id, evaluationProvidedDocuments.documentId))
     .innerJoin(evaluations, eq(evaluations.id, evaluationProvidedDocuments.evaluationId))
     .innerJoin(classrooms, eq(classrooms.id, evaluations.classroomId))
-    .where(selection(scope.evaluation.id))
+    .where(
+      and(
+        eq(evaluationProvidedDocuments.evaluationId, evaluationId),
+        eq(courseDocuments.courseId, classrooms.courseId),
+        documentId === undefined ? undefined : eq(evaluationProvidedDocuments.documentId, documentId),
+      ),
+    )
     .orderBy(asc(evaluationProvidedDocuments.position));
+}
+
+/** The documents the attempt may read now, in the teacher's order; `[]` while the rule is false. */
+export async function providedDocuments(db: Db, scope: ReadingAttempt, now: Date): Promise<ProvidedDocument[]> {
+  if (!readable(scope, now)) return [];
+  const fields = { id: courseDocuments.id, title: courseDocuments.title, kind: courseDocuments.kind };
+  return (await selection(db, fields, scope.evaluation.id)) as ProvidedDocument[];
 }
 
 /** One document the attempt may read now, to serve; null — the route's 404 — otherwise. */
@@ -76,13 +79,7 @@ export async function providedDocument(
   now: Date,
 ): Promise<Row | null> {
   if (!readable(scope, now)) return null;
-  const [row] = await db
-    .select({ document: courseDocuments })
-    .from(evaluationProvidedDocuments)
-    .innerJoin(courseDocuments, eq(courseDocuments.id, evaluationProvidedDocuments.documentId))
-    .innerJoin(evaluations, eq(evaluations.id, evaluationProvidedDocuments.evaluationId))
-    .innerJoin(classrooms, eq(classrooms.id, evaluations.classroomId))
-    .where(and(selection(scope.evaluation.id), eq(evaluationProvidedDocuments.documentId, documentId)));
+  const [row] = (await selection(db, { document: courseDocuments }, scope.evaluation.id, documentId)) as { document: Row }[];
   return row?.document ?? null;
 }
 

@@ -28,6 +28,9 @@ import { createPortal } from "react-dom";
 import { Button } from "./controls";
 import { useLayer, useScrollLock, Z } from "./layers";
 
+/** The page under a layer of this recipe: dimmed and blurred (the documents' full screen shares it). */
+export const LAYER_BACKDROP = "bg-fg/30 backdrop-blur-[2px]";
+
 export interface ExpandPanelProps {
   open: boolean;
   onClose: () => void;
@@ -67,7 +70,7 @@ function Panel({ onClose, label, closeLabel, title, status, navigation = false, 
   return (
     // Portalled but still in the React tree of the canvas's host (a sheet, a
     // pane): a click in here is not a click on what lies under it.
-    <div className={`fixed inset-0 ${Z.modal} bg-fg/30 p-4 backdrop-blur-[2px]`} onClick={(e) => e.stopPropagation()}>
+    <div className={`fixed inset-0 ${Z.modal} ${LAYER_BACKDROP} p-4`} onClick={(e) => e.stopPropagation()}>
       <div
         ref={panel}
         role="dialog"

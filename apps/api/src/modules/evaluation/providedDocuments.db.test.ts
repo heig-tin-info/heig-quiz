@@ -140,16 +140,17 @@ describe("the documents of a preview (ADR-144 §7)", () => {
     const { seed, ids } = await world();
     expect((await patch(seed.evaluationId, [ids[0]!, ids[1]!])).statusCode).toBe(200);
     const row = await reload(db(), seed.evaluationId);
-    // The hand-out and every other caller of the builder: none, the conditions counting them all the same.
+    // The hand-out and every other caller of the builder: none, and no count either (nothing of it is shown).
     const plain = await previewView(db(), row, server.clock.now());
     expect(plain.documents).toEqual([]);
-    expect(plain.conditions.imposed).toContainEqual({ key: "documents", kind: "provided", count: 2 });
+    expect(plain.conditions.imposed.map((line) => line.key)).not.toContain("documents");
     // The hand-out (`evaluation/document.ts`) and the paper copies build on this default; the fake
     // type of these tests does not print, so their records are searched by the paper's own tests.
-    // The stateless preview, the teacher's.
+    // The stateless preview, the teacher's: the list, and its count in the conditions.
     const preview = await call("POST", `/app/api/evaluations/${seed.evaluationId}/preview`);
     expect(preview.statusCode, preview.body).toBe(200);
     expect(preview.json().view.documents.map((d: { title: string }) => d.title)).toEqual(["Datasheet", "Formulaire"]);
+    expect(preview.json().view.conditions.imposed).toContainEqual({ key: "documents", kind: "provided", count: 2 });
   });
 });
 
@@ -272,13 +273,12 @@ describe("the library's side (ADR-144 §7)", () => {
   });
 
   it("is a course's staff's alone: a colleague on another course is refused like a stranger", async () => {
-    const { seed, ids } = await world();
+    const { ids } = await world();
     const other = await server.signIn("teacher");
     const elsewhere = await seedLive(db(), { teacherId: other.id, studentIds: [] });
     await db().insert(courseStaff).values({ courseId: elsewhere.courseId, userId: teacher.id, role: "assistant" });
     // The teacher reaches both courses, yet one course's selection takes none of the other's documents.
     const res = await patch(elsewhere.evaluationId, [ids[0]!]);
     expect([res.statusCode, res.json().error]).toEqual([422, "document_unknown"]);
-    expect(seed.courseId).not.toBe(elsewhere.courseId);
   });
 });

@@ -11,8 +11,8 @@
  *     window, so the column is fixed, not a flex sibling), a draggable
  *     separator between — pointer, ←/→ (Shift for larger steps), Home/End,
  *     a double click back to 46 % of the window; the panel keeps 360 px, the
- *     questions 420 px. The docks and the player's frame move left of it
- *     (`--tool-dock-inset`, `--docs-inset`);
+ *     questions 420 px. The docks and the player's questions move left of
+ *     it (`--tool-dock-inset`);
  *   - under 900 px, an OVERLAY under the player's bar, which Escape puts
  *     away;
  *   - FULL SCREEN, a CSS layer on the same node (never the browser's
@@ -20,8 +20,9 @@
  *     built as the player's expand layer: the clock, the save state and one
  *     primary action, "Back to the questions". Escape leaves it.
  *
- * One tab per document (its kind's icon and its title), a strip that
- * scrolls; the viewer's own toolbar below. Ctrl/⌘+F while the panel is open
+ * One tab per document (its kind's icon and its title, `Tabs`), a strip
+ * that scrolls, with a menu of them once they do not all fit; the viewer's
+ * own toolbar below. Ctrl/⌘+F while the panel is open
  * searches the document on screen. Escape: the search first, then the
  * document, then full screen (or the overlay).
  *
@@ -34,17 +35,19 @@
  *
  * The rule is the server's: the list is the attempt view's, `[]` while the
  * attempt may not read (a pause, a hand-in, an expiry, the close). The
- * pause and the close events carry no list, so the host hides the panel
- * while the attempt is paused, and re-reads the attempt view on resume; a
- * 404 from either route hides it at once and asks the host to read the
- * attempt again (`onGone`). The files are read by the viewer from the
+ * pause and the close events carry no list, so the panel hides while the
+ * attempt is paused, and `useAttempt` reads the attempt view again at the
+ * resume. A 404 from a document's route marks that document "not
+ * available" in its tab and asks the host to read the attempt again
+ * (`onGone`): a list without it drops its tab, an empty one hides the
+ * panel, and a list that still holds it leaves the mark — its file is
+ * missing (a staging copy holds the rows only). The files are read by the viewer from the
  * routes the host names — the attempt's for a student, the course's staff
  * routes for the teacher's stateless preview — never navigated to.
  */
-import { BookOpenText, ChevronDown, FileCode2, FileText, Maximize2, X } from "lucide-react";
+import { BookOpenText, ChevronDown, FileCode2, FileText, FileX, Maximize2, X } from "lucide-react";
 import {
   useCallback,
-  useContext,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -60,16 +63,17 @@ import { DocumentHtml, type ProvidedDocument } from "@quiz/contracts";
 import { api, ApiError } from "../api";
 import { DocumentViewer, type DocumentViewerHandle } from "../documents/DocumentViewer";
 import { useT } from "../i18n";
-import { useToast } from "../notify";
 import {
   Button,
-  ClockCountdown,
   cx,
+  EmptyState,
   IconButton,
+  LAYER_BACKDROP,
   Menu,
   QueryError,
   Spinner,
-  SyncBadge,
+  TabPanel,
+  Tabs,
   ToolDockButton,
   useLayer,
   useMinWidth,
@@ -77,7 +81,7 @@ import {
   Z,
 } from "../ui";
 import { loadPanel, savePanel, type PanelState } from "./documentsStore";
-import { ExpandChrome } from "./ExpandLayer";
+import { ExpandStatus } from "./ExpandLayer";
 
 /** Where a document's file and rendered HTML are read. */
 export interface DocumentRoutes {
@@ -102,11 +106,12 @@ export interface PlayerDocuments {
   /** The attempt view's list: the documents the attempt may read now, in their order. */
   list: readonly ProvidedDocument[];
   routes: DocumentRoutes;
-  /** Keep the state in this tab's storage; false keeps it in memory (the preview, an impersonation). */
-  persist: boolean;
-  /** A route answered 404: the rule turned false. The host reads the attempt view again. */
+  /** A route answered 404: the host reads the attempt view again. */
   onGone?: () => void;
 }
+
+/** The tabs' and the panels' ids (`Tabs`, `TabPanel`). */
+const ID_PREFIX = "docs";
 
 /** The split view's width bounds (the mockup's). */
 export const PANEL_MIN = 360;
@@ -137,12 +142,15 @@ const isGone = (error: unknown) =>
 export function DocumentsPanel({
   attemptId,
   documents,
+  persist,
   hidden,
   slot,
   offset,
 }: {
   attemptId: string;
   documents: PlayerDocuments;
+  /** Keep the state in this tab's storage; false keeps it in memory (the preview, an impersonation). */
+  persist: boolean;
   /** The attempt may not read now whatever the list says: the evaluation is paused, or over. */
   hidden: boolean;
   /** Its place in the dock's stack, above the other tools. */
@@ -150,14 +158,17 @@ export function DocumentsPanel({
   offset: string;
 }) {
   const t = useT();
-  const { list, routes, persist } = documents;
+  const { list, routes } = documents;
   const [panel, setPanel] = useState<PanelState>(() => loadPanel(attemptId, persist));
   // Each viewer's reading state changes as the student scrolls: kept here,
   // written with the rest, never a render of its own.
   const docStates = useRef<Record<string, unknown>>(panel.docs);
-  // The list a route answered 404 for: hidden until the host reads a new one.
-  const [goneFor, setGoneFor] = useState<readonly ProvidedDocument[] | null>(null);
-  const visible = list.length > 0 && !hidden && goneFor !== list;
+  // The documents a route answered 404 for, kept while the list holds them.
+  const [unavailable, setUnavailable] = useState<ReadonlySet<string>>(new Set());
+  const visible = list.length > 0 && !hidden;
+  useEffect(() => {
+    if (!visible) setUnavailable(new Set());
+  }, [visible]);
 
   const save = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const persistLater = useCallback(
@@ -180,10 +191,8 @@ export function DocumentsPanel({
   const update = (change: Partial<PanelState>) => setPanel((current) => ({ ...current, ...change }));
   const open = visible && panel.open;
   const active = list.find((d) => d.id === panel.active) ?? list[0] ?? null;
-  const toast = useToast();
-  const onGone = () => {
-    setGoneFor(list);
-    toast(t("docs.player.gone"), "info", { key: "docs:gone" });
+  const onGone = (id: string) => {
+    setUnavailable((ids) => new Set(ids).add(id));
     documents.onGone?.();
   };
 
@@ -216,6 +225,7 @@ export function DocumentsPanel({
           docStates={docStates}
           onStateChange={() => persistLater(panel)}
           onClose={() => setOpen(false)}
+          unavailable={unavailable}
           onGone={onGone}
         />
       ) : null}
@@ -232,6 +242,7 @@ function Panel({
   docStates,
   onStateChange,
   onClose,
+  unavailable,
   onGone,
 }: {
   list: readonly ProvidedDocument[];
@@ -242,10 +253,10 @@ function Panel({
   docStates: RefObject<Record<string, unknown>>;
   onStateChange: () => void;
   onClose: () => void;
-  onGone: () => void;
+  unavailable: ReadonlySet<string>;
+  onGone: (id: string) => void;
 }) {
   const t = useT();
-  const chrome = useContext(ExpandChrome);
   const wide = useMinWidth(SPLIT_FROM);
   const windowWidth = useWindowWidth();
   const full = panel.full;
@@ -264,12 +275,8 @@ function Panel({
   useLayoutEffect(() => {
     const style = document.documentElement.style;
     if (!split) return;
-    style.setProperty("--docs-inset", `${width}px`);
     style.setProperty("--tool-dock-inset", `${width}px`);
-    return () => {
-      style.removeProperty("--docs-inset");
-      style.removeProperty("--tool-dock-inset");
-    };
+    return () => void style.removeProperty("--tool-dock-inset");
   }, [split, width]);
 
   // Full screen is a layer: focus kept inside, Escape handled below.
@@ -310,6 +317,7 @@ function Panel({
   };
 
   const select = (id: string) => update({ active: id });
+  const kindIcon = (doc: ProvidedDocument) => (doc.kind === "pdf" ? FileText : FileCode2);
 
   return (
     <>
@@ -341,53 +349,83 @@ function Panel({
             onResizing={setResizing}
           />
         ) : null}
-        <header className="flex h-11 shrink-0 items-center gap-1 border-b border-line pl-2 pr-2">
-          <Tabs list={list} active={active.id} onSelect={select} />
-          {full ? (
-            <div className="flex shrink-0 items-center gap-3 pl-2">
-              {chrome === null || chrome.deadlineAt === null ? null : (
-                <ClockCountdown deadlineAt={chrome.deadlineAt} clock={chrome.clock} paused={chrome.paused} />
-              )}
-              {chrome?.sync === undefined ? null : <SyncBadge state={chrome.sync} />}
-              <Button variant="primary" size="sm" onClick={() => update({ full: false })}>
-                {t("docs.player.back")}
-              </Button>
-            </div>
-          ) : (
-            <>
-              <IconButton label={t("docs.player.full")} aria-pressed={false} onClick={() => update({ full: true })}>
-                <Maximize2 />
-              </IconButton>
-              <IconButton label={t("docs.player.close")} onClick={onClose}>
-                <X />
-              </IconButton>
-            </>
-          )}
+        <header className="flex shrink-0 items-stretch">
+          <Tabs
+            value={active.id}
+            onChange={select}
+            idPrefix={ID_PREFIX}
+            label={t("docs.player.title")}
+            truncate
+            className="min-w-0 flex-1 pl-2"
+            items={list.map((doc) => ({ value: doc.id, label: doc.title, icon: kindIcon(doc) }))}
+            trailing={(overflows) =>
+              overflows ? (
+                <Menu
+                  label={t("docs.player.all")}
+                  trigger={
+                    <IconButton label={t("docs.player.all")}>
+                      <ChevronDown />
+                    </IconButton>
+                  }
+                  items={list.map((doc) => ({ label: doc.title, icon: kindIcon(doc), onSelect: () => select(doc.id) }))}
+                />
+              ) : null
+            }
+          />
+          {/* The hairline under the strip runs on under the controls. */}
+          <div className="flex shrink-0 items-center gap-1 border-b border-line pr-2 pl-1">
+            {full ? (
+              <>
+                <div className="flex items-center gap-3 pr-1">
+                  <ExpandStatus />
+                </div>
+                <Button variant="primary" size="sm" onClick={() => update({ full: false })}>
+                  {t("docs.player.back")}
+                </Button>
+              </>
+            ) : (
+              <>
+                <IconButton label={t("docs.player.full")} aria-pressed={false} onClick={() => update({ full: true })}>
+                  <Maximize2 />
+                </IconButton>
+                <IconButton label={t("docs.player.close")} onClick={onClose}>
+                  <X />
+                </IconButton>
+              </>
+            )}
+          </div>
         </header>
         <div className={cx("relative min-h-0 flex-1", resizing && "pointer-events-none")}>
           {list
             .filter((doc) => mounted.includes(doc.id))
             .map((doc) => (
-              <div
+              <TabPanel
                 key={doc.id}
-                id={`docs-panel-${doc.id}`}
-                role="tabpanel"
-                aria-labelledby={`docs-tab-${doc.id}`}
-                className="absolute inset-0"
+                idPrefix={ID_PREFIX}
+                value={doc.id}
+                className={cx("absolute inset-0", doc.id !== active.id && "invisible")}
               >
-                <ProvidedViewer
-                  document={doc}
-                  routes={routes}
-                  active={doc.id === active.id}
-                  initialState={docStates.current[doc.id]}
-                  onState={(state) => {
-                    docStates.current[doc.id] = state;
-                    onStateChange();
-                  }}
-                  onGone={onGone}
-                  handle={(handle) => viewers.current.set(doc.id, handle)}
-                />
-              </div>
+                {unavailable.has(doc.id) ? (
+                  doc.id === active.id ? (
+                    <div className="grid h-full place-items-center px-4">
+                      <EmptyState icon={FileX} title={t("docs.player.gone")} />
+                    </div>
+                  ) : null
+                ) : (
+                  <ProvidedViewer
+                    document={doc}
+                    routes={routes}
+                    active={doc.id === active.id}
+                    initialState={docStates.current[doc.id]}
+                    onState={(state) => {
+                      docStates.current[doc.id] = state;
+                      onStateChange();
+                    }}
+                    onGone={() => onGone(doc.id)}
+                    handle={(handle) => viewers.current.set(doc.id, handle)}
+                  />
+                )}
+              </TabPanel>
             ))}
         </div>
       </section>
@@ -398,113 +436,7 @@ function Panel({
 /** Under full screen: the page dimmed, its scroll locked, as under the expand layer. */
 function FullScreenBackdrop() {
   useScrollLock();
-  return <div aria-hidden className={cx("fixed inset-0 bg-fg/30 backdrop-blur-[2px]", Z.modal)} />;
-}
-
-/**
- * One tab per document: its kind's icon and its title; a strip that
- * scrolls. When the tabs do not all fit (ten of them in a 400 px panel), a
- * menu beside the strip lists every document by its title.
- */
-function Tabs({
-  list,
-  active,
-  onSelect,
-}: {
-  list: readonly ProvidedDocument[];
-  active: string;
-  onSelect: (id: string) => void;
-}) {
-  const t = useT();
-  const strip = useRef<HTMLDivElement>(null);
-  const [overflows, setOverflows] = useState(false);
-  useEffect(() => {
-    const box = strip.current;
-    if (!box || typeof ResizeObserver === "undefined") return;
-    const measure = () => setOverflows(box.scrollWidth > box.clientWidth + 1);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(box);
-    return () => observer.disconnect();
-  }, [list.length]);
-  // The selected tab in sight: the strip scrolls, never the page.
-  useEffect(() => {
-    const box = strip.current;
-    const tab = box?.querySelector<HTMLElement>('[aria-selected="true"]');
-    if (!box || !tab) return;
-    const left = tab.offsetLeft - box.offsetLeft;
-    if (left < box.scrollLeft) box.scrollLeft = left - 8;
-    else if (left + tab.offsetWidth > box.scrollLeft + box.clientWidth) {
-      box.scrollLeft = left + tab.offsetWidth - box.clientWidth + 8;
-    }
-  }, [active]);
-  const onKey = (event: KeyboardEvent<HTMLDivElement>) => {
-    const index = list.findIndex((d) => d.id === active);
-    const step = {
-      ArrowRight: 1,
-      ArrowLeft: -1,
-      Home: -index,
-      End: list.length - 1 - index,
-    }[event.key];
-    if (step === undefined) return;
-    event.preventDefault();
-    const next = list[(index + step + list.length) % list.length]!;
-    onSelect(next.id);
-    strip.current?.querySelector<HTMLElement>(`#docs-tab-${CSS.escape(next.id)}`)?.focus();
-  };
-  return (
-    <>
-      <div
-        ref={strip}
-        role="tablist"
-        aria-label={t("docs.player.title")}
-        onKeyDown={onKey}
-        className="flex min-w-0 flex-1 gap-1 self-stretch overflow-x-auto [scrollbar-width:thin]"
-      >
-        {list.map((doc) => {
-          const selected = doc.id === active;
-          const Icon = doc.kind === "pdf" ? FileText : FileCode2;
-          return (
-            <button
-              key={doc.id}
-              id={`docs-tab-${doc.id}`}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              aria-controls={`docs-panel-${doc.id}`}
-              tabIndex={selected ? 0 : -1}
-              title={doc.title}
-              onClick={() => onSelect(doc.id)}
-              className={cx(
-                "relative inline-flex max-w-48 shrink-0 items-center gap-1.5 px-2.5 text-[13px] transition-colors focus-visible:outline-offset-[-2px]",
-                selected
-                  ? "font-semibold text-fg after:absolute after:inset-x-1.5 after:-bottom-px after:h-0.5 after:rounded-full after:bg-fg"
-                  : "font-medium text-fg-muted hover:text-fg",
-              )}
-            >
-              <Icon className="size-4 shrink-0 text-fg-faint" aria-hidden />
-              <span className="truncate">{doc.title}</span>
-            </button>
-          );
-        })}
-      </div>
-      {overflows ? (
-        <Menu
-          label={t("docs.player.all")}
-          trigger={
-            <IconButton label={t("docs.player.all")}>
-              <ChevronDown />
-            </IconButton>
-          }
-          items={list.map((doc) => ({
-            label: doc.title,
-            icon: doc.kind === "pdf" ? FileText : FileCode2,
-            onSelect: () => onSelect(doc.id),
-          }))}
-        />
-      ) : null}
-    </>
-  );
+  return <div aria-hidden className={cx("fixed inset-0", LAYER_BACKDROP, Z.modal)} />;
 }
 
 /**

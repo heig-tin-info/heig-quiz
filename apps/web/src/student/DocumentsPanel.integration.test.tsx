@@ -102,7 +102,7 @@ function Harness({ report }: { report: (entry: unknown) => void }) {
         preview={false}
         navigation="free"
         items={[]}
-        documents={{ list: LIST, routes: attemptDocumentRoutes(ATTEMPT), persist: true }}
+        documents={{ list: LIST, routes: attemptDocumentRoutes(ATTEMPT) }}
       />
     </>
   );

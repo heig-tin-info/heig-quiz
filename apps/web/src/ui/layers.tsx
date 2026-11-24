@@ -321,8 +321,8 @@ export function useScrollLock() {
   }, []);
 }
 
-/** Where a `Tip` opens: above its anchor (flipped below near the top), or at its right. */
-export type TipSide = "top" | "right";
+/** Where a `Tip` opens: above its anchor (flipped below near the top), below it, or at its right. */
+export type TipSide = "top" | "bottom" | "right";
 
 /**
  * Instant tooltip (replaces the laggy native `title`): inverted bubble with an
@@ -345,6 +345,8 @@ export type TipSide = "top" | "right";
  * on the way down since the trigger keeps its click to itself.
  * `side="right"` opens the bubble beside the anchor, vertically centred: the
  * folded sidebar's icons, where a bubble above would cover the row above.
+ * `side="bottom"` opens it below: a toolbar that sits under a bar whose
+ * action a bubble above would cover (the document viewer's).
  */
 export function Tip({
   label,
@@ -404,7 +406,7 @@ export function Tip({
         x: right ? r.right : Math.min(Math.max(r.left + r.width / 2, 16), window.innerWidth - 16),
         top: r.top,
         bottom: r.bottom,
-        below: !right && r.top < 44,
+        below: side === "bottom" || (!right && r.top < 44),
       });
     }, 120);
   };

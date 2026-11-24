@@ -29,9 +29,25 @@ export interface ExpandChromeValue {
 
 export const ExpandChrome = createContext<ExpandChromeValue | null>(null);
 
+/**
+ * What a layer over the attempt keeps in its bar: the remaining time on the
+ * server's clock and the save state — the question's expand layer, the
+ * documents' full screen (ADR-144 §7).
+ */
+export function ExpandStatus() {
+  const chrome = useContext(ExpandChrome);
+  return (
+    <>
+      {chrome === null || chrome.deadlineAt === null ? null : (
+        <ClockCountdown deadlineAt={chrome.deadlineAt} clock={chrome.clock} paused={chrome.paused} />
+      )}
+      {chrome?.sync === undefined ? null : <SyncBadge state={chrome.sync} />}
+    </>
+  );
+}
+
 export function ExpandLayer({ open, onClose, children }: ExpandProps) {
   const t = useT();
-  const chrome = useContext(ExpandChrome);
   return (
     <ExpandPanel
       open={open}
@@ -39,14 +55,7 @@ export function ExpandLayer({ open, onClose, children }: ExpandProps) {
       label={t("player.expand.title")}
       closeLabel={t("player.expand.back")}
       navigation
-      status={
-        <>
-          {chrome === null || chrome.deadlineAt === null ? null : (
-            <ClockCountdown deadlineAt={chrome.deadlineAt} clock={chrome.clock} paused={chrome.paused} />
-          )}
-          {chrome?.sync === undefined ? null : <SyncBadge state={chrome.sync} />}
-        </>
-      }
+      status={<ExpandStatus />}
     >
       {children}
     </ExpandPanel>

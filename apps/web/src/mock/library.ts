@@ -27,6 +27,7 @@ import { isEvaluationOver } from "@quiz/domain";
 
 import { renderStandalone } from "@quiz/docrender";
 
+import { AIDE_MEMOIRE_ID, FORMULAIRE_ID } from "./documentIds";
 import { dropMockDocument, mockDocumentUses } from "./evaluation";
 import { courseOr404, ME_TEACHER, myRoleOn } from "./org";
 import { D, flags, H, iso, MockError, on, refuse } from "./runtime";
@@ -49,7 +50,7 @@ const doc = (over: Partial<CourseDocument> & Pick<CourseDocument, "id" | "title"
 
 const PRG1: CourseDocument[] = [
   doc({
-    id: "5b0c8a1e-2f7d-4c3a-9e61-0d4b7a2c1f01",
+    id: FORMULAIRE_ID,
     title: "Formulaire d'électronique",
     filename: "formulaire-electronique.pdf",
     kind: "pdf",
@@ -57,7 +58,7 @@ const PRG1: CourseDocument[] = [
     uploadedAt: iso(-3 * H),
   }),
   doc({
-    id: "5b0c8a1e-2f7d-4c3a-9e61-0d4b7a2c1f02",
+    id: AIDE_MEMOIRE_ID,
     title: "Aide-mémoire du langage C",
     filename: "aide-memoire.md",
     kind: "markdown",
@@ -223,7 +224,7 @@ const extraDocuments = (): ProvidedDocument[] =>
   flags.tendocs
     ? Array.from({ length: 8 }, (_, i) => ({
         id: `5b0c8a1e-2f7d-4c3a-9e61-0d4b7a2c1e${String(i).padStart(2, "0")}`,
-        title: ["Table des transistors", "Normes de câblage", "Formulaire de trigonométrie", "Unités SI", "Codes couleur", "Table ASCII étendue", "Lois de Kirchhoff", "Datasheet LM358"][i]!,
+        title: ["Table des transistors", "Normes de câblage", "Formulaire de trigonométrie", "Unités SI", "Codes couleur", "Table ASCII étendue", "Lois de Kirchhoff", "Fiche technique ZX-4711"][i]!,
         kind: i % 3 === 2 ? ("markdown" as const) : ("pdf" as const),
       }))
     : [];

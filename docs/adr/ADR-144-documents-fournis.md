@@ -251,9 +251,16 @@ The PDF viewer is pdf.js, pinned, hardened:
   first shown and unmounted when the panel closes or hides: the panel
   follows the attempt view's list and the evaluation's pause, and a 404
   from either route hides it and reads the attempt view again. The
-  preview reads the course's staff routes. A refit of the PDF viewer (a
-  full screen, a resize) now waits for pdf.js's own scrolls before it
-  puts the kept spot back (`PdfView.#relayout`).
+  preview reads the course's staff routes. A 404 from a document's route
+  marks that document "not available" in its tab and reads the attempt
+  view again: a list without it drops the tab, an empty one hides the
+  panel, a list that still holds it (a missing file, as on staging) keeps
+  the mark beside the other documents. The resume reads the attempt view
+  at once. What the device keeps of an attempt goes through one module
+  (`attempt/localState.ts`). A refit of the PDF viewer (a full screen, a
+  resize) keeps the view on the kept spot against pdf.js's own late
+  scrolls until the reader moves (`PdfView.#refit`): a wheel, a pointer,
+  a key or a toolbar step ends it.
 - **The notepad's blocked clipboard** (ADR-090 §6) stays the rule:
   `provided_no_clipboard` refuses a paste or a drop INTO the notepad, a
   document's text included, and nothing is journaled for it (the text is
@@ -301,10 +308,18 @@ text layer.
 
 ### 11. Owed before production
 
-pdf.js inside a real Safe Exam Browser on Windows and on macOS with
-`SEB_CONFIG_KEY_ENFORCE=1` (its range requests must carry the Config Key
-header); on a kiosk station; and a load test of 30 simultaneous searches
-in a document.
+- **A real Safe Exam Browser**, on Windows and on macOS, with
+  `SEB_CONFIG_KEY_ENFORCE=1`: the worker and the `/pdfjs/<version>/` files
+  admitted by the URL filter; the range requests passing the Config Key
+  check; no download prompt; a copy from a document pasted into an answer
+  and into the code editor raising no incident (Windows' isolated
+  clipboard included); Ctrl/Cmd+F reaching the page; no "left the page"
+  incident from the panel; the pause and the deadline.
+- **A kiosk station**: the station's policy admitting those files; range
+  requests across a re-attestation; no state of the previous student left.
+- **A load test on production-like PostgreSQL** (the local one, on PGlite,
+  is an indication only: 30 clients reading a 29 MB PDF whole while one
+  autosaves, autosave p50 11 → 31 ms).
 
 ## Consequences
 
