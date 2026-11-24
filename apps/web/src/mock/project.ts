@@ -2484,7 +2484,8 @@ on("POST", "/app/api/projects/:id/release", (m) => {
 on("POST", "/app/api/projects/:id/repos/open", (m) => {
   const p = projectOr404(m.groups!.id!);
   if (p.reposOpenedAt) return;
-  const refusal = reposAccessOf(p)?.refusal ?? "not_supervised";
+  const opening = reposAccessOf(p);
+  const refusal = opening === null ? "not_supervised" : opening.refusal;
   if (refusal) throw refuse(409, refusal, refusal);
   p.reposOpenedAt = iso(0);
   for (const r of p.repos) if (isLive(p, r) && openingOf(openableOf(r)) === "open") r.invitationStatus = "pending";
