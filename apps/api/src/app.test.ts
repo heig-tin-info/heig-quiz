@@ -236,6 +236,12 @@ describe("app (serving the built SPA)", () => {
     expect(res.body).not.toContain("<title>SPA</title>");
   });
 
+  it("answers a missing file of pdf.js's data with a 404, never with the SPA", async () => {
+    const res = await app.inject({ method: "GET", url: "/pdfjs/cmaps/MISSING.bcmap" });
+    expect(res.statusCode).toBe(404);
+    expect(res.body).not.toContain("<title>SPA</title>");
+  });
+
   it("caches the hashed assets for good and makes the page revalidate", async () => {
     const chunk = await app.inject({ method: "GET", url: "/assets/page-NEW.js" });
     expect(chunk.headers["cache-control"]).toBe("public, max-age=31536000, immutable");

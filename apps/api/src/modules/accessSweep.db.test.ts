@@ -314,8 +314,10 @@ async function world(server: TestServer, owner: Who, enrolled: Who): Promise<Wor
     scanUploadedAt: new Date(),
     scanUploadedBy: owner.id,
   });
-  // A document of the course's library with its file (ADR-144): the `:documentId`.
-  const document = Buffer.from("%PDF-1.4\n%library\n%%EOF\n", "latin1");
+  // A document of the course's library with its file (ADR-144): the
+  // `:documentId`. A Markdown one, so every route under it answers its
+  // owner, the HTML of the viewer included (a PDF has none).
+  const document = Buffer.from("# Swept\n", "utf8");
   const documentSha = sha256Of(document);
   await writeAsset(server.assetsDir, documentPath(documentSha), document);
   const documentId = randomUUID();
@@ -323,10 +325,14 @@ async function world(server: TestServer, owner: Who, enrolled: Who): Promise<Wor
     id: documentId,
     courseId: seed.courseId,
     title: "Swept",
-    filename: "swept.pdf",
-    kind: "pdf",
+    filename: "swept.md",
+    kind: "markdown",
     sha256: documentSha,
     bytes: document.length,
+    html: '<h1 id="swept">Swept</h1>\n',
+    toc: [{ id: "swept", depth: 1, text: "Swept" }],
+    warnings: [],
+    renderedWith: 1,
     uploadedBy: owner.id,
   });
   // A group set of the classroom with one group: the `:gid`.

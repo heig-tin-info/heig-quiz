@@ -13,7 +13,10 @@
  *     and the reply never says whether another course holds them;
  *   - {@link deleteDocument}: the row only. A request never unlinks a file:
  *     it touches its time, and {@link sweepDocumentFiles}, a daily task,
- *     removes the files no row names once they are 48 hours old.
+ *     removes the files no row names once they are 48 hours old;
+ *   - {@link documentHtml}: a Markdown document's stored rendering, for the
+ *     viewer; {@link rerenderDocuments}, in the same daily task, renders
+ *     again from its file a document an older renderer rendered.
  *
  * This module owns `course_documents` and is its only writer. It reads
  * `courses` (the quota) and locks its row; `org` writes it.
@@ -23,12 +26,13 @@ import { readdir, readFile, rm, stat, utimes } from "node:fs/promises";
 import { join } from "node:path";
 import type { Readable } from "node:stream";
 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 
 import {
   DOCUMENT_MARKDOWN_MAX_BYTES,
   type CourseDocument,
   type CourseLibrary,
+  type DocumentHtml,
   type DocumentKind,
   type DocumentUploadRefusal,
 } from "@quiz/contracts";
@@ -339,6 +343,43 @@ export async function documentFile(
   const info = await stat(path).catch(() => null);
   if (!info?.isFile()) throw new LibraryError("file_missing");
   return { path, size: info.size, type: MIME[row.kind], filename: row.filename };
+}
+
+/** A Markdown document's rendering as stored at upload (or by the last re-rendering); null for a PDF. */
+export function documentHtml(row: Row): DocumentHtml | null {
+  if (row.kind !== "markdown" || row.html === null) return null;
+  return { title: row.title, html: row.html, toc: row.toc ?? [] };
+}
+
+/**
+ * The Markdown documents an older renderer rendered (`rendered_with` below
+ * `RENDERER_VERSION`, or never stamped) rendered again from their file
+ * (ADR-144 §3), as the journal's `sweepRenderer` does for its pages: run by
+ * the library's daily task, never by a read. A row whose file is missing (a
+ * staging copy) or no longer reads as Markdown keeps its rendering and is
+ * tried again next time; the update is conditional, so a row re-rendered
+ * meanwhile is not written twice. Answers how many were rendered again.
+ */
+export async function rerenderDocuments(db: Db, assetsDir: string): Promise<number> {
+  const stale = or(isNull(courseDocuments.renderedWith), lt(courseDocuments.renderedWith, RENDERER_VERSION));
+  const due = await db
+    .select({ id: courseDocuments.id, sha256: courseDocuments.sha256 })
+    .from(courseDocuments)
+    .where(and(eq(courseDocuments.kind, "markdown"), stale));
+  let rendered = 0;
+  for (const { id, sha256 } of due) {
+    const bytes = await readFile(safeJoin(assetsDir, documentPath(sha256))).catch(() => null);
+    const text = bytes === null ? null : markdownText(bytes);
+    if (text === null) continue;
+    const { html, toc, warnings } = renderStandalone(text);
+    const updated = await db
+      .update(courseDocuments)
+      .set({ html, toc, warnings, renderedWith: RENDERER_VERSION })
+      .where(and(eq(courseDocuments.id, id), stale))
+      .returning({ id: courseDocuments.id });
+    rendered += updated.length;
+  }
+  return rendered;
 }
 
 /** A file of the store the sweep may remove: absolute, and the hash its name is (or a temporary name). */

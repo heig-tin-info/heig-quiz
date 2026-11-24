@@ -387,7 +387,9 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     app.setNotFoundHandler((req, reply) => {
       // SPA fallback for navigation; API surfaces keep their JSON 404, and so
       // does a missing chunk: HTML in its place crashes the tab that asked.
-      const notPage = ["/app/", "/api/", "/assets/"].some((p) => req.url.startsWith(p));
+      // So does a missing file of pdf.js's data (`/pdfjs/`, a character map,
+      // a font): HTML in its place would be parsed as one.
+      const notPage = ["/app/", "/api/", "/assets/", "/pdfjs/"].some((p) => req.url.startsWith(p));
       if (req.method === "GET" && !notPage) return reply.sendFile("index.html", build);
       return reply.code(404).send({ error: "not_found" });
     });
