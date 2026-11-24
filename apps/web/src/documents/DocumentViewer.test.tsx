@@ -112,6 +112,7 @@ function makeFake(numPages = 3) {
       setDocument() {}
     },
     PDFFindController: class {
+      _scrollMatches = false;
       scrollMatchIntoView() {}
     },
     PDFViewer: FakeViewer,

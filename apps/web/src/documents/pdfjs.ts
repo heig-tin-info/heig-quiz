@@ -5,17 +5,23 @@
  * `pdf_viewer.mjs`, never the prebuilt `viewer.html`) and their stylesheet,
  * once for the page.
  *
+ * The LEGACY build, all three parts: the modern one needs a current browser
+ * (Safari 18), and Safe Exam Browser on macOS runs the system's WebKit, so
+ * an exam on an older Mac would lose its documents. The legacy build carries
+ * its own polyfills but two (`polyfills.ts`).
+ *
  * Everything pdf.js asks for comes from our origin (the CSP's
- * `default-src 'self'`): the worker is a file of the build, started by pdf.js
- * as a module worker from a same-origin URL (no `blob:` wrapper, which pdf.js
- * only makes for a foreign one); the character maps, the standard fonts, the
- * ICC profiles and the WebAssembly decoders are copied into `/pdfjs/` by
- * `scripts/copy-pdfjs-assets.mjs`.
+ * `default-src 'self'`): the worker is a file of the build (`pdfWorker.ts`),
+ * started by pdf.js as a module worker from a same-origin URL (no `blob:`
+ * wrapper, which pdf.js only makes for a foreign one); the character maps,
+ * the standard fonts, the ICC profiles and the WebAssembly decoders are
+ * copied into `/pdfjs/` by `scripts/copy-pdfjs-assets.mjs`.
  */
-import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { installPdfPolyfills } from "./polyfills";
+import workerUrl from "./pdfWorker?worker&url";
 
-export type PdfjsLib = typeof import("pdfjs-dist");
-export type PdfjsViewer = typeof import("pdfjs-dist/web/pdf_viewer.mjs");
+export type PdfjsLib = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
+export type PdfjsViewer = typeof import("pdfjs-dist/legacy/web/pdf_viewer.mjs");
 
 export interface Pdfjs {
   lib: PdfjsLib;
@@ -51,6 +57,9 @@ export function documentParams(url: string) {
     cMapUrl: `${PDFJS_ASSETS}cmaps/`,
     cMapPacked: true,
     standardFontDataUrl: `${PDFJS_ASSETS}standard_fonts/`,
+    // A font the PDF does not embed is drawn from the standard fonts we
+    // serve, never from the machine's own: the same page on every machine.
+    useSystemFonts: false,
     iccUrl: `${PDFJS_ASSETS}iccs/`,
     wasmUrl: `${PDFJS_ASSETS}wasm/`,
   };
@@ -61,13 +70,14 @@ let loading: Promise<Pdfjs> | null = null;
 /** The library and its viewer components, imported once; a failed import is tried again next time. */
 export function loadPdfjs(): Promise<Pdfjs> {
   loading ??= (async () => {
-    const lib = await import("pdfjs-dist");
+    installPdfPolyfills();
+    const lib = await import("pdfjs-dist/legacy/build/pdf.mjs");
     // `pdf_viewer.mjs` reads the core library from `globalThis.pdfjsLib`, so
     // it is imported after that is set.
     (globalThis as { pdfjsLib?: PdfjsLib }).pdfjsLib = lib;
     const [viewer] = await Promise.all([
-      import("pdfjs-dist/web/pdf_viewer.mjs"),
-      import("pdfjs-dist/web/pdf_viewer.css"),
+      import("pdfjs-dist/legacy/web/pdf_viewer.mjs"),
+      import("pdfjs-dist/legacy/web/pdf_viewer.css"),
     ]);
     lib.GlobalWorkerOptions.workerSrc = workerUrl;
     return { lib, viewer };

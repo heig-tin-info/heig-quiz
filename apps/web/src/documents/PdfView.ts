@@ -14,8 +14,8 @@
  * The position is kept as a destination (a page and a point of it, in PDF
  * units), so a remount at another width shows the same spot.
  */
-import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
-import type { EventBus, PDFFindController, PDFLinkService, PDFViewer } from "pdfjs-dist/web/pdf_viewer.mjs";
+import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist/legacy/build/pdf.mjs";
+import type { EventBus, PDFFindController, PDFLinkService, PDFViewer } from "pdfjs-dist/legacy/web/pdf_viewer.mjs";
 
 import { currentEntry, type OutlineItem } from "./outline";
 import { documentParams, loadPdfjs, type Pdfjs } from "./pdfjs";
@@ -115,16 +115,7 @@ export class PdfView implements DocView {
     const linkService = new PDFLinkService({ eventBus, ignoreDestinationZoom: true });
     linkService.externalLinkEnabled = false;
     const findController = new PDFFindController({ eventBus, linkService });
-    // The find controller scrolls to its first match as soon as a query is
-    // set; a query restored on load must leave the reader where they were.
-    const scrollMatch = findController.scrollMatchIntoView.bind(findController);
-    findController.scrollMatchIntoView = (args) => {
-      if (this.#quietFind) {
-        (findController as unknown as { _scrollMatches: boolean })._scrollMatches = false;
-        return;
-      }
-      scrollMatch(args);
-    };
+    quietScroll(findController, () => this.#quietFind);
     // `abortSignal` (read by pdf.js, missing from its types) takes the
     // viewer's document-wide listeners away with it on `destroy`.
     const settings: ConstructorParameters<typeof PDFViewer>[0] & { abortSignal: AbortSignal } = {
@@ -382,4 +373,38 @@ export function viewerL10n(pageLabel: (page: number) => string) {
     pause: () => {},
     resume: () => {},
   };
+}
+
+/**
+ * The find controller's private flag of a pending scroll to the selected
+ * match, which `quietScroll` clears. pdf.js has no option for it; the test
+ * of this file asserts the pinned release still has it, so an upgrade that
+ * drops it fails there first.
+ */
+export const SCROLL_FLAG = "_scrollMatches";
+
+/**
+ * The find controller scrolls to its first match as soon as a query is set;
+ * a query restored on load must leave the reader where they were, so while
+ * `quiet()` holds the scroll is skipped and its pending flag cleared (else
+ * pdf.js would scroll at the next page drawn). Without the flag (another
+ * pdf.js) nothing is changed: the restored query scrolls to its match, and
+ * the view goes back to the kept position once the search settles
+ * (`updatefindcontrolstate`), as before. Returns whether it took effect.
+ */
+export function quietScroll(findController: PDFFindController, quiet: () => boolean): boolean {
+  const controller = findController as unknown as Record<string, unknown> & PDFFindController;
+  if (typeof controller[SCROLL_FLAG] !== "boolean") {
+    console.warn(`document viewer: PDFFindController has no ${SCROLL_FLAG}; a restored search may move the view`);
+    return false;
+  }
+  const scrollMatch = findController.scrollMatchIntoView.bind(findController);
+  findController.scrollMatchIntoView = (args) => {
+    if (quiet()) {
+      controller[SCROLL_FLAG] = false;
+      return;
+    }
+    scrollMatch(args);
+  };
+  return true;
 }

@@ -18,6 +18,10 @@ describe("how a PDF is fetched and read (the viewer's hardening)", () => {
     expect(params.enableXfa).toBe(false);
   });
 
+  it("draws a font the PDF does not embed from the fonts we serve, never the machine's", () => {
+    expect(params.useSystemFonts).toBe(false);
+  });
+
   it("takes every resource from our own origin", () => {
     expect(PDFJS_ASSETS).toBe("/pdfjs/");
     for (const key of ["cMapUrl", "standardFontDataUrl", "iccUrl", "wasmUrl"] as const) {

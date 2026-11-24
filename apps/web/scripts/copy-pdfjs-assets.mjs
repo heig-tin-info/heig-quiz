@@ -6,7 +6,7 @@
  * into `dist/`, which the Dockerfile copies into the image: the document
  * viewer (`src/documents/`) then asks its own origin for `/pdfjs/…`, never a
  * CDN (the CSP's `default-src 'self'`). The worker is not here: Vite emits it
- * as a hashed asset (`?url` in `src/documents/pdfjs.ts`), so a tab never
+ * as a hashed asset (`src/documents/pdfWorker.ts`), so a tab never
  * pairs an old library with a new worker.
  *
  * The files are NOT in git (`.gitignore`): they are the package's, at the
