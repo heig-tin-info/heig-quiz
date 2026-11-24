@@ -14,10 +14,18 @@
  * alone — the student's loader reads {@link countedReceipts}, which never
  * selects the authors.
  */
-import { commitAttribution, effectiveDeadline, studentCommitCount, type AttributedReceipt, type CommitAttribution, type CountedReceipt } from "@quiz/domain";
+import {
+  commitAttribution,
+  effectiveDeadline,
+  holdsStudentWork,
+  studentCommitCount,
+  type AttributedReceipt,
+  type CommitAttribution,
+  type CountedReceipt,
+} from "@quiz/domain";
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { Db } from "../../db/client.js";
+import type { Db, Tx } from "../../db/client.js";
 import { pushReceipts } from "../../db/schema.js";
 import type { RepoRow } from "./repos.js";
 import type { ProjectRow } from "./views.js";
@@ -67,4 +75,20 @@ export function repoCommits(
   members: ReadonlyMap<string, number | null>,
 ): CommitAttribution<string> {
   return commitAttribution(ownReceipts(repo, receipts), effectiveDeadline(repo, project), members);
+}
+
+/**
+ * The repositories of `repos` (of `project`) that hold their student's
+ * work (ADR-145 §7, `holdsStudentWork` of `@quiz/domain`): their receipts
+ * no bot pushed — the workspace's collections INCLUDED, each counted as one
+ * commit — by their effective deadline. One read, whatever the count.
+ */
+export async function reposHoldingWork(db: Db | Tx, project: ProjectRow, repos: readonly RepoRow[]): Promise<Set<string>> {
+  const ids = repos.flatMap((r) => (r.githubRepoId === null ? [] : [r.githubRepoId]));
+  if (ids.length === 0) return new Set();
+  const { githubRepoId, receivedAt, commits } = pushReceipts;
+  const receipts = byRepo(
+    await db.select({ githubRepoId, receivedAt, commits }).from(pushReceipts).where(and(inArray(githubRepoId, ids), eq(pushReceipts.isBot, false))),
+  );
+  return new Set(repos.filter((repo) => holdsStudentWork(ownReceipts(repo, receipts), effectiveDeadline(repo, project))).map((r) => r.id));
 }

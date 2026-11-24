@@ -44,7 +44,10 @@
  *    ADR-106 §5) — nothing to GitHub;
  * 7. with a queue only, a project whose group moves wait for GitHub
  *    (`group_sync_due_at` come, M3-15b-2) has its third lease taken
- *    (`group_sync_job_at`) and one `group.sync` job sent (`groupSync.ts`).
+ *    (`group_sync_job_at`) and one `group.sync` job sent (`groupSync.ts`);
+ * 8. with a queue only, an `online_seb` project whose `repos_access_job_at`
+ *    lease a failed or crashed job left has it claimed once expired and one
+ *    `project.repos_access` job sent (`reposAccess.ts`, ADR-145).
  *
  * Steps 3 to 6 cover the repositories that take deadline work (`LIVE`):
  * provisioned, not deleted, of a project not archived. The leases are
@@ -89,6 +92,7 @@ import {
   PROJECT_DISPATCH_QUEUE,
   PROJECT_EVIDENCE_QUEUE,
   PROJECT_GROUP_SYNC_QUEUE,
+  PROJECT_REPOS_ACCESS_QUEUE,
   PROJECT_REVIEW_QUEUE,
   PROJECT_SYNC_QUEUE,
   type JobQueue,
@@ -107,6 +111,7 @@ import { claimLeases, runLeased, type ProjectJob } from "./lease.js";
 import { autoPublishProject } from "./lifecycle.js";
 import { claimMilestonePasses, claimPasses, type ClaimedPass } from "./milestone.js";
 import { remindDeadlines, tellProjectStaff } from "./notify.js";
+import { claimReposAccessWork, runReposAccessJob } from "./reposAccess.js";
 import { hintProjectStaff, hintRepo, markRepoDeleted, repoWithProject, type RepoRow } from "./repos.js";
 import { claimReviewWork, runReviewJob } from "./review.js";
 import { REVIEW_CONCURRENCY, runEvidencePass, runReview, type ReviewJob } from "./reviewPass.js";
@@ -384,6 +389,8 @@ export async function projectTick(app: FastifyInstance, config: AppConfig): Prom
   for (const job of await claimReviewWork(app.db, now)) await app.boss.send(PROJECT_DISPATCH_QUEUE, job);
   // The group moves waiting for GitHub (M3-15b-2): a third lease, a third queue.
   for (const job of await claimGroupSyncWork(app.db, now)) await app.boss.send(PROJECT_GROUP_SYNC_QUEUE, job);
+  // The opening of an `online_seb` project's repositories (ADR-145): a lease a failed or crashed job left, once expired.
+  for (const job of await claimReposAccessWork(app.db, now)) await app.boss.send(PROJECT_REPOS_ACCESS_QUEUE, job);
 }
 
 /** The project's deadline work, asked by a staff action: claimed and run unless a job already holds it. */
@@ -413,6 +420,9 @@ export async function registerProjectJobs(app: FastifyInstance, queue: JobQueue,
   // The source's sync (M3-07): sent by the staff's request, never by the ticker.
   await queue.createQueue(PROJECT_SYNC_QUEUE, { retryLimit: 0 });
   await queue.work<ProjectJob>(PROJECT_SYNC_QUEUE, (job) => runSyncJob(app, config, job));
+  // The repositories of an `online_seb` project opened or closed (ADR-145): sent by the owner's write, or the ticker.
+  await queue.createQueue(PROJECT_REPOS_ACCESS_QUEUE, { retryLimit: 0 });
+  await queue.work<ProjectJob>(PROJECT_REPOS_ACCESS_QUEUE, (job) => runReposAccessJob(app, config, job));
   // The evidence of a project graded by criteria (ADR-106 §3), sent by the final pass and a Regrade; its review follows (§4).
   await queue.createQueue(PROJECT_EVIDENCE_QUEUE, { retryLimit: 0, expireInSeconds: EVIDENCE_EXPIRY_SECONDS });
   await queue.work<EvidenceJob>(PROJECT_EVIDENCE_QUEUE, (job) => runEvidencePass(app, config, job), {

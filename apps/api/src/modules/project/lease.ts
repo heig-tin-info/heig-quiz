@@ -4,7 +4,9 @@
  * per kind of work — `deadline_job_at` for the deadline's locks and commits
  * (`jobs.ts`), `dispatch_job_at` for the review dispatches (`review.ts`),
  * `group_sync_job_at` for the moves of a group set on GitHub
- * (`groupSync.ts`), `sync_job_at` for the source's sync (`sync.ts`) — so
+ * (`groupSync.ts`), `sync_job_at` for the source's sync (`sync.ts`),
+ * `repos_access_job_at` for an `online_seb` project's repositories opened
+ * or closed (`reposAccess.ts`, ADR-145: taken over by the owner's write) — so
  * that none waits for another, and ONE frame for the jobs that hold the
  * deadline's, the dispatches' and the sync's ({@link runLeased}): take,
  * renew, backdate and give back; `group.sync`, which must run without the
@@ -30,7 +32,7 @@ export const FAILED_RETRY_MS = 30_000;
 const REPO_CONCURRENCY = 4;
 
 /** The column of `projects` that holds a kind of work's lease (`sync_job_at`: the source's sync, M3-07). */
-export type LeaseKey = "deadlineJobAt" | "dispatchJobAt" | "groupSyncJobAt" | "syncJobAt";
+export type LeaseKey = "deadlineJobAt" | "dispatchJobAt" | "groupSyncJobAt" | "syncJobAt" | "reposAccessJobAt";
 
 /** One project's work, as the queue carries it: the lease it was claimed under. */
 export interface ProjectJob {

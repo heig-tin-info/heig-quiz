@@ -52,6 +52,8 @@ import {
   projectPrimaryAction,
   projectScoreGrade,
   reviewState,
+  nothingToOpen,
+  type OpenableRepo,
   type CommitAttribution,
   type FinalScore,
   type FinalScoreSource,
@@ -71,6 +73,7 @@ import { unvalidatedRepos } from "./criterionGrades.js";
 import { isLive, releaseCounts, repoDeadlineState } from "./deadline.js";
 import { lastCollections } from "../codespace/service.js";
 import { reposWithAccessToRevoke } from "./groupCopy.js";
+import { openableRepos, reposOpening } from "./reposAccess.js";
 import { groupsDrifted, groupSyncOwed } from "./groupResync.js";
 import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
@@ -342,6 +345,7 @@ function repoView(
   commits: CommitAttribution<string>,
   toRevoke: ReadonlySet<string>,
   collection: ProjectRepoCollection | null,
+  opening: OpenableRepo | undefined,
 ): ProjectRepoView {
   const { scores, released, changedAfterRelease: changed } = repoScores(project, repo, scored, names);
   const runs = scored.runs;
@@ -372,6 +376,7 @@ function repoView(
     },
     accessToRevoke: toRevoke.has(repo.id),
     collection,
+    nothingToOpen: opening !== undefined && nothingToOpen(opening),
   };
 }
 
@@ -457,6 +462,11 @@ export async function projectDetail(
   const toRevoke = await reposWithAccessToRevoke(db, project.id);
   // The online workspace's last collection (ADR-130 §7), the `codespace` module's record.
   const collections = await lastCollections(db, repoIds);
+  // ADR-145: an `online_seb` project's repositories as their opening reads them (`nothing to open`), and the opening.
+  const seb = project.workMode === "online_seb";
+  const [openings, opening] = seb
+    ? await Promise.all([openableRepos(db, project, shownRepos), reposOpening(db, project)])
+    : [new Map<string, OpenableRepo>(), null];
 
   // The writers of the grade adjustments, named for the staff (ADR-135).
   const names = await adjusterNames(db, shownRepos);
@@ -473,7 +483,7 @@ export async function projectDetail(
   const views = new Map(
     shownRepos.map((repo) => [
       repo.id,
-      repoView(project, repo, scored, names, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), commits.get(repo.id)!, toRevoke, collections.get(repo.id) ?? null),
+      repoView(project, repo, scored, names, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), commits.get(repo.id)!, toRevoke, collections.get(repo.id) ?? null, openings.get(repo.id)),
     ]),
   );
   const groupOf = (groupId: string | null) => (groupId === null ? null : (copy.get(groupId) ?? null));
@@ -560,11 +570,14 @@ export async function projectDetail(
       sourceAhead: sync.ahead !== null,
       // Over the students' repositories only: a test repository is no acceptance (ADR-077).
       changedAfterRelease: repos.filter((repo) => views.get(repo.id)!.flags.changedAfterRelease).length,
+      // ADR-145 §3: the opening, once the owner may open them.
+      reposOpenable: opening !== null && opening.refusal === null,
     }),
     sync,
     counts,
     liveStale: !complete || [...live.values()].some((read) => read.stale),
     rows,
+    reposAccess: opening?.view ?? null,
   };
 }
 

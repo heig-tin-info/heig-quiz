@@ -1,8 +1,9 @@
 /**
  * The project lifecycle's refusals (`ProjectErrorCode`), Accept's
  * (`ProjectAcceptErrorCode`), the review checkpoints'
- * (`ProjectCheckpointErrorCode`) and the distribution's access
- * (`ProjectDistributionAccessErrorCode`), worded by the web app (invariant 1): one
+ * (`ProjectCheckpointErrorCode`), the distribution's access
+ * (`ProjectDistributionAccessErrorCode`) and the opening of the
+ * repositories (`ReposOpeningRefusal`, ADR-145), worded by the web app (invariant 1): one
  * class, its status by code. (A revocation's `revoke_failed` is a roster
  * refusal, `rosterRefusal` of the `org` module.)
  */
@@ -11,12 +12,19 @@ import type {
   ProjectCheckpointErrorCode,
   ProjectDistributionAccessErrorCode,
   ProjectErrorCode,
+  ReposOpeningRefusal,
   WorkModeRefusal,
 } from "@quiz/contracts";
 
 import { DomainError } from "../http.js";
 
-type Code = ProjectErrorCode | ProjectAcceptErrorCode | ProjectCheckpointErrorCode | ProjectDistributionAccessErrorCode | WorkModeRefusal;
+type Code =
+  | ProjectErrorCode
+  | ProjectAcceptErrorCode
+  | ProjectCheckpointErrorCode
+  | ProjectDistributionAccessErrorCode
+  | WorkModeRefusal
+  | ReposOpeningRefusal;
 
 /** The state of things is a 409; what the clock or GitHub's contents refuse a 422; too soon a 429; GitHub failing a 502. */
 const STATUS: Record<Code, number> = {
@@ -116,6 +124,13 @@ const STATUS: Record<Code, number> = {
   work_mode_frozen: 409,
   work_mode_group: 409,
   kiosk_unavailable: 422,
+  // ADR-145: the opening of an `online_seb` project's repositories, and the deadline move it refuses.
+  not_supervised: 409,
+  repos_already_open: 409,
+  not_released: 409,
+  repos_not_frozen: 409,
+  nothing_to_open: 409,
+  repos_open: 409,
 };
 
 /** A refusal: `{ error: code, message, ...details }`. */

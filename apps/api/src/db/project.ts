@@ -312,6 +312,21 @@ export const projects = pgTable(
     releasedAt: timestamp("released_at", { withTimezone: true }),
     releasedBy: uuid("released_by").references(() => users.id),
     /**
+     * An `online_seb` project's repositories opened to their students,
+     * read-only, by the course owner (ADR-145), on the server's clock; null
+     * while closed — never opened, or closed again. The invitation's
+     * permission reads it (`collaboratorPermission`, `@quiz/domain`).
+     */
+    reposOpenedAt: timestamp("repos_opened_at", { withTimezone: true }),
+    /**
+     * The lease of the project's `project.repos_access` job (ADR-145): the
+     * job that converges GitHub to `repos_opened_at`. Taken over by the
+     * owner's open or close (the job holding it stops at its next renewal),
+     * given back once converged, backdated by a failure and kept by a crash
+     * — the ticker claims a lease left so once it expires (`lease.ts`).
+     */
+    reposAccessJobAt: timestamp("repos_access_job_at", { withTimezone: true }),
+    /**
      * The contestation window of a project graded by criteria (ADR-139 §13),
      * in days after its first release: 0 to 60, 0 for none (`ContestationDays`
      * of `@quiz/contracts`); editable until that release.

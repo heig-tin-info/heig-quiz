@@ -122,6 +122,17 @@ export const PROJECT_CRITERIA_QUEUE = "project.criteria";
 export const PROJECT_SYNC_QUEUE = "project.sync";
 
 /**
+ * The GitHub access of an `online_seb` project's repositories brought to
+ * the opened fact (ADR-145): `{ projectId, lease }`, sent by the course
+ * owner's open or close once it took the project's `repos_access_job_at`
+ * lease over, and by the ticker for a lease left to expire. As
+ * {@link PROJECT_DEADLINE_QUEUE}: `standard`, no dedupe, no retry by the
+ * queue (a failure backdates the lease); every invitation and revocation
+ * is idempotent.
+ */
+export const PROJECT_REPOS_ACCESS_QUEUE = "project.repos_access";
+
+/**
  * The evidence of one repository of a project graded by criteria (ADR-106
  * §3): `{ repoId }`. A `standard` queue, no dedupe, no retry, no lease:
  * idempotent per (repository, target, distribution) — two jobs of one

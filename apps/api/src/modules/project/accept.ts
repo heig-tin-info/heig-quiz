@@ -59,7 +59,7 @@ import { redactTokens } from "../../redact.js";
 import { projectInstallation, type InstalledOrg } from "../github/service.js";
 import { DomainError, notFoundError } from "../http.js";
 import { notifyUsers } from "../notifications/service.js";
-import { followInvitation, inviteAccount, notRecorded, recordGrant, type NotRecorded } from "./access.js";
+import { followInvitation, invitationPermission, inviteAccount, notRecorded, recordGrant, type NotRecorded } from "./access.js";
 import { ProjectError } from "./errors.js";
 import { copyGroupOf, groupRepoWhere, repoMembers, seatRepo, type AccountRow, type GroupRow } from "./groupRepos.js";
 import { tellProjectStaff } from "./notify.js";
@@ -192,9 +192,11 @@ export async function acceptProject(db: Db, config: AppConfig, input: AcceptInpu
   const seat = await seatRepo(db, project, input.enrollmentId);
   if (project.groupMode && seat?.groupId === null && isLiveIndividualRepo(seat)) return acceptance(seat);
   if (project.groupMode) return acceptGroup(db, config, input, seat);
-  // Under Safe Exam Browser nobody is invited (ADR-047 §2): a provisioned repository is the answer.
-  const invites = collaboratorPermission(project.workMode) !== null;
-  if (joinable(seat) && seat!.invitationStatus === "none" && invites) return joinRepo(db, config, input, seat!);
+  // Under Safe Exam Browser nobody is invited until the owner opens the repositories (ADR-047 §2, ADR-145): a
+  // provisioned repository is the answer.
+  if (joinable(seat) && seat!.invitationStatus === "none" && (await invitationPermission(db, seat!)) !== null) {
+    return joinRepo(db, config, input, seat!);
+  }
   if (settled(seat ?? undefined)) return acceptance(seat!);
 
   const refusal = acceptRefusal(project, now);
@@ -318,6 +320,7 @@ async function provision(db: Db, input: AcceptInput, row: RepoRow, github: Githu
       branches: project.branches,
       defaultBranch: project.branches[0]!,
       studentLogin: login,
+      // A repository being made is never one an `online_seb` opening reaches (frozen for good): the mode decides.
       permission: collaboratorPermission(project.workMode),
       claim: async (repoId, created) => {
         if (!created) return repoId === row.githubRepoId;

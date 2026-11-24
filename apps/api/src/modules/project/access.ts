@@ -57,6 +57,7 @@ import { githubApp, githubStatus, installationClient, ownerRepo, unless404 } fro
 import { currentLogin, inviteCollaborator, isInvitationRefused, revokeCollaborator } from "../../github/collaborators.js";
 import { projectInstallation } from "../github/service.js";
 import { liveProject } from "../guards.js";
+import { reposHoldingWork } from "./commits.js";
 import { ProjectError } from "./errors.js";
 import { seatRepos, type RepoMember } from "./groupRepos.js";
 import { provisioningNow, type RepoRow } from "./repos.js";
@@ -103,8 +104,16 @@ export const notRecorded = (answer: object | NotRecorded): answer is NotRecorded
  * `group.sync` job then revokes what it finds. A row already there is
  * brought back (a new login, `revoking_at` and `revoked_at` cleared).
  */
-export async function recordGrant(db: Db, repo: RepoRow, account: InvitedAccount, now: Date): Promise<Grant | NotRecorded> {
+export async function recordGrant(
+  db: Db,
+  repo: RepoRow,
+  account: InvitedAccount,
+  now: Date,
+  admit?: (tx: Tx) => Promise<boolean>,
+): Promise<Grant | NotRecorded> {
   return db.transaction(async (tx) => {
+    // The project's own condition first (ADR-145: its repositories still open), under its lock: the project before the line.
+    if (admit && !(await admit(tx))) return "gone";
     const [line] = await tx
       .select({ userId: enrollments.userId, staff: enrollments.staff })
       .from(enrollments)
@@ -201,7 +210,7 @@ export async function releaseLine(tx: Tx, enrollmentId: string): Promise<void> {
  * How an invitation came: an Accept (one's own, or a fellow member's), a link, a resend, the set's move (`group.sync`),
  * a resync's (`group.resync`), the daily reconciliation (`reconcile`, M3-06).
  */
-export type InviteVia = "accept" | "link" | "resend" | "group.sync" | "group.resync" | "reconcile";
+export type InviteVia = "accept" | "link" | "resend" | "group.sync" | "group.resync" | "reconcile" | "repos.open";
 
 export interface InviteContext {
   actor: AuditActor;
@@ -213,9 +222,31 @@ export interface InviteContext {
 }
 
 /**
- * Invites `member` (who has a link) on `repo` with the permission of its
- * project's work mode (`push`, `pull` online; `409 not_invitable` under
- * Safe Exam Browser, ADR-047 §2): the login of
+ * The permission an invitation on `repo` carries now (`collaboratorPermission`
+ * of `@quiz/domain`, ADR-047 §2 as amended by ADR-145): by its project's
+ * work mode, and under Safe Exam Browser by the project's opened fact and
+ * the repository's (frozen for good, holding its student's work). `lock`:
+ * the project's row read FOR SHARE, in a transaction — the owner's close,
+ * which writes it, waits for the caller's grant to be recorded, and its job
+ * then revokes it.
+ */
+export async function invitationPermission(db: Db | Tx, repo: RepoRow, lock = false): Promise<"push" | "pull" | null> {
+  const read = db.select().from(projects).where(eq(projects.id, repo.projectId));
+  const [project] = await (lock ? read.for("share") : read);
+  if (!project) return null;
+  if (project.workMode !== "online_seb") return collaboratorPermission(project.workMode);
+  const work = await reposHoldingWork(db, project, [repo]);
+  return collaboratorPermission(project.workMode, {
+    reposOpen: project.reposOpenedAt !== null,
+    projectArchived: project.archivedAt !== null,
+    repo: { ...repo, work: work.has(repo.id) },
+  });
+}
+
+/**
+ * Invites `member` (who has a link) on `repo` with the permission of
+ * {@link invitationPermission} (`push`; `pull` online and on an opened
+ * `online_seb` repository; `409 not_invitable` otherwise): the login of
  * today for their immutable id (`linkedLogin`: a stored login renamed away
  * may be somebody else's now), the grant recorded first, the invitation
  * (idempotent on GitHub's side: 204 for a collaborator), the grant taken
@@ -237,15 +268,13 @@ export async function inviteAccount(
   });
   if (typeof login !== "string") throw new ProjectError("github_account_stale", "The GitHub account is gone or renamed: relink it");
   const account = { enrollmentId: member.enrollmentId, userId: member.userId, githubUserId: member.account.githubUserId, login };
-  // The permission of the project's work mode (ADR-047 §2): `pull` online;
-  // under Safe Exam Browser nobody is invited — Accept never calls this then.
-  const [{ workMode } = { workMode: "free" as const }] = await db
-    .select({ workMode: projects.workMode })
-    .from(projects)
-    .where(eq(projects.id, repo.projectId));
-  const permission = collaboratorPermission(workMode);
-  if (permission === null) throw new ProjectError("not_invitable", "This project's work mode invites nobody on GitHub");
-  const grant = await recordGrant(db, repo, account, ctx.now);
+  const permission = await invitationPermission(db, repo);
+  if (permission === null) throw new ProjectError("not_invitable", "This repository is not open to its student on GitHub");
+  // A pull of an online mode (an individual repository: a group project stays `free`) is read again under the
+  // project's lock as the grant is recorded: an opened `online_seb` repository's holds only while the repositories
+  // are open (ADR-145), so the owner's close either finds the grant or makes this call record none.
+  const admit = permission === "pull" ? async (tx: Tx) => (await invitationPermission(tx, repo, true)) !== null : undefined;
+  const grant = await recordGrant(db, repo, account, ctx.now, admit);
   if (notRecorded(grant)) return grant;
   const { owner, repo: name } = ownerRepo(repo.fullName!);
   let invitation: SentInvitation;
@@ -366,6 +395,8 @@ export type RevokeVia =
   | "roster.self_enroll"
   | "group.sync"
   | "group.resync"
+  /** The course owner closed an `online_seb` project's repositories again (ADR-145): the `project.repos_access` job. */
+  | "repos.close"
   /** The line's account is pseudonymized (ADR-117 §10): every line it claimed, through `revokeAccountAccess`. */
   | "account.pseudonymize";
 
@@ -579,7 +610,7 @@ function traceRevoke(db: Db, repo: RepoRow, enrollmentId: string, ctx: RevokeCon
  * everywhere (`releaseLine`, `completeDeparture`); a refusal clears the
  * mark, a crash leaves it for the next revocation to ask again.
  */
-async function revokeGrants(
+export async function revokeGrants(
   db: Db,
   items: readonly { grant: GrantRow; repo: RepoRow; client: Octokit | null }[],
   enrollmentId: string,
