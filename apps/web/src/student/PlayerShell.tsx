@@ -59,6 +59,17 @@ import {
 } from "../ui";
 
 /**
+ * The room left of the documents' column in split view (`--tool-dock-inset`,
+ * ADR-144 §7), for the bar and for everything under it. It goes AROUND a
+ * frame, never on it: a frame centers itself in the room that is left, where
+ * a padding of its own would eat its width — down to nothing once the column
+ * is the wider of the two (one question, so no side column, on a wide
+ * screen). The bar's surface still runs across the window, over the column;
+ * its content lines up with the body's.
+ */
+const BESIDE_DOCUMENTS: CSSProperties = { paddingRight: "var(--tool-dock-inset, 0px)" };
+
+/**
  * With the side column, the bar and the body share one frame: the column and
  * its gap (the two terms of `RAIL_GRID`), the room of a wide question (the
  * `max-w-400` of `column`) and the gutters (`px-6`) — 1872 px. Up to there
@@ -222,7 +233,11 @@ export function PlayerShell({
       className="flex min-h-[calc(100dvh-var(--banner-h))] flex-col bg-canvas"
       style={{ "--player-footer-h": `${footerHeight}px` } as CSSProperties}
     >
-      <header ref={setBar} className="sticky top-(--banner-h) z-20 border-b border-line bg-surface">
+      <header
+        ref={setBar}
+        style={BESIDE_DOCUMENTS}
+        className="sticky top-(--banner-h) z-20 border-b border-line bg-surface"
+      >
         <div
           className={cx(
             "mx-auto w-full px-4 pt-2.5 sm:px-6",
@@ -310,58 +325,54 @@ export function PlayerShell({
         </div>
       </header>
 
-      {/* `--tool-dock-inset`: the documents' column on the right in split view, under the bar (ADR-144 §7). */}
-      <div
-        style={{ paddingRight: "var(--tool-dock-inset, 0px)" }}
-        className={cx(
-          "mx-auto w-full flex-1 py-6",
-          docked ? cx(RAIL_GRID, FRAME, "px-6") : cx(column(wide, false), "px-4 sm:px-6"),
-        )}
-      >
-        {aside ? (
-          // Sticks the body's top padding under the bar, and fits in the
-          // viewport under it: a long list scrolls inside, never the page.
-          <aside className="sticky top-[calc(var(--banner-h)+var(--bar-h)+1.5rem)] flex max-h-[calc(100dvh-var(--banner-h)-var(--bar-h)-3rem)] flex-col gap-4 self-start">
-            {aside}
-            <p className="text-[12px] leading-relaxed text-fg-faint">
-              <Kbd>Alt</Kbd> + <Kbd>←</Kbd> <Kbd>→</Kbd> {t("player.shortcuts")}
-            </p>
-            {asideShortcuts.length === 0 ? null : (
-              <ul className="-mt-2 space-y-1" aria-label={t("shortcuts.title")}>
-                {asideShortcuts.map((shortcut) => (
-                  // The column is narrow: a label that does not fit beside its
-                  // keys goes under them rather than being cut.
-                  <li key={shortcut.keys} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <ShortcutKeys shortcut={shortcut} />
-                    <span className="text-[12px] leading-relaxed text-fg-faint">{shortcut.label}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </aside>
-        ) : null}
-        {/* Beside the side column, the question is centered in the room
-            right of it, and the column stays where it is. */}
-        <main className={cx("min-w-0", docked && cx("mx-auto w-full", column(wide, true)))}>
-          {banner ? <div className="mb-5">{banner}</div> : null}
-          {children}
-        </main>
-      </div>
-
-      {footer ? (
-        <footer
-          ref={setFoot}
-          style={{ marginRight: "var(--tool-dock-inset, 0px)" }}
-          className="sticky bottom-0 z-20 border-t border-line bg-surface"
+      <div style={BESIDE_DOCUMENTS} className="flex flex-1 flex-col">
+        <div
+          className={cx(
+            "mx-auto w-full flex-1 py-6",
+            docked ? cx(RAIL_GRID, FRAME, "px-6") : cx(column(wide, false), "px-4 sm:px-6"),
+          )}
         >
-          <div className="mx-auto flex w-full max-w-190 flex-wrap items-center gap-2 px-4 py-3 sm:px-6">
-            {footer}
-          </div>
+          {aside ? (
+            // Sticks the body's top padding under the bar, and fits in the
+            // viewport under it: a long list scrolls inside, never the page.
+            <aside className="sticky top-[calc(var(--banner-h)+var(--bar-h)+1.5rem)] flex max-h-[calc(100dvh-var(--banner-h)-var(--bar-h)-3rem)] flex-col gap-4 self-start">
+              {aside}
+              <p className="text-[12px] leading-relaxed text-fg-faint">
+                <Kbd>Alt</Kbd> + <Kbd>←</Kbd> <Kbd>→</Kbd> {t("player.shortcuts")}
+              </p>
+              {asideShortcuts.length === 0 ? null : (
+                <ul className="-mt-2 space-y-1" aria-label={t("shortcuts.title")}>
+                  {asideShortcuts.map((shortcut) => (
+                    // The column is narrow: a label that does not fit beside its
+                    // keys goes under them rather than being cut.
+                    <li key={shortcut.keys} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <ShortcutKeys shortcut={shortcut} />
+                      <span className="text-[12px] leading-relaxed text-fg-faint">{shortcut.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </aside>
+          ) : null}
+          {/* Beside the side column, the question is centered in the room
+              right of it, and the column stays where it is. */}
+          <main className={cx("min-w-0", docked && cx("mx-auto w-full", column(wide, true)))}>
+            {banner ? <div className="mb-5">{banner}</div> : null}
+            {children}
+          </main>
+        </div>
+
+        {footer ? (
+          <footer ref={setFoot} className="sticky bottom-0 z-20 border-t border-line bg-surface">
+            <div className="mx-auto flex w-full max-w-190 flex-wrap items-center gap-2 px-4 py-3 sm:px-6">
+              {footer}
+            </div>
+            <p className="sr-only">{t("player.shortcuts")}</p>
+          </footer>
+        ) : aside ? null : (
           <p className="sr-only">{t("player.shortcuts")}</p>
-        </footer>
-      ) : aside ? null : (
-        <p className="sr-only">{t("player.shortcuts")}</p>
-      )}
+        )}
+      </div>
       {palette && commands ? (
         <CommandPalette open onClose={() => setPalette(false)} commands={commands} />
       ) : null}
