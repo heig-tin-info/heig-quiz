@@ -497,8 +497,8 @@ export const admin: Record<keyof typeof en, string> = {
   "admin.revokeQuotaConfirm": "Rimuovere la quota di spazi di lavoro di {email}? Torna al valore predefinito.",
   "admin.task.paper.scan_sweep": "Pulizia delle scansioni cartacee",
   "admin.task.paper.scan_sweep.desc": "Elimina le scansioni delle copie cartacee il cui tentativo è stato eliminato.",
-  "admin.task.library.blob_sweep": "Pulizia dei file dei documenti",
-  "admin.task.library.blob_sweep.desc": "Elimina i file dei documenti che nessun corso contiene più, 48 ore dopo il loro ultimo utilizzo.",
+  "admin.task.library.blob_sweep": "Manutenzione dei documenti",
+  "admin.task.library.blob_sweep.desc": "Rielabora i documenti Markdown più vecchi ed elimina i file che nessun corso contiene più, dopo 48 ore.",
   "admin.task.accounts.lifecycle": "Ciclo di vita degli account",
   "admin.task.accounts.lifecycle.desc": "Avvisa gli account inutilizzati da due anni, poi li anonimizza un anno dopo.",
 };

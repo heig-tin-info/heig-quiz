@@ -918,12 +918,8 @@ span.md-body:not(.md-inline) { display: block; }
 @container doc-viewer (max-width: 30rem) {
   .md-body.md-doc.doc-md { padding: 16px 16px 72px; }
 }
-/* The search's two tones (`--match`, `--match-current`): highlights where the
-   browser has them, `<mark>` elements where it does not (`highlight.ts`). */
-::highlight(doc-match) { background-color: var(--match); }
-::highlight(doc-current) { background-color: var(--match-current); color: var(--match-current-ink); }
-mark.doc-match { background-color: var(--match); color: inherit; border-radius: 2px; }
-mark.doc-match.doc-current { background-color: var(--match-current); color: var(--match-current-ink); }
+/* The search's two tones (`--match`, `--match-current`) are painted by
+   `documents/highlight.css`, beside the code that registers them. */
 
 /* PDF: the pages stay white paper in both themes, as printed; the desk
    around them follows the theme. A hairline, not a shadow, sets a page off

@@ -107,6 +107,8 @@ export const courseTemplatesKey = (id: string | null) => ["course", id, "templat
 export const courseConditionsKey = (id: string) => ["course", id, "conditions"] as const;
 /** A course's library of documents (ADR-144). */
 export const courseLibraryKey = (id: string) => ["course", id, "documents"] as const;
+/** A Markdown document's HTML, for the preview: under the library, so a rename read again refreshes its title. */
+export const courseDocumentHtmlKey = (id: string, documentId: string) => ["course", id, "documents", documentId, "html"] as const;
 /**
  * The prefix of `GET /courses/:id/staff/candidates?q=` (the picker of "Add a
  * person" appends the typed text): under the course, so a staff change

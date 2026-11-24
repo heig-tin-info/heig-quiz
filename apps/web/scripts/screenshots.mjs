@@ -212,6 +212,20 @@ const scenes = [
   { name: "course-documents-empty", role: "teacher", path: "/courses/c2/documents" },
   { name: "course-documents-full", role: "teacher", path: "/courses/c1/documents?many=1" },
   { name: "course-documents-admin", role: "admin", path: "/courses/c1/documents" },
+  // ADR-144 §6: a document's preview, the viewer in the expand layer; the
+  // title opens it. A PDF (the mock's sample, searched for "résistance") and
+  // a Markdown document (its outline open).
+  { name: "course-documents-preview", role: "teacher", path: "/courses/c1/documents", fold: true, act: async (p) => {
+    await p.getByRole("button", { name: /^(formulaire d'électronique)$/i }).first().click();
+    await p.locator(".doc-pdf .page canvas").first().waitFor();
+    await p.getByRole("dialog").getByRole("searchbox").fill("résistance");
+    await p.waitForTimeout(1500); // pdf.js searches page by page
+  } },
+  { name: "course-documents-preview-md", role: "teacher", path: "/courses/c1/documents", fold: true, act: async (p) => {
+    await p.getByRole("button", { name: /^(aide-mémoire du langage c)$/i }).first().click();
+    await p.locator("article.doc-md h2").first().waitFor();
+    await p.getByRole("dialog").getByRole("button", { name: /^(outline|sommaire)$/i }).click();
+  } },
   // F-ORG-16: the catalog of conditions, a section of the settings, its
   // archived entries shown, its Add dialog, and an empty one. The editor's
   // picker is `eval-config-timing`.

@@ -1,12 +1,25 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { CourseDocument, CourseLibrary } from "@quiz/contracts";
 
 import { fail, mockFetch, noContent, ok, renderWithProviders, type Reply } from "../test/render";
 import { Button } from "../ui";
 import { CourseDocuments, useDocumentUploads } from "./CourseDocuments";
+
+/*
+ * The viewer itself (pdf.js, the Markdown article) has its own tests
+ * (`documents/`); here it is a stand-in that shows what it was handed.
+ */
+vi.mock("../documents/DocumentViewer", () => ({
+  DocumentViewer: ({ source, title }: { source: { kind: string; url?: string; html?: string }; title: string }) => (
+    <div data-testid="viewer" data-kind={source.kind} data-url={source.url ?? ""}>
+      {title}
+      {source.html ? <div dangerouslySetInnerHTML={{ __html: source.html }} /> : null}
+    </div>
+  ),
+}));
 
 /*
  * The Documents tab of a course (F-ORG-18, ADR-144): its states — loading,
@@ -191,5 +204,53 @@ describe("the Documents tab", () => {
     await screen.findByText("Datasheet");
     expect(screen.queryByRole("spinbutton")).toBeNull();
     expect(screen.getByText("2 MB of 100 MB")).toBeInTheDocument();
+  });
+
+  it("opens a PDF in the viewer, by its title or the row's action, and closes it", async () => {
+    renderTab(ok(libraryOf([pdf])));
+    await userEvent.click(await screen.findByRole("button", { name: "Datasheet" }));
+    const layer = await screen.findByRole("dialog", { name: "Datasheet" });
+    const viewer = within(layer).getByTestId("viewer");
+    expect(viewer).toHaveAttribute("data-kind", "pdf");
+    expect(viewer).toHaveAttribute("data-url", `${URL_LIST}/${pdf.id}/file`);
+    await userEvent.click(within(layer).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Actions" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Preview" }));
+    expect(await screen.findByRole("dialog", { name: "Datasheet" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  it("reads a Markdown document's HTML for the viewer; its warnings stay in the list", async () => {
+    const html = `${URL_LIST}/${sheet.id}/html`;
+    renderTab(ok(libraryOf([sheet])), {
+      [`GET ${html}`]: ok({ title: "Formula sheet", html: '<h2 id="ohm">Ohm</h2>', toc: [{ id: "ohm", depth: 2, text: "Ohm" }] }),
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "Formula sheet" }));
+    const layer = await screen.findByRole("dialog", { name: "Formula sheet" });
+    expect(await within(layer).findByRole("heading", { name: "Ohm" })).toBeInTheDocument();
+    expect(within(layer).getByTestId("viewer")).toHaveAttribute("data-kind", "markdown");
+    expect(within(layer).queryByText("Raw HTML is shown as text.")).toBeNull();
+  });
+
+  it("says when a Markdown document cannot be read, and tries again", async () => {
+    const html = `${URL_LIST}/${sheet.id}/html`;
+    let calls = 0;
+    renderTab(ok(libraryOf([sheet])), {
+      [`GET ${html}`]: () => (++calls === 1 ? fail(500) : ok({ title: "Formula sheet", html: "<p>Back</p>", toc: [] })),
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "Formula sheet" }));
+    const layer = await screen.findByRole("dialog", { name: "Formula sheet" });
+    expect(await within(layer).findByText("This document could not be loaded.")).toBeInTheDocument();
+    await userEvent.click(within(layer).getByRole("button", { name: "Retry" }));
+    expect(await within(layer).findByText("Back")).toBeInTheDocument();
+  });
+
+  it("offers no preview of a document whose file is missing", async () => {
+    renderTab(ok(libraryOf([{ ...pdf, missing: true }])));
+    await screen.findByText("Datasheet");
+    expect(screen.queryByRole("button", { name: "Datasheet" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Preview" })).toBeNull();
   });
 });

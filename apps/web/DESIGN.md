@@ -3265,6 +3265,14 @@ One PDF or one Markdown document the server rendered, read in place
 the player, a preview) and it fills it, down to 400 px. Never an iframe: a
 copy made in it is a copy of the page (ADR-088).
 
+- **The staff preview** (Documents tab of a course, `library/DocumentPreview.tsx`):
+  the viewer in the expand layer (`ExpandPanel`), the document's title on
+  the left of the bar and "Close", the layer's one action. A row's title is
+  the way in (a plain button, underlined on hover), and "Preview" is the
+  first item of its actions; a document whose file is missing has neither.
+  The rendering's warnings stay in the list. Under 24 rem of viewer the page
+  arrows step aside, so the toolbar keeps one row above the search.
+
 - **The toolbar**: one row under a hairline, 32 px icon buttons, groups
   set apart by a hairline on their left: the outline toggle; the page (a
   PDF's: previous, a `sm` field holding the page, "/ n" in 13 px muted

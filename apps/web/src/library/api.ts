@@ -1,7 +1,7 @@
 /**
  * The course library's reads and writes (F-ORG-18, F-ADMIN-10, ADR-144):
- * its documents, an upload, a rename, a delete, the file, and the course's
- * quota. Staff only.
+ * its documents, an upload, a rename, a delete, the file, a Markdown
+ * document's HTML, and the course's quota. Staff only.
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -13,15 +13,24 @@ import {
   QuotaExceeded,
   type CourseDocument,
   type CourseLibrary,
+  type DocumentHtml,
 } from "@quiz/contracts";
 
 import { api, ApiError, refusalCodeOf } from "../api";
-import { courseLibraryKey } from "../queryKeys";
+import { courseDocumentHtmlKey, courseLibraryKey } from "../queryKeys";
 
 const base = (courseId: string) => `/app/api/courses/${courseId}/documents`;
 
-/** The document's file: a download, never shown inline. */
+/** The document's file: a download, or what the preview's PDF viewer reads by ranges. */
 export const documentFileUrl = (courseId: string, documentId: string) => `${base(courseId)}/${documentId}/file`;
+
+/** `GET /courses/:id/documents/:documentId/html`: a Markdown document as the server rendered it, for the preview. */
+export function useDocumentHtml(courseId: string, documentId: string) {
+  return useQuery<DocumentHtml>({
+    queryKey: courseDocumentHtmlKey(courseId, documentId),
+    queryFn: () => api(`${base(courseId)}/${documentId}/html`),
+  });
+}
 
 /** `GET /courses/:id/documents`: the library, newest first, its use and its quota. */
 export function useCourseLibrary(courseId: string) {

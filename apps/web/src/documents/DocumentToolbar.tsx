@@ -23,6 +23,13 @@ import type { SearchCount } from "./view";
 const NEUTRAL_PRESSED =
   "aria-pressed:bg-surface-3 aria-pressed:text-fg aria-expanded:bg-surface-3 aria-expanded:text-fg";
 
+/**
+ * The page arrows step aside on a phone (under 24 rem of viewer): the page
+ * field and the scroll reach every page, and the toolbar keeps to one row
+ * above the search.
+ */
+const STEP_ARROW = "@max-[24rem]/doc-viewer:hidden";
+
 /** What the toolbar shows of the viewer. */
 export interface ToolbarState {
   kind: DocumentKind;
@@ -91,12 +98,13 @@ export function DocumentToolbar({ state, actions, fields }: { state: ToolbarStat
       </IconButton>
 
       {pdf ? (
-        <div className="flex items-center gap-0.5 border-l border-line pl-1.5">
+        <div className="flex items-center gap-0.5 border-l border-line pl-1">
           <IconButton
             size="md"
             label={t("docs.page.previous")}
             disabled={!state.pageCount || state.page <= 1}
             onClick={actions.onPreviousPage}
+            className={STEP_ARROW}
           >
             <ChevronUp />
           </IconButton>
@@ -125,13 +133,14 @@ export function DocumentToolbar({ state, actions, fields }: { state: ToolbarStat
             label={t("docs.page.next")}
             disabled={!state.pageCount || state.page >= state.pageCount}
             onClick={actions.onNextPage}
+            className={STEP_ARROW}
           >
             <ChevronDown />
           </IconButton>
         </div>
       ) : null}
 
-      <div className="flex items-center gap-0.5 border-l border-line pl-1.5">
+      <div className="flex items-center gap-0.5 border-l border-line pl-1">
         <IconButton
           size="md"
           label={t(pdf ? "docs.zoom.out" : "docs.zoom.textOut")}
@@ -140,7 +149,7 @@ export function DocumentToolbar({ state, actions, fields }: { state: ToolbarStat
         >
           <ZoomOut />
         </IconButton>
-        <span aria-live="polite" className="min-w-12 text-center text-[13px] tabular-nums text-fg-muted">
+        <span aria-live="polite" className="min-w-10 text-center text-[13px] tabular-nums text-fg-muted">
           {ready ? percent(state.zoomValue!, locale) : ""}
         </span>
         <IconButton
