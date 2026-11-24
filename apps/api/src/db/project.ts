@@ -320,9 +320,10 @@ export const projects = pgTable(
     reposOpenedAt: timestamp("repos_opened_at", { withTimezone: true }),
     /**
      * The lease of the project's `project.repos_access` job (ADR-145): the
-     * job that converges GitHub to `repos_opened_at`. Taken over by the
-     * owner's open or close (the job holding it stops at its next renewal),
-     * given back once converged, backdated by a failure and kept by a crash
+     * job that converges GitHub to `repos_opened_at`. Claimed in the owner's
+     * open or close, with the fact, when no live job holds it (a job holding
+     * it reads the new fact at its next step), given back only on the fact
+     * it converged to, backdated by a failure and kept by a crash
      * — the ticker claims a lease left so once it expires (`lease.ts`).
      */
     reposAccessJobAt: timestamp("repos_access_job_at", { withTimezone: true }),

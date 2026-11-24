@@ -6,7 +6,7 @@
  * `group_sync_job_at` for the moves of a group set on GitHub
  * (`groupSync.ts`), `sync_job_at` for the source's sync (`sync.ts`),
  * `repos_access_job_at` for an `online_seb` project's repositories opened
- * or closed (`reposAccess.ts`, ADR-145: taken over by the owner's write) — so
+ * or closed (`reposAccess.ts`, ADR-145: claimed with the owner's write, given back on the fact it converged to) — so
  * that none waits for another, and ONE frame for the jobs that hold the
  * deadline's, the dispatches' and the sync's ({@link runLeased}): take,
  * renew, backdate and give back; `group.sync`, which must run without the
@@ -29,7 +29,7 @@ export const LEASE_MS = 10 * 60_000;
 /** A job that failed leaves its work to be claimed again this soon (N-PERF-07: 100 repositories in 5 minutes). */
 export const FAILED_RETRY_MS = 30_000;
 /** Repositories a job settles at once: GitHub's secondary limits frown on more parallel writes. */
-const REPO_CONCURRENCY = 4;
+export const REPO_CONCURRENCY = 4;
 
 /** The column of `projects` that holds a kind of work's lease (`sync_job_at`: the source's sync, M3-07). */
 export type LeaseKey = "deadlineJobAt" | "dispatchJobAt" | "groupSyncJobAt" | "syncJobAt" | "reposAccessJobAt";
@@ -101,6 +101,24 @@ export function heldLease(app: FastifyInstance, key: LeaseKey, projectId: string
     lost: () => lost,
     renew: () => whileHeld(app.clock.now()),
     release: () => whileHeld(null),
+    /**
+     * The lease given back only while `condition` (over `projects`) holds
+     * too, in the same write: false, and the lease kept, when it does not —
+     * the work it stands for moved meanwhile (`reposAccess.ts`, ADR-145).
+     */
+    releaseIf: async (condition: SQL): Promise<boolean> => {
+      let released = false;
+      await (queue = queue.then(async () => {
+        if (lost) return;
+        const rows = await app.db
+          .update(projects)
+          .set({ [key]: null })
+          .where(and(eq(projects.id, projectId), eq(column, held), condition))
+          .returning({ id: projects.id });
+        released = rows.length > 0;
+      }));
+      return released;
+    },
     /**
      * After a failure: the lease kept but backdated, so that it expires
      * {@link FAILED_RETRY_MS} from now and the next tick claims the work

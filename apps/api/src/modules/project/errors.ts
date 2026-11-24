@@ -126,7 +126,6 @@ const STATUS: Record<Code, number> = {
   kiosk_unavailable: 422,
   // ADR-145: the opening of an `online_seb` project's repositories, and the deadline move it refuses.
   not_supervised: 409,
-  repos_already_open: 409,
   not_released: 409,
   repos_not_frozen: 409,
   nothing_to_open: 409,

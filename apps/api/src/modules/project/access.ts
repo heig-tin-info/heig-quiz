@@ -46,13 +46,13 @@ import type { FastifyBaseLogger } from "fastify";
 import type { Octokit } from "octokit";
 
 import type { SentInvitation } from "@quiz/contracts";
-import { collaboratorPermission } from "@quiz/domain";
+import { collaboratorPermission, openingOf } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import { linkedLogin } from "../../auth/linkedLogin.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { enrollments, githubAccounts, projectGroupMembers, projectRepoAccess, projectRepos, projects } from "../../db/schema.js";
+import { classrooms, enrollments, githubAccounts, projectGroupMembers, projectRepoAccess, projectRepos, projects } from "../../db/schema.js";
 import { githubApp, githubStatus, installationClient, ownerRepo, unless404 } from "../../github/app.js";
 import { currentLogin, inviteCollaborator, isInvitationRefused, revokeCollaborator } from "../../github/collaborators.js";
 import { projectInstallation } from "../github/service.js";
@@ -222,31 +222,29 @@ export interface InviteContext {
 }
 
 /**
- * The permission an invitation on `repo` carries now (`collaboratorPermission`
- * of `@quiz/domain`, ADR-047 §2 as amended by ADR-145): by its project's
- * work mode, and under Safe Exam Browser by the project's opened fact and
- * the repository's (frozen for good, holding its student's work). `lock`:
- * the project's row read FOR SHARE, in a transaction — the owner's close,
- * which writes it, waits for the caller's grant to be recorded, and its job
- * then revokes it.
+ * A project's row and its classroom's archive, as an invitation reads them;
+ * `lock`: both FOR SHARE, in the caller's transaction.
  */
-export async function invitationPermission(db: Db | Tx, repo: RepoRow, lock = false): Promise<"push" | "pull" | null> {
-  const read = db.select().from(projects).where(eq(projects.id, repo.projectId));
-  const [project] = await (lock ? read.for("share") : read);
-  if (!project) return null;
-  if (project.workMode !== "online_seb") return collaboratorPermission(project.workMode);
-  const work = await reposHoldingWork(db, project, [repo]);
-  return collaboratorPermission(project.workMode, {
-    reposOpen: project.reposOpenedAt !== null,
-    projectArchived: project.archivedAt !== null,
-    repo: { ...repo, work: work.has(repo.id) },
-  });
+async function invitedProject(db: Db | Tx, projectId: string, lock = false) {
+  const read = db
+    .select({ project: projects, classroomArchivedAt: classrooms.archivedAt })
+    .from(projects)
+    .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
+    .where(eq(projects.id, projectId));
+  const [row] = await (lock ? read.for("share") : read);
+  return row;
 }
 
+/** ADR-145: the owner opened the project's repositories, and neither the project nor its classroom is archived. */
+const reposStillOpen = (row: Awaited<ReturnType<typeof invitedProject>>): boolean =>
+  row !== undefined && row.project.reposOpenedAt !== null && row.project.archivedAt === null && row.classroomArchivedAt === null;
+
 /**
- * Invites `member` (who has a link) on `repo` with the permission of
- * {@link invitationPermission} (`push`; `pull` online and on an opened
- * `online_seb` repository; `409 not_invitable` otherwise): the login of
+ * Invites `member` (who has a link) on `repo` with the permission
+ * `collaboratorPermission` of `@quiz/domain` gives (ADR-047 §2 as amended by
+ * ADR-145): `push` in the students' own tools, `pull` online, and under Safe
+ * Exam Browser `pull` only on a repository the owner's opening opens
+ * (`openingOf`) while it holds — `409 not_invitable` otherwise: the login of
  * today for their immutable id (`linkedLogin`: a stored login renamed away
  * may be somebody else's now), the grant recorded first, the invitation
  * (idempotent on GitHub's side: 204 for a collaborator), the grant taken
@@ -268,12 +266,15 @@ export async function inviteAccount(
   });
   if (typeof login !== "string") throw new ProjectError("github_account_stale", "The GitHub account is gone or renamed: relink it");
   const account = { enrollmentId: member.enrollmentId, userId: member.userId, githubUserId: member.account.githubUserId, login };
-  const permission = await invitationPermission(db, repo);
+  const row = await invitedProject(db, repo.projectId);
+  const seb = row?.project.workMode === "online_seb";
+  const opened =
+    seb && reposStillOpen(row) && openingOf({ ...repo, work: (await reposHoldingWork(db, row.project, [repo])).has(repo.id) }) === "open";
+  const permission = row === undefined ? null : collaboratorPermission(row.project.workMode, opened);
   if (permission === null) throw new ProjectError("not_invitable", "This repository is not open to its student on GitHub");
-  // A pull of an online mode (an individual repository: a group project stays `free`) is read again under the
-  // project's lock as the grant is recorded: an opened `online_seb` repository's holds only while the repositories
-  // are open (ADR-145), so the owner's close either finds the grant or makes this call record none.
-  const admit = permission === "pull" ? async (tx: Tx) => (await invitationPermission(tx, repo, true)) !== null : undefined;
+  // Under Safe Exam Browser the opening is read again under the project's lock as the grant is recorded
+  // (ADR-145): the owner's close either finds the grant, or makes this call record none.
+  const admit = seb ? async (tx: Tx) => reposStillOpen(await invitedProject(tx, repo.projectId, true)) : undefined;
   const grant = await recordGrant(db, repo, account, ctx.now, admit);
   if (notRecorded(grant)) return grant;
   const { owner, repo: name } = ownerRepo(repo.fullName!);

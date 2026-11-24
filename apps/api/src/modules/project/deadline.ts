@@ -32,7 +32,6 @@ import type { ProjectRepoDeadlineState } from "@quiz/contracts";
 import {
   checkpointDueAt,
   closeRefusal,
-  deadlineMoveRefusal,
   deadlineWantsLock,
   effectiveDeadline,
   receivedLate,
@@ -152,7 +151,7 @@ async function runsWithReceipts(tx: Tx, repoIds: string[]) {
  * Teacher scores and a release are kept. The repositories reopened. A
  * move that would reopen one while the project's repositories are open to
  * their students is refused whole, `409 repos_open` (ADR-145 §8,
- * `deadlineMoveRefusal`): THE path that un-freezes a repository, every
+ * the opened fact read under the caller's lock): THE path that un-freezes a repository, every
  * deadline write goes through it.
  */
 export async function effectiveDeadlineMoved(tx: Tx, project: ProjectRow, repoIds: string[], now: Date): Promise<string[]> {
@@ -160,7 +159,7 @@ export async function effectiveDeadlineMoved(tx: Tx, project: ProjectRow, repoId
   const repos = await tx.select().from(projectRepos).where(inArray(projectRepos.id, repoIds));
   const reopened = repos.filter((r) => reopens(r.deadlineAppliedAt, effectiveDeadline(r, project), now)).map((r) => r.id);
   // ADR-145 §8: no repository un-freezes while the repositories are open to their students (the caller's lock holds the row).
-  if (deadlineMoveRefusal({ opened: project.reposOpenedAt !== null, reopened: reopened.length })) {
+  if (project.reposOpenedAt !== null && reopened.length > 0) {
     throw new ProjectError("repos_open", "Close the access to the repositories first");
   }
   if (reopened.length > 0) {

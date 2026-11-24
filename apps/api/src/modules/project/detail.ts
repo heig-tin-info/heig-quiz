@@ -52,8 +52,7 @@ import {
   projectPrimaryAction,
   projectScoreGrade,
   reviewState,
-  nothingToOpen,
-  type OpenableRepo,
+  openingOf,
   type CommitAttribution,
   type FinalScore,
   type FinalScoreSource,
@@ -68,12 +67,12 @@ import { enrollments, githubAccounts, gradeDispatches, projectGradeRuns, project
 import { installationClient } from "../../github/app.js";
 import { isRateLimited, readRepoLiveState, type LiveRead } from "../../github/metrics.js";
 import { projectInstallation } from "../github/service.js";
-import { attributedReceipts, repoCommits } from "./commits.js";
+import { attributedReceipts, holdsWork, repoCommits } from "./commits.js";
 import { unvalidatedRepos } from "./criterionGrades.js";
 import { isLive, releaseCounts, repoDeadlineState } from "./deadline.js";
 import { lastCollections } from "../codespace/service.js";
 import { reposWithAccessToRevoke } from "./groupCopy.js";
-import { openableRepos, reposOpening } from "./reposAccess.js";
+import { openingContext, reposOpening } from "./reposAccess.js";
 import { groupsDrifted, groupSyncOwed } from "./groupResync.js";
 import { seatRepos } from "./groupRepos.js";
 import { forEachLimit } from "./lease.js";
@@ -345,7 +344,7 @@ function repoView(
   commits: CommitAttribution<string>,
   toRevoke: ReadonlySet<string>,
   collection: ProjectRepoCollection | null,
-  opening: OpenableRepo | undefined,
+  opening: "open" | "nothing" | null,
 ): ProjectRepoView {
   const { scores, released, changedAfterRelease: changed } = repoScores(project, repo, scored, names);
   const runs = scored.runs;
@@ -376,7 +375,7 @@ function repoView(
     },
     accessToRevoke: toRevoke.has(repo.id),
     collection,
-    nothingToOpen: opening !== undefined && nothingToOpen(opening),
+    nothingToOpen: opening === "nothing",
   };
 }
 
@@ -462,11 +461,6 @@ export async function projectDetail(
   const toRevoke = await reposWithAccessToRevoke(db, project.id);
   // The online workspace's last collection (ADR-130 §7), the `codespace` module's record.
   const collections = await lastCollections(db, repoIds);
-  // ADR-145: an `online_seb` project's repositories as their opening reads them (`nothing to open`), and the opening.
-  const seb = project.workMode === "online_seb";
-  const [openings, opening] = seb
-    ? await Promise.all([openableRepos(db, project, shownRepos), reposOpening(db, project)])
-    : [new Map<string, OpenableRepo>(), null];
 
   // The writers of the grade adjustments, named for the staff (ADR-135).
   const names = await adjusterNames(db, shownRepos);
@@ -480,10 +474,13 @@ export async function projectDetail(
   const members = new Map<string, Map<string, number | null>>();
   for (const r of readers) members.set(r.repoId, (members.get(r.repoId) ?? new Map()).set(r.enrollmentId, r.githubUserId));
   const commits = new Map(shownRepos.map((repo) => [repo.id, repoCommits(project, repo, receipts, members.get(repo.id) ?? new Map())]));
+  // ADR-145: an `online_seb` project's repositories as the opening reads them, from the counts and collections read above.
+  const seb = project.workMode === "online_seb";
+  const work = new Set(shownRepos.filter((r) => holdsWork(commits.get(r.id)!.total, collections.get(r.id))).map((r) => r.id));
   const views = new Map(
     shownRepos.map((repo) => [
       repo.id,
-      repoView(project, repo, scored, names, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), commits.get(repo.id)!, toRevoke, collections.get(repo.id) ?? null, openings.get(repo.id)),
+      repoView(project, repo, scored, names, facts.get(repo.id), dispatches.get(repo.id), syncs.get(repo.id)!, live.get(repo.id), commits.get(repo.id)!, toRevoke, collections.get(repo.id) ?? null, seb ? openingOf({ ...repo, work: work.has(repo.id) }) : null),
     ]),
   );
   const groupOf = (groupId: string | null) => (groupId === null ? null : (copy.get(groupId) ?? null));
@@ -541,6 +538,7 @@ export async function projectDetail(
   }
 
   const counts = releaseCounts(project, repos);
+  const opening = seb ? reposOpening({ project, repos, counts, work, ...(await openingContext(db, project)) }) : null;
   // ONE predicate for the primary action and the page's Sync button: the sync's own `ahead` (M3-07).
   const sync = projectSyncState(project, repos, now, await gradedBeforeUpdate(db, project, repos));
   // The readiness of the release, as the primary action and the phase read it (ADR-104); the lists count the same
@@ -570,8 +568,8 @@ export async function projectDetail(
       sourceAhead: sync.ahead !== null,
       // Over the students' repositories only: a test repository is no acceptance (ADR-077).
       changedAfterRelease: repos.filter((repo) => views.get(repo.id)!.flags.changedAfterRelease).length,
-      // ADR-145 §3: the opening, once the owner may open them.
-      reposOpenable: opening !== null && opening.refusal === null,
+      // ADR-145 §3: the opening, once the owner may open the repositories, still closed.
+      reposOpenable: opening !== null && project.reposOpenedAt === null && opening.refusal === null,
     }),
     sync,
     counts,

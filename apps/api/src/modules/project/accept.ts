@@ -59,7 +59,7 @@ import { redactTokens } from "../../redact.js";
 import { projectInstallation, type InstalledOrg } from "../github/service.js";
 import { DomainError, notFoundError } from "../http.js";
 import { notifyUsers } from "../notifications/service.js";
-import { followInvitation, invitationPermission, inviteAccount, notRecorded, recordGrant, type NotRecorded } from "./access.js";
+import { followInvitation, inviteAccount, notRecorded, recordGrant, type NotRecorded } from "./access.js";
 import { ProjectError } from "./errors.js";
 import { copyGroupOf, groupRepoWhere, repoMembers, seatRepo, type AccountRow, type GroupRow } from "./groupRepos.js";
 import { tellProjectStaff } from "./notify.js";
@@ -193,10 +193,10 @@ export async function acceptProject(db: Db, config: AppConfig, input: AcceptInpu
   if (project.groupMode && seat?.groupId === null && isLiveIndividualRepo(seat)) return acceptance(seat);
   if (project.groupMode) return acceptGroup(db, config, input, seat);
   // Under Safe Exam Browser nobody is invited until the owner opens the repositories (ADR-047 §2, ADR-145): a
-  // provisioned repository is the answer.
-  if (joinable(seat) && seat!.invitationStatus === "none" && (await invitationPermission(db, seat!)) !== null) {
-    return joinRepo(db, config, input, seat!);
-  }
+  // provisioned repository is the answer. A cheap pre-filter on the project's facts: the binding rule, the
+  // repository's own included, is `inviteAccount`'s (`409 not_invitable` for one the opening leaves closed).
+  const invites = project.workMode !== "online_seb" || project.reposOpenedAt !== null;
+  if (joinable(seat) && seat!.invitationStatus === "none" && invites) return joinRepo(db, config, input, seat!);
   if (settled(seat ?? undefined)) return acceptance(seat!);
 
   const refusal = acceptRefusal(project, now);

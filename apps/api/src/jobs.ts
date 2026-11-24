@@ -124,8 +124,8 @@ export const PROJECT_SYNC_QUEUE = "project.sync";
 /**
  * The GitHub access of an `online_seb` project's repositories brought to
  * the opened fact (ADR-145): `{ projectId, lease }`, sent by the course
- * owner's open or close once it took the project's `repos_access_job_at`
- * lease over, and by the ticker for a lease left to expire. As
+ * owner's open or close when it claimed the project's `repos_access_job_at`
+ * lease (none live), and by the ticker for a lease left to expire. As
  * {@link PROJECT_DEADLINE_QUEUE}: `standard`, no dedupe, no retry by the
  * queue (a failure backdates the lease); every invitation and revocation
  * is idempotent.

@@ -13,19 +13,18 @@
  * {@link attributedReceipts} and {@link repoCommits}, the staff's page
  * alone — the student's loader reads {@link countedReceipts}, which never
  * selects the authors.
+ *
+ * The opening of an `online_seb` project's repositories (ADR-145 §7) reads
+ * this count: a repository holds its student's work with one commit counted
+ * here, or the online workspace collected into it (ADR-130), which this
+ * count leaves out ({@link holdsWork}).
  */
-import {
-  commitAttribution,
-  effectiveDeadline,
-  holdsStudentWork,
-  studentCommitCount,
-  type AttributedReceipt,
-  type CommitAttribution,
-  type CountedReceipt,
-} from "@quiz/domain";
+import type { ProjectRepoCollection } from "@quiz/contracts";
+import { commitAttribution, effectiveDeadline, studentCommitCount, type AttributedReceipt, type CommitAttribution, type CountedReceipt } from "@quiz/domain";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Db, Tx } from "../../db/client.js";
+import { lastCollections } from "../codespace/service.js";
 import { pushReceipts } from "../../db/schema.js";
 import type { RepoRow } from "./repos.js";
 import type { ProjectRow } from "./views.js";
@@ -40,7 +39,7 @@ function byRepo<R extends { githubRepoId: number }>(rows: R[]): Map<number, Omit
 }
 
 /** The counted receipts of GitHub repositories `ids`, by id: one read, whatever the count. */
-export async function countedReceipts(db: Db, ids: readonly number[]): Promise<Map<number, CountedReceipt[]>> {
+export async function countedReceipts(db: Db | Tx, ids: readonly number[]): Promise<Map<number, CountedReceipt[]>> {
   if (ids.length === 0) return new Map();
   const { githubRepoId, receivedAt, commits } = pushReceipts;
   return byRepo(await db.select({ githubRepoId, receivedAt, commits }).from(pushReceipts).where(counted(ids)));
@@ -78,17 +77,18 @@ export function repoCommits(
 }
 
 /**
- * The repositories of `repos` (of `project`) that hold their student's
- * work (ADR-145 §7, `holdsStudentWork` of `@quiz/domain`): their receipts
- * no bot pushed — the workspace's collections INCLUDED, each counted as one
- * commit — by their effective deadline. One read, whatever the count.
+ * A repository holds its student's work (ADR-145 §7): `commits` of theirs by
+ * the count above, or its last collection (ADR-130) committed the workspace.
+ * The staff page passes what it read already; {@link reposHoldingWork} reads it.
  */
+export const holdsWork = (commits: number, collection: ProjectRepoCollection | undefined): boolean =>
+  commits > 0 || collection?.outcome === "collected";
+
+/** The repositories of `repos` that hold their student's work ({@link holdsWork}): two reads, whatever the count. */
 export async function reposHoldingWork(db: Db | Tx, project: ProjectRow, repos: readonly RepoRow[]): Promise<Set<string>> {
-  const ids = repos.flatMap((r) => (r.githubRepoId === null ? [] : [r.githubRepoId]));
-  if (ids.length === 0) return new Set();
-  const { githubRepoId, receivedAt, commits } = pushReceipts;
-  const receipts = byRepo(
-    await db.select({ githubRepoId, receivedAt, commits }).from(pushReceipts).where(and(inArray(githubRepoId, ids), eq(pushReceipts.isBot, false))),
-  );
-  return new Set(repos.filter((repo) => holdsStudentWork(ownReceipts(repo, receipts), effectiveDeadline(repo, project))).map((r) => r.id));
+  const [receipts, collections] = await Promise.all([
+    countedReceipts(db, repos.flatMap((r) => (r.githubRepoId === null ? [] : [r.githubRepoId]))),
+    lastCollections(db, repos.map((r) => r.id)),
+  ]);
+  return new Set(repos.filter((r) => holdsWork(repoCommitCount(project, r, receipts), collections.get(r.id))).map((r) => r.id));
 }

@@ -110,7 +110,7 @@ export async function unsettledCollections(db: Db, projectId: string, now: Date)
 export const COLLECTION_UNSETTLED = sql`EXISTS (SELECT 1 FROM ${codespaceCollections} WHERE ${codespaceCollections.repoId} = ${projectRepos.id} AND ${codespaceCollections.outcome} IS NULL)`;
 
 /** Each repository's last collection (by its deadline), for the staff's rows (ADR-130 §7). */
-export async function lastCollections(db: Db, repoIds: readonly string[]): Promise<Map<string, ProjectRepoCollection>> {
+export async function lastCollections(db: Db | Tx, repoIds: readonly string[]): Promise<Map<string, ProjectRepoCollection>> {
   const out = new Map<string, ProjectRepoCollection>();
   if (repoIds.length === 0) return out;
   const rows = await db

@@ -603,20 +603,21 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   /**
    * ADR-145: an `online_seb` project's repositories opened to their
    * students, read-only (`409` with a `REPOS_OPENING_REFUSALS` code), and
-   * closed again (whenever they are open). The course owner's, like the
-   * release (`403 owner_required`). Each writes the fact and sends the job
-   * that brings GitHub to it, and answers at once (`ProjectReposAccess`).
+   * closed again (whenever they are open); either a no-op when the fact
+   * already says so. The course owner's, like the release (`403
+   * owner_required`). Each writes the fact and sends the job that brings
+   * GitHub to it, and answers 204 at once.
    */
-  app.post(
-    "/app/api/projects/:id/repos/open",
-    session,
-    teacher(onOwnedProject, async ({ req, now, scope }) => service.openRepos(app, config, scope.project.id, actorOf(req), now)),
-  );
-  app.post(
-    "/app/api/projects/:id/repos/close",
-    session,
-    teacher(onOwnedProject, async ({ req, now, scope }) => service.closeRepos(app, config, scope.project.id, actorOf(req), now)),
-  );
+  for (const [path, open] of [["open", true], ["close", false]] as const) {
+    app.post(
+      `/app/api/projects/:id/repos/${path}`,
+      session,
+      teacher(onOwnedProject, async ({ req, reply, now, scope }) => {
+        await service.setReposOpen(app, config, scope.project.id, open, actorOf(req), now);
+        return reply.code(204).send();
+      }),
+    );
+  }
 
   /**
    * F-PROJ-12 (M3-07): the source's sync — the distribution repository
