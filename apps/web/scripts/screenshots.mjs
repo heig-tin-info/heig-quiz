@@ -1388,6 +1388,13 @@ const scenes = [
   { name: "player-seb-clock", role: "student", path: `${TAKE}?scene=running&sebexam=1`, fold: true, battery: { level: 1, charging: true, chargingTime: 0 }, act: openBattery },
   // ADR-079: the conditions read before the start, reopened from the bar.
   { name: "player-conditions", role: "student", path: `${TAKE}?scene=running`, fold: true, act: (p) => p.getByRole("button", { name: /^(show the conditions|voir les conditions)$/i }).click() },
+  // ADR-144 §7: the documents panel beside the questions — on the PDF, on the
+  // Markdown, the outline open, full screen, and ten documents in a 400 px panel.
+  { name: "player-documents", role: "student", path: `${TAKE}?scene=running`, fold: true, act: openDocuments },
+  { name: "player-documents-markdown", role: "student", path: `${TAKE}?scene=running`, fold: true, act: async (p) => { await openDocuments(p); await p.getByRole("tab").nth(1).click(); await p.waitForTimeout(800); } },
+  { name: "player-documents-outline", role: "student", path: `${TAKE}?scene=running`, fold: true, act: async (p) => { await openDocuments(p); await p.getByRole("button", { name: /^(outline|sommaire)$/i }).click(); await p.waitForTimeout(500); } },
+  { name: "player-documents-full", role: "student", path: `${TAKE}?scene=running`, fold: true, act: async (p) => { await openDocuments(p); await p.getByRole("button", { name: /^(full screen|plein écran)$/i }).click(); await p.waitForTimeout(800); } },
+  { name: "player-documents-tabs", role: "student", path: `${TAKE}?scene=running&tendocs=1`, fold: true, ss: { "quiz.documents.22222222-2222-4222-8222-222222222222": JSON.stringify({ open: false, full: false, active: null, width: 400, docs: {} }) }, act: openDocuments },
   // F-EVAL-13: back on the page after leaving it, the integrity notice top right.
   { name: "player-left-notice", role: "student", path: `${TAKE}?scene=running`, fold: true, act: leaveAndReturn },
   // ADR-088 §4: a passage pasted from outside the page, the paste notice top right.
@@ -2688,6 +2695,12 @@ async function pasteFromOutside(page) {
     target.dispatchEvent(new ClipboardEvent("paste", { clipboardData, bubbles: true, cancelable: true }));
   });
   await page.waitForTimeout(400);
+}
+
+/** The player's Documents button, then the first document drawn (ADR-144 §7). */
+async function openDocuments(page) {
+  await page.getByRole("button", { name: /^documents$/i }).click();
+  await page.waitForTimeout(1500);
 }
 
 async function openQuestion(page, n) {

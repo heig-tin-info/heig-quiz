@@ -165,6 +165,10 @@
 :root:has([data-tool-dock-slot="1"]) {
   --tool-dock-h: calc(4rem + var(--tool-dock-step));
 }
+/* Three (the documents above them, ADR-144 §7). */
+:root:has([data-tool-dock-slot="2"]) {
+  --tool-dock-h: calc(4rem + 2 * var(--tool-dock-step));
+}
 /* The FAB steps aside while a list's selection bar is up: the bar spans the
    bottom edge, and the selection is the task of the moment. */
 @variant max-lg {

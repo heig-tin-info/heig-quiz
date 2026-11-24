@@ -25,6 +25,8 @@ export interface ViewOptions {
   isActive: () => boolean;
   /** The accessible name of a PDF page ("Page 3"), in the interface language. */
   pageLabel: (page: number) => string;
+  /** The document could not be loaded: what failed (pdf.js's error, its `status` for an HTTP one). */
+  onFailed?: (error: unknown) => void;
 }
 
 export interface DocView {

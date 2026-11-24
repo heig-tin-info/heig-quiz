@@ -7,6 +7,7 @@ import { usePublicConfig } from "../api";
 import { Logo } from "../Header";
 import { useT } from "../i18n";
 import { purgeAllNotepads } from "../notepad/store";
+import { purgeAllDocumentStates } from "../student/documentsStore";
 import { PollQr } from "../poll/PollQr";
 import { formatRemaining, Spinner, useNow } from "../ui";
 import type { StationTrouble } from "./station";
@@ -28,8 +29,12 @@ export function KioskPage() {
   const config = usePublicConfig();
   const phase = useKioskStation(config.data?.kiosk ?? null, !config.isLoading);
   const t = useT();
-  // ADR-090: a shared station keeps no student's notepad.
-  useEffect(() => purgeAllNotepads(), []);
+  // ADR-090: a shared station keeps no student's notepad, nor their
+  // documents' reading state (ADR-144 §7).
+  useEffect(() => {
+    purgeAllNotepads();
+    purgeAllDocumentStates();
+  }, []);
 
   return (
     <main className="flex min-h-dvh flex-col bg-canvas px-6 py-6 sm:px-12 sm:py-8">

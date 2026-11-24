@@ -69,7 +69,7 @@ import { pollOfTeacher, teacherPolls } from "./poll";
 import { hasMockJournal } from "./journal";
 import { hasStudentGroups, studentGroupSetCards } from "./groups";
 import { findEvaluation, MOCK_PROVIDED } from "./evaluation";
-import { mockProvided } from "./library";
+import { mockStudentDocuments } from "./library";
 import { roomOr404, studentRooms } from "./org";
 import { me } from "./session";
 
@@ -564,12 +564,12 @@ export const studentConditions = (kiosk = false) =>
     closesAt: null,
     timeBonusPercent: 33,
     // ADR-144 §7: two of PRG1's documents, counted (none under `?empty=1`).
-    documentCount: flags.empty ? 0 : MOCK_PROVIDED.length,
+    documentCount: flags.empty ? 0 : mockStudentDocuments(MOCK_PROVIDED).length,
   });
 
 /** What the student may read now (ADR-144 §7): the selection while the attempt runs, none otherwise. */
 const studentDocuments = () =>
-  flags.empty || scene === "closed" || scene === "paused" ? [] : mockProvided("c1", MOCK_PROVIDED);
+  flags.empty || scene === "closed" || scene === "paused" ? [] : mockStudentDocuments(MOCK_PROVIDED);
 
 /** What question n is worth. */
 const studentItemPoints = (n: number): number => (n === 4 ? 5 : n === 5 || n === 7 ? 3 : n === 3 ? 1 : 2);

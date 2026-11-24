@@ -235,7 +235,39 @@ The PDF viewer is pdf.js, pinned, hardened:
   in-page viewer is one of the page's own copies for the integrity journal
   (ADR-088), as the notepad's is (ADR-090 §6). A paper copy (ADR-125)
   gets nothing.
-- The student reads them in a panel of the player (PR3, second half).
+- **The player's panel** (PR3, second half; `student/DocumentsPanel.tsx`,
+  DESIGN.md "The documents panel"), as the validated mockup: a
+  **Documents** dock above the calculator's and the notepad's (it closes
+  neither); a split view from 900 px with a separator (360 px and 420 px
+  kept, 46 % by default), an overlay under it; full screen a CSS layer on
+  the same node with the clock, the save state and "Back to the
+  questions"; one tab per document, a menu of them once the strip
+  overflows; Ctrl/⌘+F to the search of the document on screen; Escape
+  from the search to the document to full screen (or the overlay). What
+  the student set is kept per attempt in `sessionStorage` (memory only for
+  the preview and an impersonation), each document's state read back only
+  by the viewer's `readViewState`, and gone at every end of the attempt,
+  at sign-out and when a kiosk station loads. The viewers are mounted when
+  first shown and unmounted when the panel closes or hides: the panel
+  follows the attempt view's list and the evaluation's pause, and a 404
+  from either route hides it and reads the attempt view again. The
+  preview reads the course's staff routes. A refit of the PDF viewer (a
+  full screen, a resize) now waits for pdf.js's own scrolls before it
+  puts the kept spot back (`PdfView.#relayout`).
+- **The notepad's blocked clipboard** (ADR-090 §6) stays the rule:
+  `provided_no_clipboard` refuses a paste or a drop INTO the notepad, a
+  document's text included, and nothing is journaled for it (the text is
+  one of the page's own copies). A copy FROM a document is free, as from
+  a question; the answer fields keep their clipboard. Nothing to build:
+  the notepad's own handlers already refuse it, tested with the real
+  viewer and journal.
+- **Safe Exam Browser and the kiosk.** The `.seb` file's URL filter admits
+  Quiz's host whole (`URLFilterRules`, host patterns), so `/pdfjs/<version>/`
+  and the worker under `/assets/` are admitted, as every route of the app;
+  pdf.js fetches the file from the page (not the worker), so the requests
+  carry SEB's Config Key header. The kiosk extension restricts no URL;
+  the station's allowed URLs are ChromeOS policy, outside the repository.
+  Both stay owed in a real client (§11).
 
 ### 8. Licensing
 

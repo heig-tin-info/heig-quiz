@@ -20,6 +20,7 @@ import type { Me } from "@quiz/contracts";
 
 import { api } from "./api";
 import { purgeAllNotepads } from "./notepad/store";
+import { purgeAllDocumentStates } from "./student/documentsStore";
 import quizLogo from "./assets/quiz.svg?raw";
 import type { Accessory } from "./festive/art";
 import { withAccessory } from "./festive/logo";
@@ -93,8 +94,10 @@ export function useSignOut(): () => void {
     onSuccess: () => qc.setQueryData(meKey, null),
   });
   return () => {
-    // ADR-090: no student's notepad outlives their session on this device.
+    // ADR-090: no student's notepad outlives their session on this device,
+    // nor what the documents panel kept (ADR-144 §7).
     purgeAllNotepads();
+    purgeAllDocumentStates();
     logout.mutate();
   };
 }

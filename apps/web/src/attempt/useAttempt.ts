@@ -42,6 +42,7 @@ import type {
 
 import { api } from "../api";
 import { endNotepad } from "../notepad/store";
+import { endDocumentStates } from "../student/documentsStore";
 import { useEventStream } from "../realtime/useEventStream";
 import { useServerClock } from "../realtime/useServerClock";
 import { Autosave, type SyncState } from "./autosave";
@@ -181,10 +182,12 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
   const pause = useCallback(() => setPaused(true), []);
 
   // ADR-090: the notepad goes with the attempt, at every end seen here —
-  // submitted, deadline, evaluation closed — however it was learnt.
+  // submitted, deadline, evaluation closed — however it was learnt; and
+  // what the documents panel kept of the attempt with it (ADR-144 §7).
   useEffect(() => {
     if (closed === null) return;
     endNotepad(attemptId);
+    endDocumentStates(attemptId);
   }, [closed, attemptId]);
 
   // --- Adopting a fresh view ----------------------------------------------

@@ -205,6 +205,47 @@ on("GET", "/app/api/courses/:id/documents/:documentId/html", (m): DocumentHtml =
   return { html, toc };
 });
 
+/**
+ * The student's routes (ADR-144 §7): a document of PRG1's library the
+ * attempt reads, as the course's own routes serve it; anything else — and
+ * every document under `?empty=1` — the 404 of a missing one.
+ */
+const providedOr404 = (m: RegExpMatchArray, kind: CourseDocument["kind"]) => {
+  const found = [...libraryOf("c1").documents, ...extraDocuments()].find(
+    (d) => d.id === m.groups!.documentId && d.kind === kind && !("missing" in d && d.missing),
+  );
+  if (!found || flags.empty) throw new MockError(404, "not_found");
+  return found;
+};
+
+/** `?tendocs=1`: eight more sheets, so the student's exam provides ten (the strip of tabs). */
+const extraDocuments = (): ProvidedDocument[] =>
+  flags.tendocs
+    ? Array.from({ length: 8 }, (_, i) => ({
+        id: `5b0c8a1e-2f7d-4c3a-9e61-0d4b7a2c1e${String(i).padStart(2, "0")}`,
+        title: ["Table des transistors", "Normes de câblage", "Formulaire de trigonométrie", "Unités SI", "Codes couleur", "Table ASCII étendue", "Lois de Kirchhoff", "Datasheet LM358"][i]!,
+        kind: i % 3 === 2 ? ("markdown" as const) : ("pdf" as const),
+      }))
+    : [];
+
+/** The documents the mock's student exam provides (`student.ts`): two of PRG1's, ten under `?tendocs=1`. */
+export const mockStudentDocuments = (ids: readonly string[]): ProvidedDocument[] => [
+  ...mockProvided("c1", ids),
+  ...extraDocuments(),
+];
+on("GET", "/app/api/attempts/:id/documents/:documentId/file", async (m) => {
+  providedOr404(m, "pdf");
+  const bytes = await (await fetch(pdfSample)).arrayBuffer();
+  return new Response(bytes, {
+    headers: { "content-type": "application/pdf", "content-length": String(bytes.byteLength) },
+  });
+});
+on("GET", "/app/api/attempts/:id/documents/:documentId/html", (m): DocumentHtml => {
+  providedOr404(m, "markdown");
+  const { html, toc } = renderStandalone(markdownSample);
+  return { html, toc };
+});
+
 on("PATCH", "/app/api/admin/courses/:id/documents-quota", (m, body) => {
   const parsed = DocumentsQuotaPatch.safeParse(body);
   if (!parsed.success) throw refuse(400, "validation", "Invalid quota");

@@ -62,6 +62,12 @@ export interface DocumentViewerProps {
   active?: boolean;
   /** Escape in the search field gave the focus back to the document. */
   onSearchEscape?: () => void;
+  /**
+   * A PDF could not be loaded: pdf.js's error (an HTTP one carries its
+   * `status`). A host that serves documents under a rule (an attempt's,
+   * ADR-144 §7) reads a 404 as the rule turning false.
+   */
+  onLoadError?: (error: unknown) => void;
   ref?: Ref<DocumentViewerHandle>;
 }
 
@@ -71,7 +77,7 @@ export function DocumentViewer(props: DocumentViewerProps) {
   return <Viewer key={source.kind === "pdf" ? `pdf:${source.url}` : `md:${source.html}`} {...props} />;
 }
 
-function Viewer({ source, title, initialState, onStateChange, active = true, onSearchEscape, ref }: DocumentViewerProps) {
+function Viewer({ source, title, initialState, onStateChange, active = true, onSearchEscape, onLoadError, ref }: DocumentViewerProps) {
   const t = useT();
   const ids = useId();
   const outlineId = `${ids}-outline`;
@@ -96,6 +102,8 @@ function Viewer({ source, title, initialState, onStateChange, active = true, onS
   outlineRef.current = outlineOpen;
   const onStateChangeRef = useRef(onStateChange);
   onStateChangeRef.current = onStateChange;
+  const onLoadErrorRef = useRef(onLoadError);
+  onLoadErrorRef.current = onLoadError;
   const reported = useRef<DocumentViewState | null>(null);
 
   /** The state now, the outline included; reported to the host when it changed. */
@@ -131,6 +139,7 @@ function Viewer({ source, title, initialState, onStateChange, active = true, onS
       onChange,
       isActive: () => activeRef.current,
       pageLabel: (page: number) => tRef.current("docs.page.landmark", { page }),
+      onFailed: (error: unknown) => onLoadErrorRef.current?.(error),
     };
     const view: DocView =
       source.kind === "pdf"

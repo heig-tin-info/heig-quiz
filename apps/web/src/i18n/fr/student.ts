@@ -321,4 +321,12 @@ export const student: Record<keyof typeof en, string> = {
   "docs.search.next": "Résultat suivant",
   "docs.loading": "Chargement du document",
   "docs.failed": "Ce document n'a pas pu être chargé.",
+  "docs.player.open": "Documents",
+  "docs.player.close": "Fermer les documents",
+  "docs.player.title": "Documents",
+  "docs.player.full": "Plein écran",
+  "docs.player.back": "Retour aux questions",
+  "docs.player.resize": "Largeur des documents",
+  "docs.player.gone": "Les documents ne peuvent plus être lus.",
+  "docs.player.all": "Tous les documents",
 };

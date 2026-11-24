@@ -15,6 +15,7 @@ import { api, wordedRefusal } from "./api";
 import { useConfirm } from "./confirm";
 import { useT, type Dict } from "./i18n";
 import { purgeAllNotepads } from "./notepad/store";
+import { purgeAllDocumentStates } from "./student/documentsStore";
 import { useToast } from "./notify";
 import { useOneTimeParam, type Route } from "./router";
 import { Alert, Button, IconButton, SettingRow } from "./ui";
@@ -50,8 +51,9 @@ export function AnonymizeAccountRow({ me }: { me: Me }) {
   const anonymize = useMutation({
     mutationFn: () => api(SELF_PSEUDONYMIZE_PATH, { method: "POST" }),
     onSuccess: () => {
-      // ADR-090: no notepad outlives the session on this device.
+      // ADR-090: no notepad outlives the session on this device, nor the documents' state (ADR-144 §7).
       purgeAllNotepads();
+      purgeAllDocumentStates();
       window.location.assign(`/?${ANONYMIZED_PARAM}=1`);
     },
     onError: (error) => toast(wordedRefusal(error, PSEUDONYMIZE_REFUSAL_WORDS, t), "error"),

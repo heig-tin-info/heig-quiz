@@ -50,7 +50,7 @@ liste s'ajoute, au-delà de cette fin aussi.
 
 Le reste vit sous **Options avancées**, en quatre groupes : **Déroulement**
 (navigation, mélange, et la salle d'attente d'une évaluation en direct), **Sécurité** (journal d'intégrité,
-plein écran, appareils autorisés), **Aides** (calculatrice, bloc-notes) et
+plein écran, appareils autorisés), **Aides** (calculatrice, bloc-notes, documents fournis depuis la bibliothèque du cours) et
 **Retour et notation** (retour à l'étudiant, politiques de notation, et
 **Autoriser l'entraînement**, modifiable jusqu'à la publication des résultats).
 

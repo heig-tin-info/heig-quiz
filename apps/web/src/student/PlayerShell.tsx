@@ -310,7 +310,9 @@ export function PlayerShell({
         </div>
       </header>
 
+      {/* `--docs-inset`: the documents' column on the right in split view, under the bar (ADR-144 §7). */}
       <div
+        style={{ paddingRight: "var(--docs-inset, 0px)" }}
         className={cx(
           "mx-auto w-full flex-1 py-6",
           docked ? cx(RAIL_GRID, FRAME, "px-6") : cx(column(wide, false), "px-4 sm:px-6"),
@@ -347,7 +349,11 @@ export function PlayerShell({
       </div>
 
       {footer ? (
-        <footer ref={setFoot} className="sticky bottom-0 z-20 border-t border-line bg-surface">
+        <footer
+          ref={setFoot}
+          style={{ marginRight: "var(--docs-inset, 0px)" }}
+          className="sticky bottom-0 z-20 border-t border-line bg-surface"
+        >
           <div className="mx-auto flex w-full max-w-190 flex-wrap items-center gap-2 px-4 py-3 sm:px-6">
             {footer}
           </div>
