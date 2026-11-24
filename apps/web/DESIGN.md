@@ -2284,7 +2284,7 @@ header, whatever the tab.
 
 - **Header**: title, state, the status sentence and the ONE primary button the
   server names (Publish / Sync / Release / Grade / Open repositories, the last
-  an `online_seb` project's once released, ADR-145: its confirmation says what
+  an `online_seb` project's once frozen and released, ADR-145: its confirmation says what
   becomes readable, that a clone stays, and names the projects on the same
   source still to come; *Close access* is a secondary of the Repositories
   tab, beside the line that says since when they are open), the same on every tab — no

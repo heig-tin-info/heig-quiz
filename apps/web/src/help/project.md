@@ -13,8 +13,8 @@ over.
 ## Lab tests under Safe Exam Browser
 
 During a lab test under Safe Exam Browser or at a kiosk, nobody is invited
-on GitHub. Once the scores are released (or every repository is frozen,
-for a project without grading), the course owner may **Open repositories**:
+on GitHub. Once every repository is frozen and, for a graded project, the
+scores are released, the course owner may **Open repositories**:
 the students who worked are invited read-only. They then read their code,
 the statement and tests, and every CI run with its logs: a test that
 prints hidden cases in its logs shows them. A copy they clone cannot be

@@ -13,13 +13,13 @@ Safe Exam Browser.
 ## Tests de labo sous Safe Exam Browser
 
 Pendant un test de labo sous Safe Exam Browser ou sur un poste kiosque,
-personne n'est invité sur GitHub. Une fois les scores publiés (ou tous les
-dépôts figés, pour un projet sans note), la personne responsable du cours
+personne n'est invité sur GitHub. Une fois tous les dépôts figés et les
+scores publiés (pour un projet noté), la personne responsable du cours
 peut **Ouvrir les dépôts** : les étudiants qui ont travaillé sont invités
 en lecture seule. Ils lisent alors leur code, l'énoncé et les tests, et
 chaque exécution de la CI avec ses journaux : un test qui affiche des cas cachés
 dans ses journaux les dévoile. Une copie clonée ne peut pas être reprise.
-Un dépôt sans travail de son étudiant reste fermé, signalé *rien à ouvrir*.
+Un dépôt sans travail reste fermé, signalé *rien à ouvrir*.
 **Refermer l'accès**, dans l'onglet **Dépôts**, retire cet accès. Tant que
 les dépôts sont ouverts, une échéance repoussée qui rouvrirait l'un d'eux
 est refusée : refermez d'abord l'accès.

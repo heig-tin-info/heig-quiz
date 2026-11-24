@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { FolderGit2, GraduationCap, Loader2, Lock, LockOpen, Snowflake, Users } from "lucide-react";
 
-import type { ProjectDetail, ProjectReposAccess, ProjectRepoView } from "@quiz/contracts";
+import type { ProjectDetail, ProjectRepoView } from "@quiz/contracts";
 import { projectGraded } from "@quiz/domain";
 
 import { api } from "../api";
@@ -214,25 +214,6 @@ function StateCell({ repo }: { repo: ProjectRepoView }) {
 }
 
 /**
- * The repositories (F-PROJ-13): one row per student of the roster, their
- * repository or "not accepted", then the repositories whose student left the
- * roster — as the server orders them, until a column is sorted. A group
- * project (M3-16b) has one row per group instead — its repository, its
- * scores once, its members under its name —, by name, then its students in
- * no group; "Student" sorts by the group's name. Seven
- * columns at most; the ones a phone drops (repository, last commit, CI, the
- * deadline) are on the row's own page (ADR-137), which every row opens — by
- * a click or Enter —, a row not accepted yet included.
- * A deleted repository stays, muted: it is a fact of the project.
- *
- * The staff's *Open in workspace* (ADR-129 §11, F-PROJ-27) is the last
- * column's icon, where the platform offers it; a phone drops the column and keeps the page's button.
- *
- * Nothing here waits for GitHub: `live` only adds counters when the cache
- * had them, and `liveStale` is said on the heading while the next refetch
- * fills it.
- */
-/**
  * An `online_seb` project's repositories open to their students (ADR-145
  * §6): the fact and its date, and the course owner's secondary *Close
  * access*, confirmed first — it revokes the access on GitHub and cannot
@@ -245,7 +226,7 @@ function ReposAccessLine({ project, owner }: { project: ProjectDetail; owner: bo
   const toast = useToast();
   const refresh = useProjectRefresh(project.id, project.classroomId);
   const close = useMutation({
-    mutationFn: () => api<ProjectReposAccess>(`/app/api/projects/${project.id}/repos/close`, { method: "POST" }),
+    mutationFn: () => api<void>(`/app/api/projects/${project.id}/repos/close`, { method: "POST" }),
     onSuccess: async () => {
       await refresh();
       toast(t("project.repos.access.closedToast"), "success");
@@ -270,7 +251,7 @@ function ReposAccessLine({ project, owner }: { project: ProjectDetail; owner: bo
     <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-muted" data-testid="repos-access">
       <span className="inline-flex items-center gap-1.5">
         <LockOpen className="size-3.5 text-fg-faint" aria-hidden />
-        {t("project.repos.access.state", { date: isoDateTime(openedAt) })}
+        {t("project.status.reposOpen", { date: isoDateTime(openedAt) })}
       </span>
       {owner === true ? (
         <Button variant="secondary" size="sm" onClick={() => void onClose()} loading={close.isPending}>
@@ -281,6 +262,25 @@ function ReposAccessLine({ project, owner }: { project: ProjectDetail; owner: bo
   );
 }
 
+/**
+ * The repositories (F-PROJ-13): one row per student of the roster, their
+ * repository or "not accepted", then the repositories whose student left the
+ * roster — as the server orders them, until a column is sorted. A group
+ * project (M3-16b) has one row per group instead — its repository, its
+ * scores once, its members under its name —, by name, then its students in
+ * no group; "Student" sorts by the group's name. Seven
+ * columns at most; the ones a phone drops (repository, last commit, CI, the
+ * deadline) are on the row's own page (ADR-137), which every row opens — by
+ * a click or Enter —, a row not accepted yet included.
+ * A deleted repository stays, muted: it is a fact of the project.
+ *
+ * The staff's *Open in workspace* (ADR-129 §11, F-PROJ-27) is the last
+ * column's icon, where the platform offers it; a phone drops the column and keeps the page's button.
+ *
+ * Nothing here waits for GitHub: `live` only adds counters when the cache
+ * had them, and `liveStale` is said on the heading while the next refetch
+ * fills it.
+ */
 export function ProjectRepos({
   project,
   onOpen,

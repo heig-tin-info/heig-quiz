@@ -381,7 +381,6 @@ type KnownCode =
 const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   // ADR-145: the opening of an `online_seb` project's repositories, and the deadline move it refuses.
   not_supervised: "project.refusal.notSupervised",
-  repos_already_open: "project.refusal.reposAlreadyOpen",
   not_released: "project.refusal.notReleased",
   repos_not_frozen: "project.refusal.reposNotFrozen",
   nothing_to_open: "project.refusal.nothingToOpen",

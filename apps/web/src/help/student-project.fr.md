@@ -44,7 +44,7 @@ notification.
 ## Après un test de labo sous Safe Exam Browser
 
 Pendant le test, vous n'avez aucun accès à votre dépôt sur GitHub. Une fois
-le test terminé, l'enseignant peut ouvrir les dépôts : vous recevez alors
+le test terminé, l'équipe enseignante peut ouvrir les dépôts : vous recevez alors
 une invitation en lecture seule, que vous acceptez depuis cette page, pour
 relire votre code, les tests et les exécutions de la CI.
 

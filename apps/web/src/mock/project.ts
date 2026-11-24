@@ -129,8 +129,7 @@ import {
   proratedByTests,
   resolveFinalScore,
   repoValidation,
-  nothingToOpen,
-  repoOpenable,
+  openingOf,
   reposOpeningRefusal,
   reviewState,
   roundPoints,
@@ -1042,20 +1041,19 @@ function reposAccessOf(p: MockProject): { view: ProjectReposAccess; refusal: Rep
   if (p.reposOpenedAt === undefined) return null;
   const facts = p.repos.filter((r) => isLive(p, r)).map(openableOf);
   const { live, frozen } = readinessOf(p);
-  const openable = facts.filter(repoOpenable).length;
+  const openable = facts.filter((f) => openingOf(f) === "open").length;
   return {
     refusal: reposOpeningRefusal({
       workMode: "online_seb",
       gradingMode: p.summary.gradingMode,
       projectArchived: p.summary.archivedAt !== null,
       classroomArchived: false,
-      opened: p.reposOpenedAt !== null,
       released: p.releasedAt !== null,
       live,
       frozen,
       openable,
     }),
-    view: { openedAt: p.reposOpenedAt, openable, nothingToOpen: facts.filter(nothingToOpen).length, sameSource: ["Test de labo 1 — rattrapage"] },
+    view: { openedAt: p.reposOpenedAt, openable, nothingToOpen: facts.filter((f) => openingOf(f) === "nothing").length, sameSource: ["Test de labo 1 — rattrapage"] },
   };
 }
 
@@ -1170,7 +1168,7 @@ function repoView(p: MockProject, r: MockRepo): ProjectRepoView {
     },
     accessToRevoke: r.accessToRevoke,
     collection: mockCollection(p, r),
-    nothingToOpen: p.reposOpenedAt !== undefined && isLive(p, r) && nothingToOpen(openableOf(r)),
+    nothingToOpen: p.reposOpenedAt !== undefined && isLive(p, r) && openingOf(openableOf(r)) === "nothing",
   };
 }
 
@@ -1337,7 +1335,7 @@ function detailOf(p: MockProject): ProjectDetail {
       startsLater: draftStartsLater({ publishMode: p.summary.publishMode, startAt: new Date(p.summary.startAt) }, new Date(now)),
       sourceAhead: p.sync.aheadAt !== null,
       changedAfterRelease: views.filter((r) => r.flags.changedAfterRelease).length,
-      reposOpenable: reposAccessOf(p)?.refusal === null,
+      reposOpenable: p.reposOpenedAt === null && reposAccessOf(p)?.refusal === null,
     }),
     counts,
     reposAccess: reposAccessOf(p)?.view ?? null,
@@ -2480,23 +2478,22 @@ on("POST", "/app/api/projects/:id/release", (m) => {
 /**
  * ADR-145: an `online_seb` project's repositories opened to their students
  * (the openable ones invited, `pending`), and closed again (every one back
- * to `none`). The refusals are the domain's.
+ * to `none`), 204 each; a no-op when the fact already says so, as the
+ * server. The refusals are the domain's.
  */
-on("POST", "/app/api/projects/:id/repos/open", (m): ProjectReposAccess => {
+on("POST", "/app/api/projects/:id/repos/open", (m) => {
   const p = projectOr404(m.groups!.id!);
-  const opening = reposAccessOf(p);
-  const refusal = opening === null ? "not_supervised" : opening.refusal;
+  if (p.reposOpenedAt) return;
+  const refusal = reposAccessOf(p)?.refusal ?? "not_supervised";
   if (refusal) throw refuse(409, refusal, refusal);
   p.reposOpenedAt = iso(0);
-  for (const r of p.repos) if (isLive(p, r) && repoOpenable(openableOf(r))) r.invitationStatus = "pending";
-  return reposAccessOf(p)!.view;
+  for (const r of p.repos) if (isLive(p, r) && openingOf(openableOf(r)) === "open") r.invitationStatus = "pending";
 });
-on("POST", "/app/api/projects/:id/repos/close", (m): ProjectReposAccess => {
+on("POST", "/app/api/projects/:id/repos/close", (m) => {
   const p = projectOr404(m.groups!.id!);
-  if (p.reposOpenedAt === undefined) throw refuse(409, "not_supervised", "not_supervised");
+  if (!p.reposOpenedAt) return;
   p.reposOpenedAt = null;
   for (const r of p.repos) r.invitationStatus = "none";
-  return reposAccessOf(p)!.view;
 });
 
 /** The protected files restored again (F-PROJ-08): a no-op on a repository not suspended. */

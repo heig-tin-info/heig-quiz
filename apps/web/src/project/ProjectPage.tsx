@@ -21,7 +21,6 @@ import { useState } from "react";
 import type {
   ProjectDetail,
   ProjectReleaseResult,
-  ProjectReposAccess,
   ProjectSummary,
   ProjectSyncAccepted,
   ProjectSyncRequest,
@@ -250,7 +249,7 @@ export function ProjectPage({ id, navigate }: { id: string; navigate: Navigate }
   });
   /** ADR-145: an `online_seb` project's repositories opened to their students, read-only; the job invites them. */
   const openRepos = useMutation({
-    mutationFn: () => api<ProjectReposAccess>(`/app/api/projects/${id}/repos/open`, { method: "POST" }),
+    mutationFn: () => api<void>(`/app/api/projects/${id}/repos/open`, { method: "POST" }),
     onSuccess: async () => {
       await refresh();
       toast(t("project.repos.openedToast"), "success");
