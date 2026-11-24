@@ -25,6 +25,7 @@ import {
   advancedCount,
   railSteps,
   deadlineDesc,
+  deadlineRefusal,
   isReopen,
   offersClose,
   offersResync,
@@ -94,6 +95,19 @@ describe("the header's sentence", () => {
     );
   });
 
+  it("says an online_seb project's repositories still closed, then open since their date (ADR-145)", () => {
+    const access = { openedAt: null, openable: 2, nothingToOpen: 1, sameSource: [] };
+    const closed = { state: "locked", primaryAction: "open_repos", reposAccess: access } as const;
+    expect(projectStatus(makeProject({ ...closed, releasedAt: PAST }))).toEqual({ key: "project.status.reposClosed", date: PAST });
+    expect(statusKey(makeProject({ ...closed, gradingMode: "none" }))).toBe("project.status.reposClosedUngraded");
+    // Release (again) and Grade rank before the opening, and say so.
+    expect(statusKey(makeProject({ ...closed, primaryAction: "release", releasedAt: PAST }))).toBe("project.status.rerelease");
+    const opened = makeProject({ state: "locked", releasedAt: PAST, reposAccess: { ...access, openedAt: AHEAD } });
+    expect(projectStatus(opened)).toEqual({ key: "project.status.reposOpen", date: AHEAD });
+    // Sync, when the source is ahead, still comes first.
+    expect(statusKey(makeProject({ ...opened, primaryAction: "sync" }))).toBe("project.status.sync");
+  });
+
   it("names the date the sentence is about: the start, the release, else the deadline", () => {
     const start = new Date(Date.now() + 86_400_000).toISOString();
     expect(projectStatus(makeProject({ state: "scheduled", publishMode: "scheduled", startAt: start })).date).toBe(start);
@@ -152,6 +166,10 @@ describe("a repository's flags", () => {
 
   it("reads a degraded repository that is not archived as one without its ruleset", () => {
     expect(repoFlags(makeRepo(1, { degraded: true }))).toEqual([{ key: "project.flag.noRuleset", tone: "zinc" }]);
+  });
+
+  it("says nothing to open as a fact (ADR-145 §7)", () => {
+    expect(repoFlags(makeRepo(1, { nothingToOpen: true }))).toEqual([{ key: "project.flag.nothingToOpen", tone: "zinc" }]);
   });
 });
 
@@ -290,6 +308,15 @@ describe("the refusals", () => {
     );
     expect(refusalKey(new ApiError(409, { error: "source_not_found", message: "" }))).toBeNull();
     expect(refusalKey(new Error("boom"))).toBeNull();
+  });
+
+  it("words the opening's refusals, and says a deadline refused under its field (ADR-145)", () => {
+    const refused = (error: string) => new ApiError(409, { error, message: "" });
+    expect(refusalKey(refused("not_released"))).toBe("project.refusal.notReleased");
+    expect(refusalKey(refused("nothing_to_open"))).toBe("project.refusal.nothingToOpen");
+    expect(deadlineRefusal(refused("repos_open"), t)).toBe("project.refusal.reposOpen");
+    expect(deadlineRefusal(new ApiError(422, { error: "deadline_past", message: "" }), t)).toBe("project.refusal.deadlinePast");
+    expect(deadlineRefusal(refused("repo_unavailable"), t)).toBeUndefined();
   });
 
   it("words the staff's writes' refusals (M3-08b): the score's, the resend's, the release's", () => {

@@ -192,8 +192,10 @@ export async function acceptProject(db: Db, config: AppConfig, input: AcceptInpu
   const seat = await seatRepo(db, project, input.enrollmentId);
   if (project.groupMode && seat?.groupId === null && isLiveIndividualRepo(seat)) return acceptance(seat);
   if (project.groupMode) return acceptGroup(db, config, input, seat);
-  // Under Safe Exam Browser nobody is invited (ADR-047 §2): a provisioned repository is the answer.
-  const invites = collaboratorPermission(project.workMode) !== null;
+  // Under Safe Exam Browser nobody is invited until the owner opens the repositories (ADR-047 §2, ADR-145): a
+  // provisioned repository is the answer. A cheap pre-filter on the project's facts: the binding rule, the
+  // repository's own included, is `inviteAccount`'s (`409 not_invitable` for one the opening leaves closed).
+  const invites = project.workMode !== "online_seb" || project.reposOpenedAt !== null;
   if (joinable(seat) && seat!.invitationStatus === "none" && invites) return joinRepo(db, config, input, seat!);
   if (settled(seat ?? undefined)) return acceptance(seat!);
 
@@ -318,6 +320,7 @@ async function provision(db: Db, input: AcceptInput, row: RepoRow, github: Githu
       branches: project.branches,
       defaultBranch: project.branches[0]!,
       studentLogin: login,
+      // A repository being made is never one an `online_seb` opening reaches (frozen for good): the mode decides.
       permission: collaboratorPermission(project.workMode),
       claim: async (repoId, created) => {
         if (!created) return repoId === row.githubRepoId;

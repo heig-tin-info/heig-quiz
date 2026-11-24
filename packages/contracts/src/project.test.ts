@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   PROJECT_DEFAULTS,
+  ProjectErrorCode,
+  ProjectReposAccess,
+  REPOS_OPENING_REFUSALS,
+  ReposOpeningRefusal,
   ProjectCreate,
   ProjectGradingScale,
   ProjectPatch,
@@ -17,6 +21,21 @@ import { StudentActivityCard } from "./student.js";
 const ID = "11111111-1111-4111-8111-111111111111";
 const START = "2026-10-01T08:00:00.000Z";
 const DEADLINE = "2026-10-15T22:00:00.000Z";
+
+describe("the opening of the repositories (ADR-145)", () => {
+  it("carries the opened instant, the counts and the other sittings' names", () => {
+    const view = { openedAt: DEADLINE, openable: 12, nothingToOpen: 2, sameSource: ["Lab test B"] };
+    expect(ProjectReposAccess.parse(view)).toEqual(view);
+    expect(ProjectReposAccess.safeParse({ ...view, openedAt: null }).success).toBe(true);
+    expect(ProjectReposAccess.safeParse({ ...view, openable: -1 }).success).toBe(false);
+  });
+
+  it("refuses with the domain's closed list, the deadline guard among the project's refusals", () => {
+    expect(ReposOpeningRefusal.options).toEqual([...REPOS_OPENING_REFUSALS]);
+    expect(ReposOpeningRefusal.safeParse("not_released").success).toBe(true);
+    expect(ProjectErrorCode.safeParse("repos_open").success).toBe(true);
+  });
+});
 
 describe("ProjectGradingScale (D05, spec 06 no. 49)", () => {
   it("is linear by default, rounded to the nearest tenth", () => {

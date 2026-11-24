@@ -132,7 +132,7 @@ export function changedAfterRelease(released: boolean, live: ReleasedGrade, snap
 }
 
 /** The one primary action of the staff's project page (F-PROJ-13). */
-export const PROJECT_PRIMARY_ACTIONS = ["publish", "schedule", "sync", "grade", "release", "none"] as const;
+export const PROJECT_PRIMARY_ACTIONS = ["publish", "schedule", "sync", "grade", "release", "open_repos", "none"] as const;
 export type ProjectPrimaryAction = (typeof PROJECT_PRIMARY_ACTIONS)[number];
 
 export interface PrimaryActionInput {
@@ -158,6 +158,12 @@ export interface PrimaryActionInput {
    * (0) for any other mode.
    */
   unvalidated?: number;
+  /**
+   * An `online_seb` project whose repositories are closed and whose course
+   * owner may open them now (`reposOpeningRefusal` null, ADR-145): at least
+   * one may be opened. Absent (false) for any other project.
+   */
+  reposOpenable?: boolean;
 }
 
 /**
@@ -221,10 +227,11 @@ export function projectPhase(p: ProjectPhaseInput): ProjectPhase {
  * nothing for a scheduled project (its form autosaves; Publish now and
  * Cancel the schedule are secondary); Grade for a project graded by criteria, every
  * repository frozen, while one is still to validate (ADR-106 §8); Release
- * once the scores are final and not yet released, or changed since; Sync
- * when the source is ahead; nothing for an archived project. The release
- * comes before the sync: once every repository is frozen, a sync reaches
- * nobody's score.
+ * once the scores are final and not yet released, or changed since; then
+ * Open the repositories of an `online_seb` project the owner may open now
+ * (ADR-145 §3); Sync when the source is ahead; nothing for an archived
+ * project. The release comes before the sync: once every repository is
+ * frozen, a sync reaches nobody's score.
  */
 export function projectPrimaryAction(p: PrimaryActionInput): ProjectPrimaryAction {
   if (p.archived) return "none";
@@ -232,6 +239,7 @@ export function projectPrimaryAction(p: PrimaryActionInput): ProjectPrimaryActio
   if (p.state === "scheduled") return "none";
   if (allFrozen(p) && (p.unvalidated ?? 0) > 0) return "grade";
   if (scoresFinal(p) && (!p.released || p.changedAfterRelease > 0)) return "release";
+  if (p.reposOpenable === true) return "open_repos";
   if (p.sourceAhead) return "sync";
   return "none";
 }

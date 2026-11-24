@@ -82,6 +82,7 @@ export function makeRepo(n: number, over: Partial<ProjectRepoView> = {}): Projec
     },
     accessToRevoke: false,
     collection: null,
+    nothingToOpen: false,
     ...over,
   };
 }
@@ -153,6 +154,7 @@ export function makeProject(over: Partial<ProjectDetail> = {}): ProjectDetail {
     sync: { ahead: null, inProgress: false, syncedAt: null, last: null, message: null, gradedBefore: 0 },
     counts: { live: accepted, frozen: 0 },
     liveStale: false,
+    reposAccess: null,
     rows,
     ...over,
   };

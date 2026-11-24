@@ -39,6 +39,13 @@ in time may still finish. The clock is the server's, not your computer's.
 Once your teacher releases the scores, the page shows your final score, your
 grade and the teacher's comment. You get a notification.
 
+## After a lab test under Safe Exam Browser
+
+During the test you have no access to your repository on GitHub. Once the
+test is over, your teacher may open the repositories: you then get a
+read-only invitation, which you accept from this page, to read your code,
+the tests and the CI runs again.
+
 ## Contesting a criterion
 
 Once its scores are released, a project graded by criteria may be contested for a few days:

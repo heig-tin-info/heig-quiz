@@ -46,19 +46,21 @@ import type { FastifyBaseLogger } from "fastify";
 import type { Octokit } from "octokit";
 
 import type { SentInvitation } from "@quiz/contracts";
-import { collaboratorPermission } from "@quiz/domain";
+import { collaboratorPermission, openingOf } from "@quiz/domain";
 
 import { audit, type AuditActor } from "../../audit.js";
 import { linkedLogin } from "../../auth/linkedLogin.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { enrollments, githubAccounts, projectGroupMembers, projectRepoAccess, projectRepos, projects } from "../../db/schema.js";
+import { classrooms, enrollments, githubAccounts, projectGroupMembers, projectRepoAccess, projectRepos, projects } from "../../db/schema.js";
 import { githubApp, githubStatus, installationClient, ownerRepo, unless404 } from "../../github/app.js";
 import { currentLogin, inviteCollaborator, isInvitationRefused, revokeCollaborator } from "../../github/collaborators.js";
 import { projectInstallation } from "../github/service.js";
 import { liveProject } from "../guards.js";
+import { reposHoldingWork } from "./commits.js";
 import { ProjectError } from "./errors.js";
 import { seatRepos, type RepoMember } from "./groupRepos.js";
+import { LEASE_MS } from "./lease.js";
 import { provisioningNow, type RepoRow } from "./repos.js";
 
 /** The account invited: its line and the line's user, its immutable id and the login GitHub knew it by then. */
@@ -103,8 +105,16 @@ export const notRecorded = (answer: object | NotRecorded): answer is NotRecorded
  * `group.sync` job then revokes what it finds. A row already there is
  * brought back (a new login, `revoking_at` and `revoked_at` cleared).
  */
-export async function recordGrant(db: Db, repo: RepoRow, account: InvitedAccount, now: Date): Promise<Grant | NotRecorded> {
+export async function recordGrant(
+  db: Db,
+  repo: RepoRow,
+  account: InvitedAccount,
+  now: Date,
+  admit?: (tx: Tx) => Promise<boolean>,
+): Promise<Grant | NotRecorded> {
   return db.transaction(async (tx) => {
+    // The project's own condition first (ADR-145: its repositories still open), under its lock: the project before the line.
+    if (admit && !(await admit(tx))) return "gone";
     const [line] = await tx
       .select({ userId: enrollments.userId, staff: enrollments.staff })
       .from(enrollments)
@@ -201,7 +211,7 @@ export async function releaseLine(tx: Tx, enrollmentId: string): Promise<void> {
  * How an invitation came: an Accept (one's own, or a fellow member's), a link, a resend, the set's move (`group.sync`),
  * a resync's (`group.resync`), the daily reconciliation (`reconcile`, M3-06).
  */
-export type InviteVia = "accept" | "link" | "resend" | "group.sync" | "group.resync" | "reconcile";
+export type InviteVia = "accept" | "link" | "resend" | "group.sync" | "group.resync" | "reconcile" | "repos.open";
 
 export interface InviteContext {
   actor: AuditActor;
@@ -213,9 +223,29 @@ export interface InviteContext {
 }
 
 /**
- * Invites `member` (who has a link) on `repo` with the permission of its
- * project's work mode (`push`, `pull` online; `409 not_invitable` under
- * Safe Exam Browser, ADR-047 §2): the login of
+ * A project's row and its classroom's archive, as an invitation reads them;
+ * `lock`: both FOR SHARE, in the caller's transaction.
+ */
+async function invitedProject(db: Db | Tx, projectId: string, lock = false) {
+  const read = db
+    .select({ project: projects, classroomArchivedAt: classrooms.archivedAt })
+    .from(projects)
+    .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
+    .where(eq(projects.id, projectId));
+  const [row] = await (lock ? read.for("share") : read);
+  return row;
+}
+
+/** ADR-145: the owner opened the project's repositories, and neither the project nor its classroom is archived. */
+const reposStillOpen = (row: Awaited<ReturnType<typeof invitedProject>>): boolean =>
+  row !== undefined && row.project.reposOpenedAt !== null && row.project.archivedAt === null && row.classroomArchivedAt === null;
+
+/**
+ * Invites `member` (who has a link) on `repo` with the permission
+ * `collaboratorPermission` of `@quiz/domain` gives (ADR-047 §2 as amended by
+ * ADR-145): `push` in the students' own tools, `pull` online, and under Safe
+ * Exam Browser `pull` only on a repository the owner's opening opens
+ * (`openingOf`) while it holds — `409 not_invitable` otherwise: the login of
  * today for their immutable id (`linkedLogin`: a stored login renamed away
  * may be somebody else's now), the grant recorded first, the invitation
  * (idempotent on GitHub's side: 204 for a collaborator), the grant taken
@@ -237,15 +267,16 @@ export async function inviteAccount(
   });
   if (typeof login !== "string") throw new ProjectError("github_account_stale", "The GitHub account is gone or renamed: relink it");
   const account = { enrollmentId: member.enrollmentId, userId: member.userId, githubUserId: member.account.githubUserId, login };
-  // The permission of the project's work mode (ADR-047 §2): `pull` online;
-  // under Safe Exam Browser nobody is invited — Accept never calls this then.
-  const [{ workMode } = { workMode: "free" as const }] = await db
-    .select({ workMode: projects.workMode })
-    .from(projects)
-    .where(eq(projects.id, repo.projectId));
-  const permission = collaboratorPermission(workMode);
-  if (permission === null) throw new ProjectError("not_invitable", "This project's work mode invites nobody on GitHub");
-  const grant = await recordGrant(db, repo, account, ctx.now);
+  const row = await invitedProject(db, repo.projectId);
+  const seb = row?.project.workMode === "online_seb";
+  const opened =
+    seb && reposStillOpen(row) && openingOf({ ...repo, work: (await reposHoldingWork(db, row.project, [repo])).has(repo.id) }) === "open";
+  const permission = row === undefined ? null : collaboratorPermission(row.project.workMode, opened);
+  if (permission === null) throw new ProjectError("not_invitable", "This repository is not open to its student on GitHub");
+  // Under Safe Exam Browser the opening is read again under the project's lock as the grant is recorded
+  // (ADR-145): the owner's close either finds the grant, or makes this call record none.
+  const admit = seb ? async (tx: Tx) => reposStillOpen(await invitedProject(tx, repo.projectId, true)) : undefined;
+  const grant = await recordGrant(db, repo, account, ctx.now, admit);
   if (notRecorded(grant)) return grant;
   const { owner, repo: name } = ownerRepo(repo.fullName!);
   let invitation: SentInvitation;
@@ -272,12 +303,25 @@ export async function inviteAccount(
     } catch (err) {
       // Still let in: the grant live again — a revocation still asking will
       // not confirm it —, and a group's project due, for the `group.sync`
-      // job to take this stray access (`STRAY_GRANT`).
+      // job to take this stray access (`STRAY_GRANT`) — under Safe Exam
+      // Browser, the `project.repos_access` job armed, whose next pass revokes
+      // it (ADR-145): the revision moved, so a job holding the lease runs
+      // another pass instead of giving it back, and a free lease is left
+      // expired for the ticker to claim.
       await db.update(projectRepoAccess).set({ revokedAt: null, revokingAt: null }).where(eq(projectRepoAccess.id, grant.id));
       if (repo.groupId !== null) {
         await db
           .update(projects)
           .set({ groupSyncDueAt: sql`coalesce(${projects.groupSyncDueAt}, ${ctx.now.toISOString()}::timestamptz)` })
+          .where(eq(projects.id, repo.projectId));
+      } else if (seb) {
+        const expired = new Date(ctx.now.getTime() - LEASE_MS - 1);
+        await db
+          .update(projects)
+          .set({
+            reposAccessRev: sql`${projects.reposAccessRev} + 1`,
+            reposAccessJobAt: sql`coalesce(${projects.reposAccessJobAt}, ${expired.toISOString()}::timestamptz)`,
+          })
           .where(eq(projects.id, repo.projectId));
       }
       const { status, message } = err as { status?: number; message?: string };
@@ -366,6 +410,8 @@ export type RevokeVia =
   | "roster.self_enroll"
   | "group.sync"
   | "group.resync"
+  /** The course owner closed an `online_seb` project's repositories again (ADR-145): the `project.repos_access` job. */
+  | "repos.close"
   /** The line's account is pseudonymized (ADR-117 §10): every line it claimed, through `revokeAccountAccess`. */
   | "account.pseudonymize";
 
@@ -579,7 +625,7 @@ function traceRevoke(db: Db, repo: RepoRow, enrollmentId: string, ctx: RevokeCon
  * everywhere (`releaseLine`, `completeDeparture`); a refusal clears the
  * mark, a crash leaves it for the next revocation to ask again.
  */
-async function revokeGrants(
+export async function revokeGrants(
   db: Db,
   items: readonly { grant: GrantRow; repo: RepoRow; client: Octokit | null }[],
   enrollmentId: string,

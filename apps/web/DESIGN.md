@@ -2283,7 +2283,11 @@ action raises (a refused release) stay above the tabs: they answer the
 header, whatever the tab.
 
 - **Header**: title, state, the status sentence and the ONE primary button the
-  server names (Publish / Sync / Release / Grade), the same on every tab — no
+  server names (Publish / Sync / Release / Grade / Open repositories, the last
+  an `online_seb` project's once frozen and released, ADR-145: its confirmation says what
+  becomes readable, that a clone stays, and names the projects on the same
+  source still to come; *Close access* is a secondary of the Repositories
+  tab, beside the line that says since when they are open), the same on every tab — no
   tab has a primary of its own. No counts line: the figures live in the
   tiles. Nothing in a tile is `primary`. **Close project** (#1147) is the
   live evaluation's Close, in the header left of the primary but

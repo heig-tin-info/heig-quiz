@@ -4,7 +4,9 @@
  * per kind of work — `deadline_job_at` for the deadline's locks and commits
  * (`jobs.ts`), `dispatch_job_at` for the review dispatches (`review.ts`),
  * `group_sync_job_at` for the moves of a group set on GitHub
- * (`groupSync.ts`), `sync_job_at` for the source's sync (`sync.ts`) — so
+ * (`groupSync.ts`), `sync_job_at` for the source's sync (`sync.ts`),
+ * `repos_access_job_at` for an `online_seb` project's repositories opened
+ * or closed (`reposAccess.ts`, ADR-145: claimed with the owner's write, given back on the fact it converged to) — so
  * that none waits for another, and ONE frame for the jobs that hold the
  * deadline's, the dispatches' and the sync's ({@link runLeased}): take,
  * renew, backdate and give back; `group.sync`, which must run without the
@@ -30,7 +32,13 @@ export const FAILED_RETRY_MS = 30_000;
 const REPO_CONCURRENCY = 4;
 
 /** The column of `projects` that holds a kind of work's lease (`sync_job_at`: the source's sync, M3-07). */
-export type LeaseKey = "deadlineJobAt" | "dispatchJobAt" | "groupSyncJobAt" | "syncJobAt";
+export type LeaseKey = "deadlineJobAt" | "dispatchJobAt" | "groupSyncJobAt" | "syncJobAt" | "reposAccessJobAt";
+
+/** A lease taken before this instant is expired at `now`. */
+const staleBefore = (now: Date): Date => new Date(now.getTime() - LEASE_MS);
+
+/** A lease free at `now` — none, or expired —: what {@link claimLeases} takes, for a writer that claims in its own transaction. */
+export const leaseFree = (at: Date | null, now: Date): boolean => at === null || at.getTime() < staleBefore(now).getTime();
 
 /** One project's work, as the queue carries it: the lease it was claimed under. */
 export interface ProjectJob {
@@ -52,7 +60,7 @@ export async function claimLeases(db: Db, key: LeaseKey, now: Date, work: SQL, p
     .where(
       and(
         projectId === undefined ? undefined : eq(projects.id, projectId),
-        or(isNull(column), lt(column, new Date(now.getTime() - LEASE_MS))),
+        or(isNull(column), lt(column, staleBefore(now))),
         work,
       ),
     )
@@ -99,6 +107,24 @@ export function heldLease(app: FastifyInstance, key: LeaseKey, projectId: string
     lost: () => lost,
     renew: () => whileHeld(app.clock.now()),
     release: () => whileHeld(null),
+    /**
+     * The lease given back only while `condition` (over `projects`) holds
+     * too, in the same write: false, and the lease kept, when it does not —
+     * the work it stands for moved meanwhile (`reposAccess.ts`, ADR-145).
+     */
+    releaseIf: async (condition: SQL): Promise<boolean> => {
+      let released = false;
+      await (queue = queue.then(async () => {
+        if (lost) return;
+        const rows = await app.db
+          .update(projects)
+          .set({ [key]: null })
+          .where(and(eq(projects.id, projectId), eq(column, held), condition))
+          .returning({ id: projects.id });
+        released = rows.length > 0;
+      }));
+      return released;
+    },
     /**
      * After a failure: the lease kept but backdated, so that it expires
      * {@link FAILED_RETRY_MS} from now and the next tick claims the work
@@ -147,7 +173,11 @@ export interface LeasedRun {
  * finishes the work); when a repository failed, a throw with the lease
  * backdated (`onFailure: "expire"`, the default: the next tick resumes the
  * work) or given back (`"release"`: work nobody re-claims but a person —
- * the sync, M3-07 — may be asked again at once); else the lease given back.
+ * the sync, M3-07 — may be asked again at once); else the lease given back
+ * — with `releaseWhile`, only in a write that finds it holding over the
+ * project the body ran on (`releaseIf`); when it does not, the work moved
+ * meanwhile: the project is read again and the body run again on it
+ * (`project.repos_access`, ADR-145).
  */
 export async function runLeased(
   app: FastifyInstance,
@@ -156,7 +186,7 @@ export async function runLeased(
   job: ProjectJob,
   label: string,
   body: (run: LeasedRun) => Promise<void>,
-  opts: { onFailure?: "expire" | "release" } = {},
+  opts: { onFailure?: "expire" | "release"; releaseWhile?: (project: ProjectRow) => SQL } = {},
 ): Promise<void> {
   const [project] = await app.db.select().from(projects).where(eq(projects.id, job.projectId));
   if (!project || project[key]?.toISOString() !== job.lease) return;
@@ -184,11 +214,18 @@ export async function runLeased(
     failed.push(...mine);
     return mine;
   };
-  await body({ project, octokit, token, lost: lease.lost, each });
-  if (lease.lost()) return;
-  if (failed.length > 0) {
-    await (opts.onFailure === "release" ? lease.release() : lease.expireSoon());
-    throw new Error(`${label} incomplete: ${failed.join(", ")}`);
+  for (let current = project; ; ) {
+    await body({ project: current, octokit, token, lost: lease.lost, each });
+    if (lease.lost()) return;
+    if (failed.length > 0) {
+      await (opts.onFailure === "release" ? lease.release() : lease.expireSoon());
+      throw new Error(`${label} incomplete: ${failed.join(", ")}`);
+    }
+    if (!opts.releaseWhile) return void (await lease.release());
+    if (await lease.releaseIf(opts.releaseWhile(current))) return;
+    // The work moved while the body ran: the project read again, the body run again on it.
+    [current] = (await app.db.select().from(projects).where(eq(projects.id, project.id))) as [ProjectRow];
+    await lease.renew();
+    if (lease.lost()) return;
   }
-  await lease.release();
 }

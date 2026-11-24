@@ -7,7 +7,22 @@ un dépôt source à vous. La CI du dépôt calcule le score ; Quiz gère
 l'échéance, les fichiers protégés, les scores et la publication. L'action
 principale suit l'état : **Publier** pour un brouillon, **Synchroniser**
 quand la source a de l'avance, **Publier les scores** quand tout est
-définitif.
+définitif, **Ouvrir les dépôts** une fois terminé un test de labo passé sous
+Safe Exam Browser.
+
+## Tests de labo sous Safe Exam Browser
+
+Pendant un test de labo sous Safe Exam Browser ou sur un poste kiosque,
+personne n'est invité sur GitHub. Une fois tous les dépôts figés et les
+scores publiés (pour un projet noté), la personne responsable du cours
+peut **Ouvrir les dépôts** : les étudiants qui ont travaillé sont invités
+en lecture seule. Ils lisent alors leur code, l'énoncé et les tests, et
+chaque exécution de la CI avec ses journaux : un test qui affiche des cas cachés
+dans ses journaux les dévoile. Une copie clonée ne peut pas être reprise.
+Un dépôt sans travail reste fermé, signalé *rien à ouvrir*.
+**Refermer l'accès**, dans l'onglet **Dépôts**, retire cet accès. Tant que
+les dépôts sont ouverts, une échéance repoussée qui rouvrirait l'un d'eux
+est refusée : refermez d'abord l'accès.
 
 ## Le tableau
 

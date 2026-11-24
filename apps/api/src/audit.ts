@@ -539,6 +539,18 @@ export type AuditAction =
    */
   | "project.release"
   /**
+   * ADR-145: the course owner opened an `online_seb` project's repositories
+   * to their students, read-only, or closed them again; subject the project.
+   * `repos_opened`: `payload.openable` and `nothingToOpen` (the student
+   * repositories the opening reaches, and those it leaves closed);
+   * `repos_closed`: `payload.openedAt` (since when they were open). The
+   * invitations and the revocations of the `project.repos_access` job are
+   * audited one by one (`project_group.repo_invite`, `via: "repos.open"`;
+   * `project_group.repo_revoke`, `via: "repos.close"`). No token, ever.
+   */
+  | "project.repos_opened"
+  | "project.repos_closed"
+  /**
    * ADR-139 §13: the owner closed the contestation window of a released
    * project graded by criteria now, or extended it; subject the project,
    * `payload.action` (`close` | `extend`) and `payload.closesAt`.

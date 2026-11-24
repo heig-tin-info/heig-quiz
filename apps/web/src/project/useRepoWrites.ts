@@ -11,11 +11,11 @@ import type {
   ScoreOverride,
 } from "@quiz/contracts";
 
-import { api, refusedWith } from "../api";
+import { api } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { projectKey, projectRunsKey } from "../queryKeys";
-import { refusalMessage, type RepoEntry } from "./projectPage";
+import { deadlineRefusal, refusalMessage, type RepoEntry } from "./projectPage";
 
 /**
  * The writes of a repository's page (ADR-137): its own deadline, its lock,
@@ -46,8 +46,8 @@ export function useRepoWrites(projectId: string, entry: RepoEntry, onScored: () 
       toast(t("project.repo.deadlineSaved"), "success");
     },
     onError: (error) => {
-      // A past date is said under the field, not toasted.
-      if (!refusedWith(error, "deadline_past")) failed(error);
+      // A past date, or the repositories open (ADR-145 §8), is said under the field, not toasted.
+      if (deadlineRefusal(error, t) === undefined) failed(error);
     },
   });
   const lock = useMutation({

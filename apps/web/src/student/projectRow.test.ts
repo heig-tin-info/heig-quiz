@@ -188,11 +188,15 @@ describe("the workspace's action on a card (ADR-047, ADR-089)", () => {
     expect(cardWorkspaceAction(card({ status: "in_progress", ...REPO, workspace: online }))).toBe("launch");
   });
 
-  it("leads to the page under supervision, whatever the state", () => {
+  it("leads to the page under supervision, whatever the state, until the repositories are opened (ADR-145)", () => {
     for (const devices of ["seb", "either", "kiosk"] as const) {
       for (const status of ["in_progress", "locked", "released"] as const) {
-        expect(cardWorkspaceAction(card({ status, ...REPO, workspace: { mode: "online_seb", devices } }))).toBe("page");
+        expect(cardWorkspaceAction(card({ status, ...REPO, invitation: null, workspace: { mode: "online_seb", devices } }))).toBe("page");
       }
+    }
+    // Opened: the student's invitation, the card's own action leads to GitHub, as an online project's.
+    for (const invitation of ["pending", "accepted"] as const) {
+      expect(cardWorkspaceAction(card({ status: "released", ...REPO, invitation, workspace: { mode: "online_seb", devices: "seb" } }))).toBeNull();
     }
   });
 

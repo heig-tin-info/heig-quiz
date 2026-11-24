@@ -685,6 +685,44 @@ const scenes = [
       await p.getByRole("dialog").waitFor();
     },
   },
+  // ADR-145: a lab test sat under SEB, released, its repositories still closed — the primary, its
+  // confirmation, then the Repositories tab once open (the line and Close access, "nothing to open").
+  { name: "project-seb-closed", role: "teacher", path: "/projects/pj-seb?projects=1", settle: 2500, fold: true },
+  {
+    name: "project-seb-open-confirm",
+    role: "teacher",
+    path: "/projects/pj-seb?projects=1",
+    settle: 2500,
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(open repositories|ouvrir les dépôts)$/i }).click();
+      await p.getByRole("dialog").waitFor();
+    },
+  },
+  {
+    name: "project-seb-opened",
+    role: "teacher",
+    path: "/projects/pj-seb?projects=1&tab=repositories",
+    settle: 2500,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(open repositories|ouvrir les dépôts)$/i }).click();
+      await p.getByRole("dialog").getByRole("button", { name: /^(open repositories|ouvrir les dépôts)$/i }).click();
+      await p.getByTestId("repos-access").waitFor();
+    },
+  },
+  {
+    name: "project-seb-close-confirm",
+    role: "teacher",
+    path: "/projects/pj-seb?projects=1&tab=repositories",
+    settle: 2500,
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(open repositories|ouvrir les dépôts)$/i }).click();
+      await p.getByRole("dialog").getByRole("button", { name: /^(open repositories|ouvrir les dépôts)$/i }).click();
+      await p.getByRole("button", { name: /^(close access|refermer l'accès)$/i }).click();
+      await p.getByRole("dialog").waitFor();
+    },
+  },
   {
     name: "project-released",
     role: "teacher",

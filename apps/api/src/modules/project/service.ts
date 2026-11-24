@@ -115,6 +115,7 @@ export { resyncGroups } from "./groupResync.js";
 export { inviteOnGithubLink, releaseLine, revokeEnrollmentAccess, RevokeFailed, type RevokeVia } from "./access.js";
 export { resendInvitation } from "./invitation.js";
 export { reenableProtection } from "./protection.js";
+export { setReposOpen } from "./reposAccess.js";
 export { requestDeadlineWork } from "./jobs.js";
 export {
   createProject,

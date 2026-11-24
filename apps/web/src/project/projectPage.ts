@@ -23,6 +23,7 @@ import {
   type ProjectRepoView,
   type ProjectStudent,
   type RepoAccessState,
+  type ReposOpeningRefusal,
   type ProjectSummary,
   type ReviewCheckpoint,
   type StaffReviewRefusal,
@@ -102,6 +103,9 @@ export type StatusKey =
   | "project.status.rerelease"
   | "project.status.sync"
   | "project.status.open"
+  | "project.status.reposClosed"
+  | "project.status.reposClosedUngraded"
+  | "project.status.reposOpen"
   | "project.status.released"
   | "project.status.lockedFreezing"
   | "project.status.locked"
@@ -115,8 +119,11 @@ export function projectStatus(p: ProjectDetail): { key: StatusKey; date: string 
     if (p.phase === "draft") return p.primaryAction === "schedule" ? "project.status.draftDated" : "project.status.draft";
     if (p.primaryAction === "grade") return "project.status.grade";
     if (p.primaryAction === "release") return p.releasedAt ? "project.status.rerelease" : "project.status.release";
+    // ADR-145: an `online_seb` project's repositories still closed once its work is over, or open since a date.
+    if (p.primaryAction === "open_repos") return p.releasedAt ? "project.status.reposClosed" : "project.status.reposClosedUngraded";
     if (p.primaryAction === "sync") return "project.status.sync";
     if (p.state === "published") return "project.status.open";
+    if (p.reposAccess?.openedAt) return "project.status.reposOpen";
     if (p.releasedAt) return "project.status.released";
     const freezing = p.counts.frozen < p.counts.live;
     // Under the `commit` strategy the repositories stay open: never "Locked" (#958).
@@ -126,9 +133,11 @@ export function projectStatus(p: ProjectDetail): { key: StatusKey; date: string 
   const date =
     key === "project.status.scheduled" || key === "project.status.draftDated"
       ? p.startAt
-      : key === "project.status.released" || key === "project.status.rerelease"
+      : key === "project.status.released" || key === "project.status.rerelease" || key === "project.status.reposClosed"
         ? p.releasedAt!
-        : p.deadlineAt;
+        : key === "project.status.reposOpen"
+          ? p.reposAccess!.openedAt!
+          : p.deadlineAt;
   return { key, date };
 }
 
@@ -143,6 +152,18 @@ export function deadlineDesc(p: ProjectDetail, zone: string | null, t: TFunction
   }
   if (p.state === "locked") return t("project.deadline.reopenDesc");
   return zone ? t("project.zone", { zone }) : undefined;
+}
+
+/**
+ * What a deadline field says under itself of a refused move (F-PROJ-09) —
+ * the project's or a repository's own: a date already past, or the
+ * repositories open to their students (`repos_open`, ADR-145 §8); undefined
+ * for any other refusal, which the caller words as it does.
+ */
+export function deadlineRefusal(error: unknown, t: TFunction): string | undefined {
+  const code = refusalCodeOf(error);
+  if (code === "deadline_past") return t("project.refusal.deadlinePast");
+  return code === "repos_open" ? t("project.refusal.reposOpen") : undefined;
 }
 
 /** A repository's flag, as a tag of the table: its word and its tone (danger red, to look at amber, a fact zinc). */
@@ -168,6 +189,8 @@ export function repoFlags(repo: ProjectRepoView): RepoFlag[] {
   if (repo.flags.clamped) flags.push({ key: "project.flag.clamped", tone: "amber" });
   if (repo.flags.malformed !== null) flags.push({ key: "project.flag.malformed", tone: "zinc" });
   if (repo.degraded) flags.push({ key: repo.archived ? "project.flag.degraded" : "project.flag.noRuleset", tone: "zinc" });
+  // ADR-145 §7: frozen with no work of its student, the opening of the repositories leaves it closed. A fact.
+  if (repo.nothingToOpen) flags.push({ key: "project.flag.nothingToOpen", tone: "zinc" });
   return flags;
 }
 
@@ -353,8 +376,15 @@ type KnownCode =
   | Extract<ProjectAcceptErrorCode, "github_account_stale">
   | WorkModeRefusal
   | Extract<WorkspaceStartRefusal, "not_online" | "seb_required">
-  | StaffReviewRefusal;
+  | StaffReviewRefusal
+  | ReposOpeningRefusal;
 const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
+  // ADR-145: the opening of an `online_seb` project's repositories, and the deadline move it refuses.
+  not_supervised: "project.refusal.notSupervised",
+  not_released: "project.refusal.notReleased",
+  repos_not_frozen: "project.refusal.reposNotFrozen",
+  nothing_to_open: "project.refusal.nothingToOpen",
+  repos_open: "project.refusal.reposOpen",
   not_draft: "project.refusal.notDraft",
   not_scheduled: "project.refusal.notScheduled",
   not_open: "project.refusal.notOpen",

@@ -142,6 +142,22 @@ describe("projectPrimaryAction (F-PROJ-13)", () => {
     expect(projectPrimaryAction({ ...base, sourceAhead: true })).toBe("sync");
     expect(projectPrimaryAction({ ...base, sourceAhead: true, state: "locked", frozen: 3 })).toBe("release");
   });
+
+  it("opens an online_seb project's repositories after Grade and Release, before Sync (ADR-145 §3)", () => {
+    const released = { ...base, state: "locked" as const, frozen: 3, released: true, reposOpenable: true };
+    expect(projectPrimaryAction(released)).toBe("open_repos");
+    expect(projectPrimaryAction({ ...released, sourceAhead: true })).toBe("open_repos");
+    // A score moved since the release: the release again comes first.
+    expect(projectPrimaryAction({ ...released, changedAfterRelease: 1 })).toBe("release");
+    // Graded by criteria with a repository still to validate: Grade first.
+    expect(projectPrimaryAction({ ...released, gradingMode: "criteria", unvalidated: 1 })).toBe("grade");
+    // An ungraded project, every repository frozen: no release, the opening.
+    expect(projectPrimaryAction({ ...base, state: "locked", gradingMode: "none", frozen: 3, reposOpenable: true })).toBe("open_repos");
+    // Once opened (not openable any more), the rule of before: Sync when ahead, else nothing.
+    expect(projectPrimaryAction({ ...released, reposOpenable: false, sourceAhead: true })).toBe("sync");
+    expect(projectPrimaryAction({ ...released, reposOpenable: false })).toBe("none");
+    expect(projectPrimaryAction({ ...released, archived: true })).toBe("none");
+  });
 });
 
 describe("reviewState (F-PROJ-11, M3-08b)", () => {

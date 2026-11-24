@@ -312,6 +312,31 @@ export const projects = pgTable(
     releasedAt: timestamp("released_at", { withTimezone: true }),
     releasedBy: uuid("released_by").references(() => users.id),
     /**
+     * An `online_seb` project's repositories opened to their students,
+     * read-only, by the course owner (ADR-145), on the server's clock; null
+     * while closed — never opened, or closed again. The invitation's
+     * permission reads it (`collaboratorPermission`, `@quiz/domain`).
+     */
+    reposOpenedAt: timestamp("repos_opened_at", { withTimezone: true }),
+    /**
+     * The lease of the project's `project.repos_access` job (ADR-145): the
+     * job that converges GitHub to `repos_opened_at`. Claimed in the owner's
+     * open or close, with the fact, when no live job holds it (a job holding
+     * it finds a new revision when its pass ends), given back only on the
+     * revision it converged to (`repos_access_rev`), backdated by a failure,
+     * kept by a crash, armed expired by a take-back GitHub refused
+     * — the ticker claims a lease left so once it expires (`lease.ts`).
+     */
+    reposAccessJobAt: timestamp("repos_access_job_at", { withTimezone: true }),
+    /**
+     * The revision of `repos_opened_at` (ADR-145): bumped by every write that
+     * changes it, in the same transaction. The job gives its lease back only
+     * while the revision is the one its pass converged to: a close, a
+     * re-open and a close again while it worked are a new revision, never
+     * the closed fact it started from.
+     */
+    reposAccessRev: integer("repos_access_rev").notNull().default(0),
+    /**
      * The contestation window of a project graded by criteria (ADR-139 §13),
      * in days after its first release: 0 to 60, 0 for none (`ContestationDays`
      * of `@quiz/contracts`); editable until that release.

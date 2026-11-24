@@ -601,6 +601,25 @@ export async function projectPlugin(app: FastifyInstance, opts: { config: AppCon
   );
 
   /**
+   * ADR-145: an `online_seb` project's repositories opened to their
+   * students, read-only (`409` with a `REPOS_OPENING_REFUSALS` code), and
+   * closed again (whenever they are open); either a no-op when the fact
+   * already says so. The course owner's, like the release (`403
+   * owner_required`). Each writes the fact and sends the job that brings
+   * GitHub to it, and answers 204 at once.
+   */
+  for (const [path, open] of [["open", true], ["close", false]] as const) {
+    app.post(
+      `/app/api/projects/:id/repos/${path}`,
+      session,
+      teacher(onOwnedProject, async ({ req, reply, now, scope }) => {
+        await service.setReposOpen(app, config, scope.project.id, open, actorOf(req), now);
+        return reply.code(204).send();
+      }),
+    );
+  }
+
+  /**
    * F-PROJ-12 (M3-07): the source's sync — the distribution repository
    * updated in the request, the pass over the repositories (the
    * `sync/<branch>` refs, the pull requests) queued: 202. A draft syncs its

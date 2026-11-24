@@ -43,14 +43,20 @@ export function isOnlineMode(mode: WorkModeName): mode is Exclude<WorkModeName, 
 }
 
 /**
- * The GitHub permission a student's invitation carries (ADR-047 §2):
- * `push` in their own tools (unchanged), `pull` in the online workspace —
- * only the portal writes —, and no invitation at all under Safe Exam
- * Browser (null): no access before grading.
+ * THE GitHub permission an invitation carries (ADR-047 §2 as amended by
+ * ADR-145): `push` in the students' own tools (unchanged), `pull` in the
+ * online workspace — only the portal writes —, and under Safe Exam Browser
+ * nothing (null) unless `opened`: the course owner opened the repositories,
+ * the project and its classroom are not archived, and the repository is one
+ * the opening opens (`openingOf`, `reposOpening.ts`) — then `pull`, never
+ * more. The caller judges `opened` (the API's `inviteAccount`, `access.ts`);
+ * every invitation — an Accept, a resend, the reconciliation, the
+ * opening's job — asks this.
  */
-export function collaboratorPermission(mode: WorkModeName): "push" | "pull" | null {
+export function collaboratorPermission(mode: WorkModeName, opened = false): "push" | "pull" | null {
   if (mode === "free") return "push";
-  return mode === "online" ? "pull" : null;
+  if (mode === "online") return "pull";
+  return opened ? "pull" : null;
 }
 
 /**

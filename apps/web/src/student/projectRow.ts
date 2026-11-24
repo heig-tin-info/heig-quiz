@@ -94,9 +94,10 @@ export function projectActionKind(facts: ProjectFacts, now: number): ProjectActi
  */
 export type CardWorkspaceAction = "launch" | "page";
 
-export function cardWorkspaceAction(card: Pick<StudentProjectCard, "workspace" | "repoUrl" | "status">): CardWorkspaceAction | null {
+export function cardWorkspaceAction(card: Pick<StudentProjectCard, "workspace" | "repoUrl" | "status" | "invitation">): CardWorkspaceAction | null {
   if (card.workspace === null || card.repoUrl === null) return null;
-  if (card.workspace.mode === "online_seb") return "page";
+  // Once the course owner opened the repositories (ADR-145), an invitation is the student's: GitHub, as online.
+  if (card.workspace.mode === "online_seb") return card.invitation === null ? "page" : null;
   return card.status === "in_progress" ? "launch" : null;
 }
 

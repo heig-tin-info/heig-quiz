@@ -134,6 +134,7 @@ export * from "./gradeAdjustment.js";
 export * from "./projectAccept.js";
 export * from "./projectRuns.js";
 export * from "./projectStudent.js";
+export * from "./reposOpening.js";
 export * from "./deadlineReminder.js";
 export * from "./criteria.js";
 export * from "./checkResults.js";

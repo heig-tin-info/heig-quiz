@@ -204,9 +204,12 @@ const liveRepo = (row: RepoRow | null, project: ProjectRow): ProvisionedRepo | n
  * repository (a group's row is the group's, one member in: `accepted`):
  * joined, an invitation to accept or to resend (pending or expired), or none
  * (nobody invited on the repository, no grant of theirs, no seat). A
- * teammate's is never read here.
+ * teammate's is never read here. Under Safe Exam Browser, none while the
+ * repositories are not open to the students (ADR-145): the grant Accept
+ * records invites nobody, and a close may still be revoking.
  */
-function ownInvitation(repo: RepoRow, access: RepoAccessState | null): SentInvitation | null {
+function ownInvitation(project: ProjectRow, repo: RepoRow, access: RepoAccessState | null): SentInvitation | null {
+  if (project.workMode === "online_seb" && project.reposOpenedAt === null) return null;
   if (repo.invitationStatus === "none" || access === null || access === "unlinked") return null;
   return access === "joined" ? "accepted" : "pending";
 }
@@ -236,7 +239,7 @@ function card(
     group,
     card: {
       ...facts,
-      invitation: live === null ? null : ownInvitation(live, access),
+      invitation: live === null ? null : ownInvitation(row.project, live, access),
       repoFullName: live?.fullName ?? null,
       repoUrl: live === null ? null : htmlUrl(live.fullName),
       work,
@@ -412,7 +415,7 @@ export async function studentProject(
         : {
             fullName: repo.fullName,
             url: htmlUrl(repo.fullName),
-            invitation: ownInvitation(repo, access),
+            invitation: ownInvitation(project, repo, access),
             deleted: repo.deletedAt !== null,
             // A group's repository (ADR-048): its contestations are the group's (ADR-139 §13).
             group: repo.groupId !== null,
