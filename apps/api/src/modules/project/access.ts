@@ -60,6 +60,7 @@ import { liveProject } from "../guards.js";
 import { reposHoldingWork } from "./commits.js";
 import { ProjectError } from "./errors.js";
 import { seatRepos, type RepoMember } from "./groupRepos.js";
+import { LEASE_MS } from "./lease.js";
 import { provisioningNow, type RepoRow } from "./repos.js";
 
 /** The account invited: its line and the line's user, its immutable id and the login GitHub knew it by then. */
@@ -302,12 +303,20 @@ export async function inviteAccount(
     } catch (err) {
       // Still let in: the grant live again — a revocation still asking will
       // not confirm it —, and a group's project due, for the `group.sync`
-      // job to take this stray access (`STRAY_GRANT`).
+      // job to take this stray access (`STRAY_GRANT`) — under Safe Exam
+      // Browser, the `project.repos_access` job armed (an expired lease, unless
+      // one is held: the ticker claims it), whose next pass revokes it (ADR-145).
       await db.update(projectRepoAccess).set({ revokedAt: null, revokingAt: null }).where(eq(projectRepoAccess.id, grant.id));
       if (repo.groupId !== null) {
         await db
           .update(projects)
           .set({ groupSyncDueAt: sql`coalesce(${projects.groupSyncDueAt}, ${ctx.now.toISOString()}::timestamptz)` })
+          .where(eq(projects.id, repo.projectId));
+      } else if (seb) {
+        const expired = new Date(ctx.now.getTime() - LEASE_MS - 1);
+        await db
+          .update(projects)
+          .set({ reposAccessJobAt: sql`coalesce(${projects.reposAccessJobAt}, ${expired.toISOString()}::timestamptz)` })
           .where(eq(projects.id, repo.projectId));
       }
       const { status, message } = err as { status?: number; message?: string };

@@ -1,5 +1,5 @@
 {
-  "id": "09b96acd-e2fa-418f-8405-dcd75fc26113",
+  "id": "30e59c58-e6bc-49ee-b63a-2fe8970eb135",
   "prevId": "99bd39b1-e8c3-46cf-ac67-693d7c6fd347",
   "version": "7",
   "dialect": "postgresql",
@@ -12705,6 +12705,13 @@
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
+        },
+        "repos_access_rev": {
+          "name": "repos_access_rev",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
         },
         "contestation_days": {
           "name": "contestation_days",

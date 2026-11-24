@@ -254,6 +254,30 @@ describe("closing the access (ADR-145 §6)", () => {
     expect(onGithub(lab, lab.ana).pending).toEqual([lab.ana.login]);
   });
 
+  it("never touches a project that is not open: no lease, no job, its grants kept", async () => {
+    const lab = await sebLab();
+    const freeRepo = (await repoRows(lab.free.id))[0]!;
+    const sebGrants = async () => (await Promise.all((await repoRows(lab.project.id)).map((r) => grantsOf(r.id)))).flat();
+    const live = (await sebGrants()).filter((g) => g.revokedAt === null).length;
+    expect(live).toBeGreaterThan(0);
+    const before = gh.calls.length;
+    // The `free` lab: Ana keeps her push.
+    await done(await staff("POST", `/app/api/projects/${lab.free.id}/repos/close`));
+    expect(seats(freeRepo.fullName!)[lab.ana.login]).toBe("push");
+    expect((await grantsOf(freeRepo.id)).every((g) => g.revokedAt === null)).toBe(true);
+    expect((await server.app.db.select().from(projects).where(eq(projects.id, lab.free.id)))[0]!.reposAccessJobAt).toBeNull();
+    // The SEB lab never opened: the grants its Accepts recorded stay as they are.
+    await close(lab);
+    expect((await sebGrants()).filter((g) => g.revokedAt === null)).toHaveLength(live);
+    expect((await stored(lab)).reposAccessJobAt).toBeNull();
+    expect(gh.calls.slice(before).filter((c) => c.startsWith("DELETE "))).toEqual([]);
+    // A lease a ticker claims on another mode's project: the job gives it back, touching nothing.
+    const [row] = await server.app.db.update(projects).set({ reposAccessJobAt: at(1) }).where(eq(projects.id, lab.free.id)).returning();
+    await runReposAccessJob(server.app, config, { projectId: lab.free.id, lease: row!.reposAccessJobAt!.toISOString() });
+    expect(seats(freeRepo.fullName!)[lab.ana.login]).toBe("push");
+    expect((await server.app.db.select().from(projects).where(eq(projects.id, lab.free.id)))[0]!.reposAccessJobAt).toBeNull();
+  });
+
   it("is allowed on an archived project, and writes nothing on a project not open", async () => {
     const lab = await sebLab();
     await close(lab);
@@ -318,6 +342,47 @@ describe("convergence whatever lands while the job works (ADR-145)", () => {
       expect((await grantsOf(lab.repoOf(who).id)).some((g) => g.revokedAt === null && g.revokingAt === null)).toBe(true);
     }
     expect((await stored(lab)).reposAccessJobAt).toBeNull();
+  });
+
+  /** Everything the close took away, and the lease given back. */
+  const closedForGood = async (lab: Lab) => {
+    for (const who of [lab.ana, lab.ben, lab.cid, lab.tess]) expect(onGithub(lab, who)).toEqual(NOBODY);
+    expect(Object.values(await states(lab))).toEqual(["none", "none", "none", "none"]);
+    for (const row of await repoRows(lab.project.id)) expect((await grantsOf(row.id)).every((g) => g.revokedAt !== null)).toBe(true);
+    expect((await stored(lab)).reposAccessJobAt).toBeNull();
+  };
+  /** The close job's revocation of Ana, `during` it — before GitHub hears of it. */
+  const duringAnasRevocation = (lab: Lab, during: () => Promise<void>) =>
+    on({
+      match: (url, method) => method === "DELETE" && url.pathname === `/repos/${lab.repoOf(lab.ana).fullName!}/collaborators/${lab.ana.login}`,
+      run: during,
+    });
+
+  it("a re-open then a close again while a close is revoking: a new revision, every access gone at the end", async () => {
+    const lab = await sebLab();
+    await open(lab);
+    duringAnasRevocation(lab, async () => {
+      await open(lab);
+      await close(lab);
+    });
+    await close(lab);
+    expect((await stored(lab)).reposOpenedAt).toBeNull();
+    expect((await stored(lab)).reposAccessRev).toBe(4);
+    await closedForGood(lab);
+  });
+
+  it("a grant re-recorded in an open window, by a resend, is revoked by the next pass", async () => {
+    const lab = await sebLab();
+    await open(lab);
+    let resent = 0;
+    duringAnasRevocation(lab, async () => {
+      await open(lab);
+      resent = (await staff("POST", `/app/api/projects/${lab.project.id}/repos/${lab.repoOf(lab.ana).id}/invite`)).statusCode;
+      await close(lab);
+    });
+    await close(lab);
+    expect(resent).toBe(200);
+    await closedForGood(lab);
   });
 });
 

@@ -49,7 +49,7 @@ export function isOnlineMode(mode: WorkModeName): mode is Exclude<WorkModeName, 
  * nothing (null) unless `opened`: the course owner opened the repositories,
  * the project and its classroom are not archived, and the repository is one
  * the opening opens (`openingOf`, `reposOpening.ts`) — then `pull`, never
- * more. The caller judges `opened` (the API's `invitationPermission`);
+ * more. The caller judges `opened` (the API's `inviteAccount`, `access.ts`);
  * every invitation — an Accept, a resend, the reconciliation, the
  * opening's job — asks this.
  */

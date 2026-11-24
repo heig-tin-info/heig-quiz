@@ -322,11 +322,20 @@ export const projects = pgTable(
      * The lease of the project's `project.repos_access` job (ADR-145): the
      * job that converges GitHub to `repos_opened_at`. Claimed in the owner's
      * open or close, with the fact, when no live job holds it (a job holding
-     * it reads the new fact at its next step), given back only on the fact
-     * it converged to, backdated by a failure and kept by a crash
+     * it finds a new revision when its pass ends), given back only on the
+     * revision it converged to (`repos_access_rev`), backdated by a failure,
+     * kept by a crash, armed expired by a take-back GitHub refused
      * — the ticker claims a lease left so once it expires (`lease.ts`).
      */
     reposAccessJobAt: timestamp("repos_access_job_at", { withTimezone: true }),
+    /**
+     * The revision of `repos_opened_at` (ADR-145): bumped by every write that
+     * changes it, in the same transaction. The job gives its lease back only
+     * while the revision is the one its pass converged to: a close, a
+     * re-open and a close again while it worked are a new revision, never
+     * the closed fact it started from.
+     */
+    reposAccessRev: integer("repos_access_rev").notNull().default(0),
     /**
      * The contestation window of a project graded by criteria (ADR-139 §13),
      * in days after its first release: 0 to 60, 0 for none (`ContestationDays`
