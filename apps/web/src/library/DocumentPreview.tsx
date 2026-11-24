@@ -56,7 +56,7 @@ function MarkdownPreview({ courseId, document }: { courseId: string; document: C
     );
   }
   return (
-    <Viewer source={{ kind: "markdown", html: html.data.html, toc: html.data.toc }} title={html.data.title} />
+    <Viewer source={{ kind: "markdown", html: html.data.html, toc: html.data.toc }} title={document.title} />
   );
 }
 

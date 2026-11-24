@@ -94,11 +94,10 @@ export type CourseLibrary = z.infer<typeof CourseLibrary>;
 /**
  * `GET /courses/:id/documents/:documentId/html`: a Markdown document as the
  * server rendered it (`@quiz/docrender`, raw HTML escaped, no image), and
- * the table of contents the viewer's outline reads. `title` is the
- * document's, as its staff named it.
+ * the table of contents the viewer's outline reads. The title is the
+ * caller's already (the library's row).
  */
 export const DocumentHtml = z.object({
-  title: z.string(),
   html: z.string(),
   toc: z.array(JournalTocEntry),
 });

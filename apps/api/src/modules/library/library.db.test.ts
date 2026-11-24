@@ -11,10 +11,10 @@ import { mkdir, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/p
 import { dirname, join } from "node:path";
 
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { CourseDocument, CourseLibrary, DEFAULT_DOCUMENTS_QUOTA_BYTES, DocumentHtml } from "@quiz/contracts";
-import { RENDERER_VERSION } from "@quiz/docrender";
+import { RENDERER_VERSION, renderStandalone } from "@quiz/docrender";
 
 import { auditLog, courseDocuments, courseStaff, courses } from "../../db/schema.js";
 import { testServer, type Actor, type TestServer } from "../../test/http.js";
@@ -389,15 +389,13 @@ describe("the file (Range, inert headers)", () => {
 describe("a Markdown document's HTML (the viewer, ADR-144 §6)", () => {
   const source = "# Formulaire\n\n## Lois\n\n<b>gras</b> et $U = RI$.\n\n## Unités\n";
 
-  it("answers the staff the stored rendering, its table of contents and the document's title", async () => {
+  it("answers the staff the stored rendering and its table of contents", async () => {
     const id = await course();
     const doc = CourseDocument.parse((await upload(id, Buffer.from(source), "formulaire.md")).json());
-    await server.app.inject({ method: "PATCH", url: `${base(id)}/${doc.id}`, headers: owner.headers, payload: { title: "Formulaire d'électronique" } });
     for (const who of [owner, assistant]) {
       const res = await get(`${base(id)}/${doc.id}/html`, who);
       expect(res.statusCode, res.body).toBe(200);
-      const body = DocumentHtml.parse(res.json());
-      expect(body.title).toBe("Formulaire d'électronique");
+      const body = DocumentHtml.strict().parse(res.json());
       expect(body.html).toContain('<h2 id="lois">Lois</h2>');
       // Raw HTML stays text, as rendered at upload.
       expect(body.html).toContain("&lt;b&gt;");
@@ -443,7 +441,7 @@ describe("the re-rendering (library.blob_sweep, ADR-144 §3)", () => {
     const fileless = await stale(id, "# Gone\n", RENDERER_VERSION - 1, false);
     const pdfDoc = (await upload(id, pdf())).json();
 
-    expect(await rerenderDocuments(db(), server.assetsDir)).toBeGreaterThanOrEqual(2);
+    expect(await rerenderDocuments(db(), server.assetsDir, server.app.log)).toBeGreaterThanOrEqual(2);
     expect(await rowOf(older)).toMatchObject({ renderedWith: RENDERER_VERSION, toc: [{ id: "old", depth: 1, text: "Old" }] });
     expect((await rowOf(older)).html).toContain("&lt;i&gt;");
     expect((await rowOf(older)).warnings).toEqual([{ code: "raw_html" }]);
@@ -454,8 +452,48 @@ describe("the re-rendering (library.blob_sweep, ADR-144 §3)", () => {
     expect(await rowOf(pdfDoc.id)).toMatchObject({ html: null, renderedWith: null });
     // Once caught up, nothing more to do.
     const again = await stale(id, "# Again\n", RENDERER_VERSION - 1);
-    expect(await rerenderDocuments(db(), server.assetsDir)).toBe(1);
+    expect(await rerenderDocuments(db(), server.assetsDir, server.app.log)).toBe(1);
     expect(await rowOf(again)).toMatchObject({ renderedWith: RENDERER_VERSION });
+  });
+
+  it("goes on past a document whose rendering throws, keeping that one's", async () => {
+    const id = await course();
+    const broken = await stale(id, "# Broken\n", RENDERER_VERSION - 1);
+    const fine = await stale(id, "# Fine\n", RENDERER_VERSION - 1);
+    const warn = vi.fn();
+    const render = (source: string) => {
+      if (source.includes("Broken")) throw new Error("renderer crashed");
+      return renderStandalone(source);
+    };
+    expect(await rerenderDocuments(db(), server.assetsDir, { warn }, render)).toBeGreaterThanOrEqual(1);
+    expect(await rowOf(broken)).toMatchObject({ html: "<p>old</p>", renderedWith: RENDERER_VERSION - 1 });
+    expect(await rowOf(fine)).toMatchObject({ renderedWith: RENDERER_VERSION });
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({ documentId: broken, error: "renderer crashed" }), "document re-rendering failed");
+  });
+
+  it("sweeps the files even when the re-rendering cannot run at all", async () => {
+    const orphan = join(server.assetsDir, documentPath("f".repeat(64)));
+    await mkdir(dirname(orphan), { recursive: true });
+    await writeFile(orphan, "orphan");
+    const longAgo = new Date(server.app.clock.now().getTime() - 2 * SWEEP_GRACE_MS);
+    await utimes(orphan, longAgo, longAgo);
+    const task = LIBRARY_TASKS.find((t) => t.key === "library.blob_sweep")!;
+    // A database the re-rendering's first query fails on, the sweep's own reads intact.
+    const db = server.app.db;
+    const select = db.select.bind(db);
+    let calls = 0;
+    const spy = vi.spyOn(db, "select").mockImplementation(((...args: Parameters<typeof select>) => {
+      calls += 1;
+      if (calls === 1) throw new Error("database gone");
+      return select(...args);
+    }) as typeof db.select);
+    try {
+      const summary = await task.run(server.app, { ASSETS_DIR: server.assetsDir } as AppConfig);
+      expect(summary).toMatch(/^documents not rendered again, \d+ document files swept$/);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(await stat(orphan).catch(() => null)).toBeNull();
   });
 
   it("is a step of the library's daily task, never of a read", async () => {

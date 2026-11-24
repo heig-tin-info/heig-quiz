@@ -14,9 +14,16 @@ export const LIBRARY_TASKS: ScheduledTask[] = [
     key: "library.blob_sweep",
     defaultIntervalMinutes: 24 * 60,
     run: async (app, config) => {
-      const rendered = await rerenderDocuments(app.db, config.ASSETS_DIR);
+      // The sweep runs whatever the re-rendering did.
+      let rendered: string;
+      try {
+        rendered = `${await rerenderDocuments(app.db, config.ASSETS_DIR, app.log)} documents rendered again`;
+      } catch (error) {
+        app.log.warn({ error: String((error as Error)?.message ?? error) }, "document re-rendering failed");
+        rendered = "documents not rendered again";
+      }
       const swept = await sweepDocumentFiles(app.db, config.ASSETS_DIR, app.clock.now());
-      return `${rendered} documents rendered again, ${swept} document files swept`;
+      return `${rendered}, ${swept} document files swept`;
     },
   },
 ];

@@ -225,7 +225,7 @@ describe("the Documents tab", () => {
   it("reads a Markdown document's HTML for the viewer; its warnings stay in the list", async () => {
     const html = `${URL_LIST}/${sheet.id}/html`;
     renderTab(ok(libraryOf([sheet])), {
-      [`GET ${html}`]: ok({ title: "Formula sheet", html: '<h2 id="ohm">Ohm</h2>', toc: [{ id: "ohm", depth: 2, text: "Ohm" }] }),
+      [`GET ${html}`]: ok({ html: '<h2 id="ohm">Ohm</h2>', toc: [{ id: "ohm", depth: 2, text: "Ohm" }] }),
     });
     await userEvent.click(await screen.findByRole("button", { name: "Formula sheet" }));
     const layer = await screen.findByRole("dialog", { name: "Formula sheet" });
@@ -238,7 +238,7 @@ describe("the Documents tab", () => {
     const html = `${URL_LIST}/${sheet.id}/html`;
     let calls = 0;
     renderTab(ok(libraryOf([sheet])), {
-      [`GET ${html}`]: () => (++calls === 1 ? fail(500) : ok({ title: "Formula sheet", html: "<p>Back</p>", toc: [] })),
+      [`GET ${html}`]: () => (++calls === 1 ? fail(500) : ok({ html: "<p>Back</p>", toc: [] })),
     });
     await userEvent.click(await screen.findByRole("button", { name: "Formula sheet" }));
     const layer = await screen.findByRole("dialog", { name: "Formula sheet" });

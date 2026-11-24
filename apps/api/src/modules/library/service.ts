@@ -348,7 +348,7 @@ export async function documentFile(
 /** A Markdown document's rendering as stored at upload (or by the last re-rendering); null for a PDF. */
 export function documentHtml(row: Row): DocumentHtml | null {
   if (row.kind !== "markdown" || row.html === null) return null;
-  return { title: row.title, html: row.html, toc: row.toc ?? [] };
+  return { html: row.html, toc: row.toc ?? [] };
 }
 
 /**
@@ -357,10 +357,17 @@ export function documentHtml(row: Row): DocumentHtml | null {
  * (ADR-144 §3), as the journal's `sweepRenderer` does for its pages: run by
  * the library's daily task, never by a read. A row whose file is missing (a
  * staging copy) or no longer reads as Markdown keeps its rendering and is
- * tried again next time; the update is conditional, so a row re-rendered
- * meanwhile is not written twice. Answers how many were rendered again.
+ * tried again next time, and so does a row whose rendering fails: it is
+ * logged, and the others go on. The update is conditional, so a row
+ * re-rendered meanwhile is not written twice. Answers how many were
+ * rendered again.
  */
-export async function rerenderDocuments(db: Db, assetsDir: string): Promise<number> {
+export async function rerenderDocuments(
+  db: Db,
+  assetsDir: string,
+  log: { warn: (details: object, message: string) => void },
+  render: (source: string) => Pick<ReturnType<typeof renderStandalone>, "html" | "toc" | "warnings"> = renderStandalone,
+): Promise<number> {
   const stale = or(isNull(courseDocuments.renderedWith), lt(courseDocuments.renderedWith, RENDERER_VERSION));
   const due = await db
     .select({ id: courseDocuments.id, sha256: courseDocuments.sha256 })
@@ -368,16 +375,21 @@ export async function rerenderDocuments(db: Db, assetsDir: string): Promise<numb
     .where(and(eq(courseDocuments.kind, "markdown"), stale));
   let rendered = 0;
   for (const { id, sha256 } of due) {
-    const bytes = await readFile(safeJoin(assetsDir, documentPath(sha256))).catch(() => null);
-    const text = bytes === null ? null : markdownText(bytes);
-    if (text === null) continue;
-    const { html, toc, warnings } = renderStandalone(text);
-    const updated = await db
-      .update(courseDocuments)
-      .set({ html, toc, warnings, renderedWith: RENDERER_VERSION })
-      .where(and(eq(courseDocuments.id, id), stale))
-      .returning({ id: courseDocuments.id });
-    rendered += updated.length;
+    try {
+      const bytes = await readFile(safeJoin(assetsDir, documentPath(sha256))).catch(() => null);
+      const text = bytes === null ? null : markdownText(bytes);
+      if (text === null) continue;
+      const { html, toc, warnings } = render(text);
+      const updated = await db
+        .update(courseDocuments)
+        .set({ html, toc, warnings, renderedWith: RENDERER_VERSION })
+        .where(and(eq(courseDocuments.id, id), stale))
+        .returning({ id: courseDocuments.id });
+      rendered += updated.length;
+    } catch (error) {
+      // One document that fails to render must not hold the others back; the next run retries it.
+      log.warn({ documentId: id, error: String((error as Error)?.message ?? error) }, "document re-rendering failed");
+    }
   }
   return rendered;
 }

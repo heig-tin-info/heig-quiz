@@ -182,7 +182,7 @@ on("GET", "/app/api/courses/:id/documents/:documentId/html", (m): DocumentHtml =
   const { document } = documentOr404(m);
   if (document.kind !== "markdown") throw new MockError(404, "not_found");
   const { html, toc } = renderStandalone(markdownSample);
-  return { title: document.title, html, toc };
+  return { html, toc };
 });
 
 on("PATCH", "/app/api/admin/courses/:id/documents-quota", (m, body) => {
