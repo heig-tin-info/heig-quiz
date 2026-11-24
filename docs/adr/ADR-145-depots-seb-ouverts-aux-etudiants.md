@@ -3,8 +3,8 @@
 ## Status
 
 Proposed (2026-11-24). The nine decisions below are the product owner's
-(2026-11-24); the data, the job and the exposure rule are the
-orchestrator's design, within them.
+(2026-11-24); the frozen-repository reading of decisions 1 and 8, the
+data, the job and the exposure rule are the orchestrator's, within them.
 
 Scope: who reads an `online_seb` project's repositories on GitHub once the
 lab test is over, and how that access is given and taken back.
@@ -70,37 +70,59 @@ The product owner's decisions (2026-11-24):
    those paths.
 9. The labels are ours to write, in the four languages.
 
+The orchestrator's reading of decisions 1 and 8, by symmetry: a graded
+project, released, is opened only once every live repository is frozen
+for good too (`409 repos_not_frozen` otherwise, and no primary action). A
+make-up whose repository was given a later deadline of its own after the
+release still runs: its classmates would otherwise receive the statement
+during it.
+
 The design:
 
 - **The fact** is one column, `projects.repos_opened_at`, the server's
   clock, null while closed; the owner's open and close write it, audited
-  `project.repos_opened` and `project.repos_closed`. Neither calls GitHub.
+  `project.repos_opened` and `project.repos_closed`, and answer 204. Either
+  is a no-op when the fact already says so. Neither calls GitHub.
 - **The permission** of every invitation — an Accept, a resend, the
   reconciliation, the job below — is one rule, `collaboratorPermission`
   (`@quiz/domain`): `free` → `push` and `online` → `pull`, unchanged;
-  `online_seb` → `pull` only while the repositories are open, the project
-  not archived, on a repository that may be opened (individual, live,
-  frozen for good, holding the student's work), otherwise none. An
-  invitation recording its grant reads the fact again under the project's
-  row lock, so a close either finds that grant or makes the invitation
-  record none; one that lands on GitHub after the close is taken back by
-  `inviteAccount`'s own after-check.
-- **The job** `project.repos_access`, under its own lease
-  (`repos_access_job_at`, ADR-064's claim and expiry), converges GitHub to
-  the fact: while open, the seat of every openable repository nobody is
-  invited on is invited with `pull`; while closed, every recorded live
-  grant of the project's repositories is revoked, repository by
-  repository, a pending invitation cancelled first, and the repository's
-  invitation state goes back to `none` — never through
-  `revokeEnrollmentAccess`, which would cut the student's repositories of
-  every other project. The owner's write takes the lease over; a failure
-  backdates it, the ticker claims an expired one. A repository archived as
-  its lock, a seat without a linked or with a stale account, a seat gone
-  from the roster: skipped, never fatal for the others.
+  `online_seb` → `pull` only while the repositories are open, neither the
+  project nor its classroom archived, on a repository the opening opens
+  (`openingOf`: individual, live, frozen for good, holding the student's
+  work), otherwise none. An invitation recording its grant reads the
+  opening again under the project's row lock, so a close either finds that
+  grant or makes the invitation record none.
+- **The job** `project.repos_access` is the project's one runner on
+  GitHub, under its own lease (`repos_access_job_at`, ADR-064's claim and
+  expiry). While open, the seat of every repository the opening opens and
+  nobody is let into is invited with `pull`; while closed, every recorded
+  live grant of the project's repositories is revoked, one at a time, a
+  pending invitation cancelled first, and the repository's invitation state
+  goes back to `none` — never through `revokeEnrollmentAccess`, which would
+  cut the student's repositories of every other project. The owner's write
+  sets the fact and, when no live job holds it, the lease, in ONE
+  transaction; the job is sent after the commit. A job holding the lease
+  reads the fact again before each step and ends its pass when it moved,
+  then runs a pass for the new fact; it gives the lease back only in a
+  write that finds the fact it converged to. Whatever the interleaving of
+  the owner's writes, the last pass therefore leaves GitHub and the
+  invitation states as the fact says. A failure backdates the lease, a
+  crash leaves it; the ticker claims either once expired. A repository
+  archived as its lock, a seat without a linked or with a stale account, a
+  seat gone from the roster: skipped, never fatal for the others.
 - **The student** reads the outcome through the project's student view
   alone (N-SEC-20): once opened and invited, their card and page carry their
   invitation and lead to GitHub as an `online` project's do; before the
-  opening and after a close, no invitation.
+  opening and after a close, no invitation. The student view anticipates
+  the revocation on purpose: a closed `online_seb` project shows no
+  invitation even while the job is still revoking a stale `pending`.
+- **Archives.** Archiving a project or its classroom stops new invitations
+  and never touches the GitHub grants already given, as in every other
+  mode; closing the access stays possible on an archived project.
+- **A staff unlock** of a frozen repository of an opened project needs no
+  guard: under `online_seb` the workspace closes at the effective deadline
+  plus the grace whatever the lock (`workspaceClosesAt`, `gitTokenRefusal`),
+  and the student holds `pull` only.
 
 **What a `pull` collaborator reads**, stated for `online_seb` as it already
 holds for `online`: the repository's files at every commit and branch; the
