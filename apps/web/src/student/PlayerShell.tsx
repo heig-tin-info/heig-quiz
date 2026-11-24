@@ -310,42 +310,46 @@ export function PlayerShell({
         </div>
       </header>
 
-      {/* `--tool-dock-inset`: the documents' column on the right in split view, under the bar (ADR-144 §7). */}
-      <div
-        style={{ paddingRight: "var(--tool-dock-inset, 0px)" }}
-        className={cx(
-          "mx-auto w-full flex-1 py-6",
-          docked ? cx(RAIL_GRID, FRAME, "px-6") : cx(column(wide, false), "px-4 sm:px-6"),
-        )}
-      >
-        {aside ? (
-          // Sticks the body's top padding under the bar, and fits in the
-          // viewport under it: a long list scrolls inside, never the page.
-          <aside className="sticky top-[calc(var(--banner-h)+var(--bar-h)+1.5rem)] flex max-h-[calc(100dvh-var(--banner-h)-var(--bar-h)-3rem)] flex-col gap-4 self-start">
-            {aside}
-            <p className="text-[12px] leading-relaxed text-fg-faint">
-              <Kbd>Alt</Kbd> + <Kbd>←</Kbd> <Kbd>→</Kbd> {t("player.shortcuts")}
-            </p>
-            {asideShortcuts.length === 0 ? null : (
-              <ul className="-mt-2 space-y-1" aria-label={t("shortcuts.title")}>
-                {asideShortcuts.map((shortcut) => (
-                  // The column is narrow: a label that does not fit beside its
-                  // keys goes under them rather than being cut.
-                  <li key={shortcut.keys} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                    <ShortcutKeys shortcut={shortcut} />
-                    <span className="text-[12px] leading-relaxed text-fg-faint">{shortcut.label}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </aside>
-        ) : null}
-        {/* Beside the side column, the question is centered in the room
-            right of it, and the column stays where it is. */}
-        <main className={cx("min-w-0", docked && cx("mx-auto w-full", column(wide, true)))}>
-          {banner ? <div className="mb-5">{banner}</div> : null}
-          {children}
-        </main>
+      {/* `--tool-dock-inset`: the documents' column on the right in split view, under the bar (ADR-144 §7).
+          It goes AROUND the frame, never on it: the frame centers itself in the room that is left,
+          where a padding of its own would eat its width — down to nothing once the column is the
+          wider of the two (one question, so no side column, on a wide screen). */}
+      <div style={{ paddingRight: "var(--tool-dock-inset, 0px)" }} className="flex flex-1 flex-col">
+        <div
+          className={cx(
+            "mx-auto w-full flex-1 py-6",
+            docked ? cx(RAIL_GRID, FRAME, "px-6") : cx(column(wide, false), "px-4 sm:px-6"),
+          )}
+        >
+          {aside ? (
+            // Sticks the body's top padding under the bar, and fits in the
+            // viewport under it: a long list scrolls inside, never the page.
+            <aside className="sticky top-[calc(var(--banner-h)+var(--bar-h)+1.5rem)] flex max-h-[calc(100dvh-var(--banner-h)-var(--bar-h)-3rem)] flex-col gap-4 self-start">
+              {aside}
+              <p className="text-[12px] leading-relaxed text-fg-faint">
+                <Kbd>Alt</Kbd> + <Kbd>←</Kbd> <Kbd>→</Kbd> {t("player.shortcuts")}
+              </p>
+              {asideShortcuts.length === 0 ? null : (
+                <ul className="-mt-2 space-y-1" aria-label={t("shortcuts.title")}>
+                  {asideShortcuts.map((shortcut) => (
+                    // The column is narrow: a label that does not fit beside its
+                    // keys goes under them rather than being cut.
+                    <li key={shortcut.keys} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <ShortcutKeys shortcut={shortcut} />
+                      <span className="text-[12px] leading-relaxed text-fg-faint">{shortcut.label}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </aside>
+          ) : null}
+          {/* Beside the side column, the question is centered in the room
+              right of it, and the column stays where it is. */}
+          <main className={cx("min-w-0", docked && cx("mx-auto w-full", column(wide, true)))}>
+            {banner ? <div className="mb-5">{banner}</div> : null}
+            {children}
+          </main>
+        </div>
       </div>
 
       {footer ? (

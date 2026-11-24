@@ -42,6 +42,19 @@ describe("the zen player's frame", () => {
     expect(container.querySelector("header > div")).toHaveClass("max-w-190", "lg:max-w-400");
     expect(container.querySelector("main")!.parentElement).toHaveClass("max-w-190", "lg:max-w-400");
   });
+
+  // The documents' column (ADR-144 §7) takes its room AROUND the frame. On the
+  // frame, the inset ate the frame's own width: with one question (no side
+  // column, 760 px) beside a wider column, the question was a letter wide.
+  it.each([true, false])("leaves the documents' column its room around the frame (side column: %s)", (aside) => {
+    const { container } = renderWithProviders(shell(false, aside));
+    const frame = container.querySelector("main")!.parentElement!;
+    expect(frame.className).toContain("max-w-");
+    expect(frame.getAttribute("style") ?? "").not.toContain("--tool-dock-inset");
+    const room = frame.parentElement!;
+    expect(room.getAttribute("style")).toContain("padding-right: var(--tool-dock-inset, 0px)");
+    expect(room.className).not.toContain("max-w-");
+  });
 });
 
 /*

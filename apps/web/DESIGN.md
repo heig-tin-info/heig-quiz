@@ -3325,7 +3325,8 @@ does it.
 - **Split view** (900 px and up): the panel is a fixed column on the right,
   under the player's bar — which keeps the clock and "Hand in" across the
   window — a hairline on its left; the questions, the footer and the docks
-  move left of it (`--tool-dock-inset`). The
+  move left of it (`--tool-dock-inset`), the question's column centered in
+  the room that is left, with or without the side column. The
   separator is a 5 px grip on that hairline, `line-strong`, `fg-faint`
   and taller under the pointer or a drag, the accent with its ring when
   focused; 46 % of the window by default, the panel at least 360 px, the
