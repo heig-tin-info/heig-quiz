@@ -192,7 +192,8 @@ Two pairs stay below their target, on purpose:
 - Focus: 2 px accent ring at 2 px offset, on every interactive element. It is
   declared once in `style.css` on `:focus-visible`; no component restyles it,
   except the mode banner (below), whose dark fill would swallow a red ring,
-  and the cells of the pool's concept map (below), whose box would clip it.
+  the cells of the pool's concept map (below), whose box would clip it, and
+  the document viewer's reading area (below), inset for the same reason.
 
 ## Long-form reading (the journal)
 
@@ -3256,6 +3257,45 @@ tab: the system shows both already, and a second battery is noise.
   `danger` at 10 %; no dialog, no sound. Charging, it stays neutral.
 - **Second to the countdown**: smaller, quieter, no accent. The time is the
   browser's, for reading only; nothing closes or counts on it (invariant 5).
+
+## The document viewer
+
+One PDF or one Markdown document the server rendered, read in place
+(`src/documents/DocumentViewer.tsx`): a host gives it the room (a panel of
+the player, a preview) and it fills it, down to 400 px. Never an iframe: a
+copy made in it is a copy of the page (ADR-088).
+
+- **The toolbar**: one row under a hairline, 32 px icon buttons, groups
+  set apart by a hairline on their left: the outline toggle; the page (a
+  PDF's: previous, a `sm` field holding the page, "/ n" in 13 px muted
+  tabular, next); the zoom (out, the value in 13 px muted tabular, in, and
+  fit to width for a PDF; a Markdown document's zoom is its text size);
+  then, at the right, the search: a pill on the control scale's `md`
+  height, the field, the count ("3 / 17" in 12 px faint, "No results" in
+  `warning`) and its two 24 px arrows. Under 520 px of viewer the search
+  takes a row of its own. Nothing to download, print or open.
+- **No accent**: every control is a toggle, a step or a field, and the
+  screen's one action is the host's (the player's "Hand in"). A pressed
+  toggle (the outline, fit to width) is the neutral ink chip, `surface-3`
+  under `fg`, as the player's own tools are (`ToggleChip`'s `neutral`).
+- **The outline**: a 240 px column at the left on `surface-2` under a
+  hairline, two levels (13 px, the second 12 px muted and indented 12 px),
+  the entry being read on `surface-3` and semibold. Under 520 px it covers
+  the document instead, with the popover shadow (it floats), and folds once
+  an entry is chosen.
+- **The page**: a PDF's pages stay white paper in both themes, one hairline
+  of `line-strong` around each, on the `surface-2` desk. A Markdown document
+  wears the journal's long-form type (`.md-body.md-doc`) on `surface`, in
+  the journal's 48 rem column, centred, with 16 px of air under 30 rem.
+- **The search's two tones**: every match in a soft amber (`--match`), the
+  current one in the full amber with the ink on it (`--match-current`,
+  `--match-current-ink`): two tones apart without the accent. Over a PDF
+  page both are translucent, since the text layer lies over the drawn word.
+- **Focus**: the document itself takes the focus (arrows and Page Up/Down
+  scroll it); its ring is drawn 2 px INSIDE the edge, the one place the ring
+  is inset, because the viewer fills a panel that would clip it outside.
+  Ctrl+F (⌘+F) inside the viewer goes to its search; Escape there hands the
+  focus back to the document, query and highlights kept.
 
 ## The help assistant (ADR-080)
 

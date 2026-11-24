@@ -30,6 +30,7 @@ export const DOMAINS = {
   ],
   student: [
     "player", "shome", "sroom", "scourses", "practice", "ready", "feedback", "calc", "notepad",
+    "docs",
   ],
   evaluation: [
     "eval", "launch", "templates", "templatePull", "picker", "conditions", "seb", "kiosk",

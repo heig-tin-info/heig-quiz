@@ -87,6 +87,7 @@ const ALLOW_RAW_INPUT: Allowed = {
   "apps/web/src/ui/PointsInput.tsx": { count: 1, reason: "the points inside their pill: the pill is the field's chrome, the value and its maximum one control" },
   "apps/web/src/CommandPalette.tsx": { count: 1, reason: "the palette's top band IS the field; a second chrome inside the panel is noise" },
   "apps/web/src/concepts/ConceptPicker.tsx": { count: 1, reason: "the typing cursor inside a token field: chips and input share one box" },
+  "apps/web/src/documents/DocumentToolbar.tsx": { count: 1, reason: "the document search inside its pill: the pill, with the count and the two arrows, is the field's chrome" },
   "packages/qt-mcq/src/ui.tsx": { count: 1, reason: "the radio or checkbox of a choice, its type decided at run time (a box drawn over it)" },
   "packages/qt-categorize/src/Editor.tsx": { count: 1, reason: "a column title edited in place on the board (borderless until hovered)" },
 };
