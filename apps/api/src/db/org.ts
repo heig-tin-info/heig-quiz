@@ -5,6 +5,7 @@
  */
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   boolean,
   check,
   index,
@@ -17,7 +18,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { POOL_COLORS } from "@quiz/contracts";
+import { DEFAULT_DOCUMENTS_QUOTA_BYTES, POOL_COLORS } from "@quiz/contracts";
 import { CONDITION_KINDS, COURSE_ROLES } from "@quiz/domain";
 
 import { users } from "./auth.js";
@@ -53,6 +54,15 @@ export const courses = pgTable(
      * deleted account unmarks the course and never deletes it.
      */
     trainingFor: uuid("training_for").references(() => users.id, { onDelete: "set null" }),
+    /**
+     * What the course's library may hold, in bytes (F-ADMIN-10, ADR-144):
+     * the sum of its documents' sizes, each counted in full. Raised by an
+     * administrator alone (`setDocumentsQuota`); read by the `library`
+     * module, which locks the row while it checks an upload against it.
+     */
+    documentsQuotaBytes: bigint("documents_quota_bytes", { mode: "number" })
+      .notNull()
+      .default(DEFAULT_DOCUMENTS_QUOTA_BYTES),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

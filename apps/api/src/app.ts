@@ -74,6 +74,7 @@ import { readableAssets } from "./modules/pool/service.js";
 import { flushCoalescers, openStreamCount } from "./modules/realtime/bus.js";
 import { realtimePlugin } from "./modules/realtime/routes.js";
 import { paperPlugin } from "./modules/paper/routes.js";
+import { libraryPlugin } from "./modules/library/routes.js";
 import { resultsPlugin } from "./modules/results/routes.js";
 import { createRunner } from "./modules/runner/index.js";
 import { statsPlugin } from "./modules/stats/routes.js";
@@ -275,6 +276,8 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(gradingPlugin);
   await app.register(resultsPlugin);
   await app.register(paperPlugin, { config });
+  // A course's library of documents (ADR-144): staff routes only in this first step.
+  await app.register(libraryPlugin, { config });
   await app.register(statsPlugin);
   // The vocabulary of concepts (ADR-081): the registry alone, connected to nothing yet.
   await app.register(conceptPlugin);

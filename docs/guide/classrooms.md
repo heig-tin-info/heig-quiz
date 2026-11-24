@@ -13,7 +13,7 @@ A course card is a summary of four things:
 - the **Pools of this course**, the pools its evaluations may draw from;
 - how many **evaluation templates** it keeps; the count opens the course page.
 
-The course's name opens its page. Under the title, five tabs, and the primary action at the right of the title changes with the tab: **Classrooms** (the default, with **New classroom**), **Templates** (**New template**), **Linked pools** (**Link a pool**), **Members** (**Add a staff member**) and **Settings**, which has none. An assistant of the course sees only **New template** there: the other three are an owner's (see below), and their **Settings** tab holds only whether the course shows in their own navigation.
+The course's name opens its page. Under the title, six tabs, and the primary action at the right of the title changes with the tab: **Classrooms** (the default, with **New classroom**), **Templates** (**New template**), **Linked pools** (**Link a pool**), **Documents** (**Add a document**), **Members** (**Add a staff member**) and **Settings**, which has none. An assistant of the course sees only **New template** and **Add a document** there: the other three are an owner's (see below), and their **Settings** tab holds only whether the course shows in their own navigation.
 
 A course outlives a class. The same "Programmation C" carries the classroom of 2026, then the one of 2027, and its staff and pools stay in place from one year to the next.
 
@@ -32,6 +32,10 @@ Being on the staff of a course is enough to be a teacher: a colleague you add do
 ### Linking a pool
 
 The evaluations of a course draw their questions from the pools linked to it, and only from those. **Link a pool**, on the course page's **Linked pools** tab, offers your pools; a linked pool appears with its question count. From the pool's own menu there, **Unlink from this course** removes the link and nothing else: the pool and its questions stay where they are, and the evaluations that already use its questions keep them. One pool can feed several courses. See [Question pools](pools.md) for the pools themselves.
+
+### The course's documents
+
+The **Documents** tab holds the course's PDF and Markdown files: datasheets, extracts of a standard, formula sheets. **Add a document** opens a file picker; several files may be picked and are sent one after the other. A PDF is at most 50 MB on a default installation, a Markdown file at most 500 kB, and the course's documents share a quota, 100 MB unless an administrator changed it, shown above the list. Any member of the staff adds and renames a document; its uploader or an owner of the course deletes it. A Markdown file shows no image: what its rendering left out is listed under it. Upload only what you may hand out to your students: the licence of a standard may forbid it.
 
 ## Creating a classroom
 

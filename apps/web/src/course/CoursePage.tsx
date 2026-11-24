@@ -1,4 +1,4 @@
-import { FileStack, FolderTree, Library, Plus, Settings as SettingsIcon, UserPlus, Users } from "lucide-react";
+import { FileStack, FileText, FileUp, FolderTree, Library, Plus, Settings as SettingsIcon, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
 import type { CourseSummary } from "@quiz/contracts";
@@ -6,6 +6,8 @@ import type { CourseTab } from "@quiz/domain";
 
 import { CourseTemplates, useCourseTemplates } from "../evaluation/templates";
 import { useT } from "../i18n";
+import { CourseDocuments, useDocumentUploads } from "../library/CourseDocuments";
+import { useCourseLibrary } from "../library/api";
 import type { Route } from "../router";
 import { Trail, useRootCrumb } from "../Trail";
 import {
@@ -32,14 +34,15 @@ import { useCourseActions } from "./useCourseActions";
 /**
  * The page of one course (F-ORG-12), in tabs as the classroom's: its
  * classrooms (the default), its evaluation templates, which live here and
- * nowhere else (ADR-031), the pools it draws from, its members and its
- * settings, which hold its catalog of conditions (F-ORG-16). Each tab is a
- * path of its own (`/courses/:id/<tab>`).
+ * nowhere else (ADR-031), the pools it draws from, its documents (F-ORG-18,
+ * ADR-144), its members and its settings, which hold its catalog of
+ * conditions (F-ORG-16). Each tab is a path of its own (`/courses/:id/<tab>`).
  *
  * The header's one primary action is the open tab's: New classroom, New
- * template, Link a pool, Add a staff member; Settings has none. An
- * assistant (ADR-068) is offered only New template there: the classrooms,
- * the linked pools and the staff are the owners' to change. The course's
+ * template, Link a pool, Add a document, Add a staff member; Settings has
+ * none. An assistant (ADR-068) is offered New template and Add a document
+ * there: the classrooms, the linked pools and the staff are the owners' to
+ * change. The course's
  * actions are `useCourseActions`, the card's copy, so the two cannot drift —
  * the card keeps them in its menu, the page spreads them over its tabs.
  *
@@ -111,6 +114,8 @@ function Course({
   const [creatingTemplate, setCreatingTemplate] = useState(false);
   const templates = useCourseTemplates(course.id);
   const pools = useCourseDetail(course.id).data?.pools;
+  const documents = useCourseLibrary(course.id).data?.documents;
+  const uploads = useDocumentUploads(course.id);
   const signalsOf = useClassroomSignals();
   const open = (next: CourseTab) => navigate({ view: "course", id: course.id, tab: next });
 
@@ -121,6 +126,8 @@ function Course({
   // which stays in the action row.
   const memberPrimary: Partial<Record<CourseTab, PagePrimary>> = {
     templates: { icon: Plus, label: t("templates.new"), onClick: () => setCreatingTemplate(true) },
+    // ADR-144: any member of the staff adds documents to the course.
+    documents: { icon: FileUp, label: t("courses.docs.add"), onClick: uploads.pick },
   };
   const ownerPrimary: Partial<Record<CourseTab, PagePrimary>> = {
     classrooms: { icon: Plus, label: t("classrooms.new"), onClick: actions.newClassroom },
@@ -159,6 +166,7 @@ function Course({
             { value: "classrooms", label: t("classrooms.title"), count: course.classrooms.length, icon: ClassroomIcon },
             { value: "templates", label: t("courses.tab.templates"), count: templates.data?.length, icon: FileStack },
             { value: "pools", label: t("courses.tab.pools"), count: pools?.length, icon: FolderTree },
+            { value: "documents", label: t("courses.tab.documents"), count: documents?.length, icon: FileText },
             { value: "members", label: t("courses.tab.members"), count: course.staff.length, icon: Users },
             { value: "settings", label: t("courses.tab.settings"), icon: SettingsIcon },
           ]}
@@ -193,6 +201,8 @@ function Course({
           />
         ) : tab === "pools" ? (
           <LinkedPools course={course} navigate={navigate} />
+        ) : tab === "documents" ? (
+          <CourseDocuments courseId={course.id} uploads={uploads} />
         ) : tab === "members" ? (
           <CourseMembers course={course} staffActions={actions.staffActions} />
         ) : (
@@ -201,6 +211,7 @@ function Course({
       </div>
 
       {actions.dialogs}
+      {uploads.picker}
     </div>
   );
 }

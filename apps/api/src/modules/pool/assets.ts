@@ -14,8 +14,11 @@
  *     `nosniff`, so a browser can never be talked into executing it.
  */
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createWriteStream } from "node:fs";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
+import { Transform, type Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 import { eq } from "drizzle-orm";
 
@@ -141,6 +144,66 @@ export async function writeAsset(
   const full = safeJoin(assetsDir, relativePath);
   await mkdir(dirname(full), { recursive: true });
   await writeFile(full, bytes);
+}
+
+/** A stream written to a temporary file by {@link streamToTemp}: where, its hash, its size, its first bytes. */
+export interface TempFile {
+  /** Absolute, under `ASSETS_DIR`: {@link placeTemp} moves it, {@link dropTemp} removes it. */
+  path: string;
+  sha256: string;
+  bytes: number;
+  /** The first {@link HEAD_BYTES} bytes (fewer for a shorter file): enough for a magic number. */
+  head: Buffer;
+}
+
+const HEAD_BYTES = 16;
+
+/**
+ * Streams `source` into a new file of `tmpDir` (relative to `ASSETS_DIR`)
+ * while hashing it, so a large upload never sits whole in memory. The
+ * directory is on the same file system as the store: {@link placeTemp} is
+ * a rename. On any failure the partial file is removed and the error thrown.
+ */
+export async function streamToTemp(assetsDir: string, tmpDir: string, source: Readable): Promise<TempFile> {
+  const dir = safeJoin(assetsDir, tmpDir);
+  await mkdir(dir, { recursive: true });
+  const path = join(dir, randomUUID());
+  const hash = createHash("sha256");
+  let bytes = 0;
+  const heads: Buffer[] = [];
+  let headLength = 0;
+  const tap = new Transform({
+    transform(chunk: Buffer, _encoding, done) {
+      hash.update(chunk);
+      bytes += chunk.length;
+      if (headLength < HEAD_BYTES) {
+        const piece = chunk.subarray(0, HEAD_BYTES - headLength);
+        heads.push(piece);
+        headLength += piece.length;
+      }
+      done(null, chunk);
+    },
+  });
+  try {
+    await pipeline(source, tap, createWriteStream(path, { flags: "wx" }));
+  } catch (error) {
+    await dropTemp(path);
+    throw error;
+  }
+  return { path, sha256: hash.digest("hex"), bytes, head: Buffer.concat(heads) };
+}
+
+/** Moves a {@link streamToTemp} file to `relativePath` under `ASSETS_DIR`, replacing what is there. */
+export async function placeTemp(assetsDir: string, temp: TempFile, relativePath: string): Promise<string> {
+  const full = safeJoin(assetsDir, relativePath);
+  await mkdir(dirname(full), { recursive: true });
+  await rename(temp.path, full);
+  return full;
+}
+
+/** Removes a temporary file; one already moved or gone is no error. */
+export async function dropTemp(path: string): Promise<void> {
+  await rm(path, { force: true });
 }
 
 export async function readAsset(assetsDir: string, relativePath: string): Promise<Buffer> {

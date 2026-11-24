@@ -88,7 +88,7 @@ function world(templates: unknown[] = [TEMPLATE]) {
 }
 
 describe("CoursePage", () => {
-  it("opens on the course's classrooms, with its five tabs under its name", async () => {
+  it("opens on the course's classrooms, with its six tabs under its name", async () => {
     mockFetch(world());
     const navigate = vi.fn();
     renderWithProviders(<CoursePage id="c1" navigate={navigate} />);
@@ -99,6 +99,8 @@ describe("CoursePage", () => {
       expect.stringMatching(/^Classrooms/),
       expect.stringMatching(/^Templates/),
       expect.stringMatching(/^Linked pools/),
+      // No count while the library is not read (this world does not answer it).
+      expect.stringMatching(/^Documents/),
       expect.stringMatching(/^Members/),
       "Settings",
     ]);

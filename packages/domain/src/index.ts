@@ -149,6 +149,7 @@ export * from "./pseudonym.js";
 export * from "./questionProgress.js";
 export * from "./repoName.js";
 export * from "./retake.js";
+export * from "./library.js";
 export * from "./reviewDispatch.js";
 export * from "./roster.js";
 export * from "./essayCriteria.js";

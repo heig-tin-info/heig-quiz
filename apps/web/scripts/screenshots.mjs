@@ -205,6 +205,13 @@ const scenes = [
   { name: "course-page-pools", role: "teacher", path: "/courses/c1/pools" },
   { name: "course-page-link-pool", role: "teacher", path: "/courses/c1/pools", fold: true, act: (p) => p.getByRole("button", { name: /link a pool|lier une banque/i }).first().click() },
   { name: "course-page-members", role: "teacher", path: "/courses/c1/members" },
+  // ADR-144: the course's documents — PRG1's (a Markdown sheet with its
+  // warnings, a colleague's datasheet, a file gone missing), an empty
+  // library, a full one, and the quota an administrator types in.
+  { name: "course-documents", role: "teacher", path: "/courses/c1/documents" },
+  { name: "course-documents-empty", role: "teacher", path: "/courses/c2/documents" },
+  { name: "course-documents-full", role: "teacher", path: "/courses/c1/documents?many=1" },
+  { name: "course-documents-admin", role: "admin", path: "/courses/c1/documents" },
   // F-ORG-16: the catalog of conditions, a section of the settings, its
   // archived entries shown, its Add dialog, and an empty one. The editor's
   // picker is `eval-config-timing`.

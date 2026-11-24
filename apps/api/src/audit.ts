@@ -157,6 +157,18 @@ export type AuditAction =
   | "course.condition_archive"
   | "course.condition_unarchive"
   /**
+   * The course's library (F-ORG-18, ADR-144), written by any staff member;
+   * subject the course, `payload.documentId`, `payload.title`,
+   * `payload.kind` (`pdf` | `markdown`) and `payload.bytes`. `rename` adds
+   * `payload.from`, the title before. An upload of bytes the course already
+   * holds changes nothing and is not traced.
+   */
+  | "course.document_upload"
+  | "course.document_rename"
+  | "course.document_delete"
+  /** An administrator set the course's quota of documents (F-ADMIN-10); `payload.from` and `payload.to`, in bytes. */
+  | "course.documents_quota"
+  /**
    * The online workspace (ADR-047, M6-06). `launch_issued`: a student's
    * launch token minted by the start route (subject the project;
    * `payload.jti`, `payload.mode` and, from a `seb` session, `payload.seb:

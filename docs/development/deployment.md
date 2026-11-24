@@ -1030,8 +1030,13 @@ archiving) is not set up; it comes only if an hour proves too much.
   `BACKUP_STATUS_FILE`: its status says "not configured".
 
 - `/srv/quiz/assets/` (question images, content-addressed by sha256) is part
-  of what the off-site copy holds (below). `./secrets` goes through the
-  vault, never through the backup directory.
+  of what the off-site copy holds (below). So are the courses' documents,
+  under `assets/documents/` (ADR-144 §9): files, not database rows, so the
+  hourly dumps never carry them and a restore needs the off-site copy or
+  the VM backup for them. A deleted document's file is removed by the daily
+  `library.blob_sweep` 48 hours after its delete, and leaves the backups on
+  their own schedule (N-DATA-03). `./secrets` goes through the vault, never
+  through the backup directory.
 - The runner itself holds nothing to back up (its images rebuild, its
   token is in the vault copy of `.env.prod`), but the codespace portals on
   the same VM do: their SQLite and volumes are pulled daily onto this VM, 14 archives
@@ -1527,8 +1532,10 @@ the dump into a recreated database, empties every credential and secret
 production issued and forgets its GitHub installations and live projects
 (`scripts/staging-scrub.sql`: staging's own App never acts on a production
 organization, N-SEC-18; a tester unarchives the project under test; enter
-staging's own LLM key in the admin screen), unpacks the question images,
-and starts the app, which migrates the copy forward: the very migration
+staging's own LLM key in the admin screen), unpacks the question images (not the courses' documents: `staging-export.sh`
+leaves `assets/documents/` out, so staging holds the documents' rows
+without their files and the Documents tab says "File missing" on each,
+ADR-144 §9), and starts the app, which migrates the copy forward: the very migration
 production will run next. It doubles as the restore test of §6. The inbox
 keeps only the latest copy; each export overwrites it. Both SQL files are
 tested against the real migrations by `apps/api/src/stagingScrub.db.test.ts`.

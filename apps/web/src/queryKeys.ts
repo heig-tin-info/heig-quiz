@@ -105,6 +105,8 @@ export const courseKey = (id: string) => ["course", id] as const;
 export const courseTemplatesKey = (id: string | null) => ["course", id, "templates"] as const;
 /** `GET /courses/:id/conditions` (F-ORG-16): the course's whole catalog, archived entries included. */
 export const courseConditionsKey = (id: string) => ["course", id, "conditions"] as const;
+/** A course's library of documents (ADR-144). */
+export const courseLibraryKey = (id: string) => ["course", id, "documents"] as const;
 /**
  * The prefix of `GET /courses/:id/staff/candidates?q=` (the picker of "Add a
  * person" appends the typed text): under the course, so a staff change

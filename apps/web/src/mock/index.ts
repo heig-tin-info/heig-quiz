@@ -166,6 +166,7 @@ import {
 } from "./poll";
 // Last: it seeds its exam from the running one, and draws no id before the others.
 import "./paper";
+import "./library";
 
 
 /** Latency of every mocked call: enough to see a skeleton under `?slow=1`. */
@@ -200,6 +201,9 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
     } catch {
       body = {};
     }
+  } else if (init?.body instanceof FormData) {
+    // A multipart upload: its fields, a file as the `File` the page picked.
+    body = Object.fromEntries(init.body.entries());
   }
   for (const r of routes) {
     if (r.method !== method) continue;

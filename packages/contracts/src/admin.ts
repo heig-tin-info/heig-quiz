@@ -104,6 +104,7 @@ export const SCHEDULED_TASK_KEYS = [
   "presence.purge",
   "poll.purge_guests",
   "paper.scan_sweep",
+  "library.blob_sweep",
   "accounts.lifecycle",
   "audit.purge",
 ] as const;

@@ -402,3 +402,34 @@ function math(
   const cls = display ? "md-math-error md-math-block" : "md-math-error";
   return `<code class="${cls}">${escapeHtml(source)}</code>`;
 }
+
+/** What {@link renderStandalone} keeps of a rendering: a document stands alone. */
+export interface StandaloneRendering {
+  html: string;
+  toc: JournalTocEntry[];
+  warnings: JournalWarning[];
+}
+
+/**
+ * One Markdown document of a course's library (ADR-144), rendered on its
+ * own: {@link renderPage} with no page and no asset beside it. A link to
+ * another file keeps its text and loses its target; a relative image
+ * becomes its alt text and a `target_missing` warning, an external one its
+ * alt text and an `external_image` warning: a document carries no image in
+ * v1. Raw HTML is shown as text, as everywhere. The front matter's `draft`
+ * and `visible_from` mean nothing here and are dropped.
+ */
+export function renderStandalone(source: string): StandaloneRendering {
+  const page = renderPage(source, {
+    classroomId: "",
+    pagePath: "document.md",
+    fallbackTitle: null,
+    pages: new Set(),
+    assets: new Set(),
+  });
+  return {
+    html: page.html,
+    toc: page.toc,
+    warnings: page.warnings.filter((w) => w.code !== "visible_from_invalid"),
+  };
+}

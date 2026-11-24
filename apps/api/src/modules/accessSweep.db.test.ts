@@ -44,6 +44,7 @@ import {
   attempts,
   contestations,
   courseConditions,
+  courseDocuments,
   courseStaff,
   enrollments,
   evaluations,
@@ -65,6 +66,7 @@ import { seedLive } from "../test/live.js";
 import { linkClassroom, newOrg, server as projectServer, useProjectWorld } from "../test/projectWorld.js";
 import { CODESPACE_ENV, fakePortal } from "./codespace/testing.js";
 import * as evaluationService from "./evaluation/service.js";
+import { documentPath } from "./library/service.js";
 import { sha256Of, writeAsset } from "./pool/assets.js";
 
 type Who = Awaited<ReturnType<TestServer["signIn"]>>;
@@ -312,6 +314,21 @@ async function world(server: TestServer, owner: Who, enrolled: Who): Promise<Wor
     scanUploadedAt: new Date(),
     scanUploadedBy: owner.id,
   });
+  // A document of the course's library with its file (ADR-144): the `:documentId`.
+  const document = Buffer.from("%PDF-1.4\n%library\n%%EOF\n", "latin1");
+  const documentSha = sha256Of(document);
+  await writeAsset(server.assetsDir, documentPath(documentSha), document);
+  const documentId = randomUUID();
+  await db.insert(courseDocuments).values({
+    id: documentId,
+    courseId: seed.courseId,
+    title: "Swept",
+    filename: "swept.pdf",
+    kind: "pdf",
+    sha256: documentSha,
+    bytes: document.length,
+    uploadedBy: owner.id,
+  });
   // A group set of the classroom with one group: the `:gid`.
   const set = await server.app.inject({ method: "POST", url: `/app/api/classrooms/${seed.classroomId}/group-sets`, headers: owner.headers, payload: {} });
   expect(set.statusCode, set.body).toBe(201);
@@ -344,6 +361,7 @@ async function world(server: TestServer, owner: Who, enrolled: Who): Promise<Wor
       componentId,
       reportId,
       gid,
+      documentId,
     },
   };
 }

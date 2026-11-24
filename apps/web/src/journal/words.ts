@@ -26,10 +26,14 @@ const WARNINGS: { [C in JournalWarningCode]: (w: WarningOf<C>, t: TFunction) => 
   math_error: (w, t) => t("journal.warning.math_error", { source: w.source }),
 };
 
-/** One warning of a page, in the interface language. */
-export function warningText(warning: JournalWarning, t: TFunction): string {
+/** The words of some warning codes, in place of the journal's: another reader of a rendering (a course's document, ADR-144). */
+export type WarningWords = Partial<typeof WARNINGS>;
+
+/** One warning of a page, in the interface language; `overrides` words some codes otherwise. */
+export function warningText(warning: JournalWarning, t: TFunction, overrides: WarningWords = {}): string {
+  const words = { ...WARNINGS, ...overrides };
   // The one cast: the compiler cannot correlate `warning.code` with the entry it selects.
-  return (WARNINGS[warning.code] as (w: JournalWarning, t: TFunction) => string)(warning, t);
+  return (words[warning.code] as (w: JournalWarning, t: TFunction) => string)(warning, t);
 }
 
 /** Why the last synchronisation failed, by its code. */

@@ -497,6 +497,8 @@ export const admin: Record<keyof typeof en, string> = {
   "admin.revokeQuotaConfirm": "Kontingent an Arbeitsbereichen von {email} entfernen? Es gilt wieder der Standard.",
   "admin.task.paper.scan_sweep": "Bereinigung der Papier-Scans",
   "admin.task.paper.scan_sweep.desc": "Löscht die Scans von Papierexemplaren, deren Versuch gelöscht wurde.",
+  "admin.task.library.blob_sweep": "Bereinigung der Dokumentdateien",
+  "admin.task.library.blob_sweep.desc": "Löscht die Dokumentdateien, die kein Kurs mehr enthält, 48 Stunden nach ihrer letzten Verwendung.",
   "admin.task.accounts.lifecycle": "Lebenszyklus der Konten",
   "admin.task.accounts.lifecycle.desc": "Warnt Konten, die seit zwei Jahren unbenutzt sind, und anonymisiert sie ein Jahr später.",
 };
