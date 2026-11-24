@@ -32,8 +32,11 @@ export function AfterDueSetting({ detail }: { detail: EvaluationDetail }) {
   const qc = useQueryClient();
   const toastError = useErrorToast();
   const { evaluation } = detail;
-  const exam = evaluation.mode === "exam";
-  const keyHidden = practicePolicyOf(evaluation.mode)?.needsKeyShown === true && !practiceKeyShown(evaluation.feedbackPolicy);
+  const policy = practicePolicyOf(evaluation.mode);
+  // A released exam's wording: its practice is only for those who took it.
+  // The policy table decides, never a test of the mode.
+  const takersOnly = policy?.needsTaken === true;
+  const keyHidden = policy?.needsKeyShown === true && !practiceKeyShown(evaluation.feedbackPolicy);
   // Opened, then the key hidden: the practice waits for the key, the switch
   // stays on and may still close it. Turning it on waits for the key.
   const suspended = keyHidden && afterDueSettingOf(evaluation.mode, evaluation.settings.afterDue) === "open";
@@ -54,7 +57,7 @@ export function AfterDueSetting({ detail }: { detail: EvaluationDetail }) {
           ? "eval.afterDue.suspended"
           : keyHidden
             ? "eval.afterDue.keyHidden"
-            : exam
+            : takersOnly
               ? "eval.afterDue.exam.desc"
               : "eval.afterDue.desc",
       )}
