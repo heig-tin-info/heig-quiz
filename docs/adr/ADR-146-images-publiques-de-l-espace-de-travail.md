@@ -47,54 +47,84 @@ know what the students run, only that the image keeps the contract.
 
 1. **The platform builds no student image, on any of its machines.** A
    session runs a public OCI image pulled from a registry (GitHub Container
-   Registry or Docker Hub), always by digest.
+   Registry or Docker Hub), always by digest, for `linux/amd64`. Every
+   container is started with `--pull=never`: the portal pulls only through
+   the admission of decision 5 or a deploy, never implicitly at a start.
 2. **The platform publishes `quiz-base`**, public, built and pushed by the
-   repository's CI: today's `c-dev` — Debian, code-server
-   and its extensions (status bar, clangd, debug), the Safe Exam Browser
+   repository's CI: today's `c-dev` — Debian, code-server and its
+   extensions (status bar, clangd, debug), the Safe Exam Browser
    workarounds, the entrypoint and the rest of the contract, and gcc, g++,
    gdb, make, git, python3, pytest and the man pages, and Baygon 0.7 for
-   the labs that run it today. Its contract tests ship in the image.
-3. **The default image is the portal's configuration**
-   (`CODESPACE_DEFAULT_IMAGE`), a `quiz-base` reference by digest, changed
-   by a deploy.
+   the labs that run it today. **A release is versioned and published only
+   from a production-approved run**, never from a staging deploy; the
+   moving tag teachers derive from (`latest`) points to the last release.
+   The host-driven `test.sh` stays the gate: the production portal deploy
+   pulls the new release, runs it against that digest, and switches only
+   on a pass (ADR-016's "only a pass takes the tag", carried over).
+3. **The platform's own runs are `quiz-base`, never a course image.** The
+   default image (`CODESPACE_DEFAULT_IMAGE`), the confined reader of the
+   deadline collection (`CODESPACE_IMAGE`, ADR-130) and the staff's review
+   sessions (ADR-129 §10) run the current `quiz-base` release by digest;
+   both variables move together, by a deploy that pulled the release
+   first. The released set (the digests of every `quiz-base` release) is a
+   portal configuration list, changed by a deploy.
 4. **A course holds a list of images**: a name and a reference
-   (`ghcr.io/…` or `docker.io/…`). A course owner adds, refreshes or
-   removes one (`requireCourseRole` owner, the pools' 403); every staff
-   member of the course reads the list. A project in the online workspace
-   picks the default or one image of its course's list.
-5. **An image is admitted before it is offered.** On adding or refreshing,
-   Quiz resolves the reference's tag to a digest and the portal pulls it
-   on the engine VM, as a job the course's Images screen follows
-   ("Downloading…", "Checking…", then ready or refused with its reason).
-   The portal checks, and refuses the image otherwise:
-   - it is public (an anonymous pull);
-   - its compressed size stays under a ceiling of the portal's
-     configuration;
-   - its first layers are those of a released `quiz-base`
-     (read from the manifest);
-   - `quiz-base`'s contract tests, run from the image in a session
-     container with the session's hardening, pass.
+   (`ghcr.io/…` or `docker.io/…`), at most five. A course owner who holds
+   the workspace grant (ADR-047, rule 4) adds, refreshes or removes one
+   (`requireCourseRole` owner, the pools' 403, then the grant's); every
+   staff member of the course reads the list. A project in the online
+   workspace picks the default or one image of its course's list. An image
+   a project uses cannot be removed.
+5. **An image is admitted before it is offered.** The portal resolves the
+   reference's tag to the `linux/amd64` manifest's digest, pulls it
+   anonymously on the engine VM, as a job the course's Images screen
+   follows ("Downloading…", "Checking…", then ready or refused with its
+   reason). Quiz offers only a ready image. The portal refuses the image
+   unless:
+   - the free disk stays above the floor before the pull, and its size on
+     disk after the pull stays under the ceiling (both portal
+     configuration);
+   - its first **uncompressed** layers (the config's `diff_ids`) are those
+     of a released `quiz-base`; the base version is read from that prefix,
+     never from a label the image can override;
+   - its `User`, `Entrypoint` and `Cmd` are the base's;
+   - the released base's contract check, run **from the portal's own copy**
+     against a container of the image under the session's hardening,
+     passes.
    The portal runs only digests it admitted; a reference it has not
-   admitted is refused at session start, whatever Quiz sends.
-6. **A digest never moves by itself.** A push to the image's tag changes
-   nothing until an owner presses Refresh, which re-resolves, re-pulls and
-   re-admits it. New sessions get the new digest; a running session keeps
-   its own.
+   admitted is accepted in a sync (the deadline and the update it carries
+   still apply) and refused at session start, with a page of its own.
+   **Admission catches accidents, not the image's author**: an author can
+   rewrite any file of the base. What protects security or integrity is
+   enforced at run time by the portal (the session's flags, `--user`, the
+   network, `--pull=never`), or is the course owner's responsibility, as
+   the lab's own repository already is.
+6. **A digest never moves by itself, and Refresh always applies.** A push
+   to the image's tag changes nothing until an owner presses Refresh, which
+   re-resolves, re-pulls and re-admits it. Refresh is never refused, even
+   while a project using it is open, `online_seb` included (owner,
+   2026-11-25): every container started afterwards — a new session, a
+   resume, a relaunch — runs the new digest; a running container keeps its
+   own.
 7. **An image on an older `quiz-base` still runs, and is marked obsolete.**
-   `quiz-base` carries its version as an OCI label; when a newer one is
-   released, the course's Images screen marks every image built on an
-   older one, and the course's owners are notified to rebuild it.
+   When a newer release exists, the course's Images screen marks every
+   image whose prefix is an older one, and the course's owners are
+   notified to rebuild it. A minimum base the portal accepts exists as a
+   setting, empty: it is filled only for a release that fixes a flaw.
 8. **No automatic deletion.** The administrator's console shows the disk
-   each pulled image takes, its courses and its last use; the
-   administrator frees space by hand, with the teachers.
+   each pulled image takes, its courses and its last use, for both
+   instances (staging and production share the engine VM's image store);
+   the administrator frees space by hand, with the teachers.
 9. **A course's image may bring notebook support back**
    ([ADR-047](ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24)
-   rule 4 holds for `quiz-base`, not for an image derived from it). The
-   product owner accepts the residual risk of the shared origin (audit
-   L24): a notebook's output runs script on the portal's origin, which
-   reaches the other sessions open in the same browser — a group member's,
-   or those of a staff member in a review session (ADR-129). One origin
-   per session (open question 70) stays the fix, tracked with the
+   rule 4 holds for `quiz-base`, not for an image derived from it). A
+   course image controls everything code-server serves on the portal's
+   shared origin (audit L24), notebooks and the workbench alike, so its
+   script reaches the other sessions open in the same browser. Decision 3
+   keeps the staff's review sessions out of it; the product owner accepts
+   the rest in writing (2026-11-25): a course's image against the sessions
+   of that course's students and of a group's members. One origin per
+   session (open question 70) stays the fix, tracked with the
    Jupyter-in-the-workspace issue (#1217).
 
 **Baygon 0.7 stays in `quiz-base` for now** (owner, 2026-11-25), so the
@@ -110,9 +140,12 @@ distribution repository.
 ## Consequences
 
 - The engine VM runs no teacher's code at build time and no deploy builds
-  an image; the rootful socket only pulls and runs. The hardening of a
-  session does not change: the same flags, read-only root, limits and
-  entrypoint for every image.
+  an image; the rootful socket only pulls and runs. The session's flags,
+  read-only root and limits do not change for any image.
+- Unpacking a third party's layers as root on the engine VM replaces the
+  supply-chain argument of ADR-016's 2026-11-18 amendment: accepted, the
+  pull bounded by the free-disk floor and the ceiling, the image never
+  started outside the session's hardening.
 - A lab in any language is a Containerfile in the teacher's own
   repository; the same image can be the `container:` of the lab's grading
   workflow, so the student works in the grader's environment.
@@ -143,14 +176,5 @@ distribution repository.
 
 ## Open
 
-- Must an image derive from `quiz-base`? The owner's word was "should";
-  the orchestrator made it a check of decision 5, because the contract
-  (the deadline in the status bar, the Safe Exam Browser workarounds, no
-  port proxy) lives in the image and the check is cheap. Assumed for now:
-  required.
-- Is an image too old for the portal ever refused (a code-server security
-  fix, a change of the status-bar extension's protocol with the portal)?
-  Assumed for now: never refused, only marked obsolete; `quiz-base` keeps
-  its contract backward compatible.
-- The size ceiling. Assumed for now: 3 GB compressed, `quiz-base`
-  included.
+- The ceilings. Assumed for now: 4 GB on disk per image, `quiz-base`
+  included; a free-disk floor of 20 GB before a pull.
