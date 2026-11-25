@@ -208,6 +208,34 @@ export type AuditAction =
    */
   | "codespace.session_closed"
   | "codespace.session_close_failed"
+  /**
+   * A course's workspace images (ADR-146 §4–§6), written by an owner with
+   * the workspace grant; subject the course, `payload.imageId`,
+   * `payload.name` and `payload.reference` (the owner's, canonical).
+   * `image_renamed` adds `payload.from`; `image_refreshed` the admission it
+   * asked for (`payload.candidate`, null when the digest in service was
+   * already the tag's: nothing to do); `image_removed` the digest it had
+   * in service (`payload.digestReference`).
+   */
+  | "codespace.image_added"
+  | "codespace.image_renamed"
+  | "codespace.image_refreshed"
+  | "codespace.image_removed"
+  /**
+   * The portal's verdict on a course image's admission, mirrored by the
+   * follow-up job (a system action; subject the course): `image_admitted`
+   * once ready (`payload.imageId`, `digestReference`, `previous` — the
+   * digest it replaced in service, null for the first —, `baseVersion`),
+   * `image_refused` (`payload.imageId`, `candidate`, `reason`, `detail`;
+   * the digest in service, if any, stays).
+   */
+  | "codespace.image_admitted"
+  | "codespace.image_refused"
+  /**
+   * An owner set the image a project runs (ADR-146 §4); subject the project,
+   * `payload.from` and `payload.to` (an image id, null for the default).
+   */
+  | "codespace.project_image"
   /** The teacher enabled the drill for a classroom (ADR-041 §6). */
   | "drill.enable"
   /** …and disabled it: its cards leave the sessions, their data is kept. */

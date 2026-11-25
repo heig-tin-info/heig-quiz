@@ -21,9 +21,10 @@
  * Off — `CODESPACE_URL` empty — the module registers nothing (every route a
  * 404) and {@link requestCodespaceSync} does nothing.
  *
- * It owns `codespace_projects` (`db/codespace.ts`) and reads the projects,
- * the course's staff and the grants by join; a project's `work_mode` is
- * written by the `project` module (`setWorkMode`).
+ * It owns `codespace_projects` and `course_workspace_images` (`db/codespace.ts`;
+ * a course's images and a project's choice are `images.ts`'s, ADR-146) and
+ * reads the projects, the course's staff and the grants by join; a project's
+ * `work_mode` is written by the `project` module (`setWorkMode`).
  */
 import { randomUUID } from "node:crypto";
 
@@ -76,7 +77,20 @@ import {
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import { kioskProjectsOn, type AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { classrooms, codespaceLaunches, codespaceProjects, codespaceReviews, courseStaff, enrollments, githubAccounts, projectRepos, projects, teacherGrants, users } from "../../db/schema.js";
+import {
+  classrooms,
+  codespaceLaunches,
+  codespaceProjects,
+  codespaceReviews,
+  courseStaff,
+  courseWorkspaceImages,
+  enrollments,
+  githubAccounts,
+  projectRepos,
+  projects,
+  teacherGrants,
+  users,
+} from "../../db/schema.js";
 import { knownEmails, normalizeEmail } from "../../identity.js";
 import { CODESPACE_SYNC_QUEUE } from "../../jobs.js";
 import { PORTAL } from "../../auth/session.js";
@@ -122,12 +136,27 @@ export async function grantOf(db: Db | Tx, userId: string): Promise<TeacherCodes
   };
 }
 
+/** The account holds an enabled workspace grant ({@link grantOf}): ADR-047 rule 4, what every workspace setting asks. */
+export async function hasGrant(db: Db | Tx, userId: string): Promise<boolean> {
+  return (await grantOf(db, userId))?.enabled === true;
+}
+
 // ---------------------------------------------------------------- the staff's view
 
-/** The `codespace_projects` row of a project, or the empty one it would be. */
+/** The `codespace_projects` row of a project, or the empty one it would be, with the course image it picks (ADR-146 §4). */
 async function portalState(db: Db, projectId: string) {
-  const [row] = await db.select().from(codespaceProjects).where(eq(codespaceProjects.projectId, projectId));
-  return row ?? { syncedAt: null, syncError: null, firstLaunchAt: null };
+  const [row] = await db
+    .select({
+      syncedAt: codespaceProjects.syncedAt,
+      syncError: codespaceProjects.syncError,
+      firstLaunchAt: codespaceProjects.firstLaunchAt,
+      imageId: courseWorkspaceImages.id,
+      imageName: courseWorkspaceImages.name,
+    })
+    .from(codespaceProjects)
+    .leftJoin(courseWorkspaceImages, eq(courseWorkspaceImages.id, codespaceProjects.imageId))
+    .where(eq(codespaceProjects.projectId, projectId));
+  return row ?? { syncedAt: null, syncError: null, firstLaunchAt: null, imageId: null, imageName: null };
 }
 
 /**
@@ -147,7 +176,7 @@ export async function projectWorkspace(
   caller: { userId: string; owner: boolean },
 ): Promise<ProjectWorkspace> {
   const state = await portalState(db, project.id);
-  const granted = caller.owner && (await grantOf(db, caller.userId))?.enabled === true;
+  const granted = caller.owner && (await hasGrant(db, caller.userId));
   const kioskOffered = kioskProjectsOn(config);
   const facts = { owner: caller.owner, granted, launched: state.firstLaunchAt !== null, groupMode: project.groupMode, kioskOffered };
   const holder = await holderGrant(db, courseId, project.createdBy);
@@ -165,6 +194,7 @@ export async function projectWorkspace(
     // A review session exists while the quota holder holds an enabled grant (ADR-129 §3).
     review: holder?.grant?.enabled === true,
     quota: holder?.grant ? { max: holder.grant.maxActiveSessions, seats: claimed?.seats ?? 0 } : null,
+    image: state.imageId === null || state.imageName === null ? null : { id: state.imageId, name: state.imageName },
   };
 }
 
@@ -277,13 +307,23 @@ export async function holderGrant(
  * the `commit` strategy, whose start route decides student by student
  * (#958; ADR-078 as amended 2026-10-29). It carries the teacher's update of
  * an `online` project ({@link workspaceUpdateOf}, ADR-132 §11), which the end
- * of every sync pass sends again.
+ * of every sync pass sends again. Its `image` is the digest in service of
+ * the course image the project picks (ADR-146 §4, §6), null for the
+ * default: never a tag, never a Refresh's candidate. (While the portal has
+ * no image route, no image is ever admitted, so it stays null.)
  */
 export async function syncPayload(db: Db, projectId: string): Promise<CodespaceAssignmentSync | null> {
   const [row] = await db
-    .select({ project: projects, classroomName: classrooms.name, courseId: classrooms.courseId })
+    .select({
+      project: projects,
+      classroomName: classrooms.name,
+      courseId: classrooms.courseId,
+      image: courseWorkspaceImages.digestReference,
+    })
     .from(projects)
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
+    .leftJoin(codespaceProjects, eq(codespaceProjects.projectId, projects.id))
+    .leftJoin(courseWorkspaceImages, eq(courseWorkspaceImages.id, codespaceProjects.imageId))
     .where(eq(projects.id, projectId));
   if (!row || !isOnlineMode(row.project.workMode) || row.project.distributionFullName === null) return null;
   const { project } = row;
@@ -297,7 +337,7 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     classroomId: project.classroomId,
     classroomName: row.classroomName,
     mode: project.workMode,
-    image: null,
+    image: row.image ?? null,
     sourceRepo: { fullName: project.distributionFullName, defaultBranch: project.branches[0] ?? "main" },
     browserExamKeys: [],
     teacher: holder,

@@ -534,6 +534,8 @@ export type CodespaceImageQuery = z.infer<typeof CodespaceImageQuery>;
  */
 export const ADMISSION_STATES = ["downloading", "checking", "ready", "refused"] as const;
 export type AdmissionState = (typeof ADMISSION_STATES)[number];
+/** The states of an admission still in flight: neither ready nor refused. */
+export const ADMISSION_IN_FLIGHT = ["downloading", "checking"] as const satisfies readonly AdmissionState[];
 
 /**
  * Why the portal refuses an image (ADR-146 §5), what Quiz renders through
@@ -670,6 +672,151 @@ export const CodespaceEngineImage = z.object({
   admissions: z.array(CodespaceEngineImageAdmission),
 });
 export type CodespaceEngineImage = z.infer<typeof CodespaceEngineImage>;
+
+// ---------------------------------------------------------- a course's workspace images (ADR-146 §4–§8, Quiz's side)
+
+/** A course holds at most this many images (ADR-146 §4): a sixth is `409 too_many_images`. */
+export const COURSE_WORKSPACE_IMAGES_MAX = 5;
+/** An image's name, as the staff read it in the course's list and the project's choice. */
+export const WORKSPACE_IMAGE_NAME_MAX = 60;
+
+/**
+ * Why a course image route refuses, past the loader's 404 and the role's
+ * `403 owner_required`:
+ *   - `codespace_not_granted` (403): an owner without the workspace grant
+ *     (ADR-047 rule 4), on a write;
+ *   - `too_many_images` (409): the course holds {@link COURSE_WORKSPACE_IMAGES_MAX};
+ *   - `name_taken` (409): another image of the course has that name (case ignored);
+ *   - `image_in_use` (409): a project of the course picks it, `projects` named;
+ *   - `image_not_ready` (409): a project picks an image with no digest in service;
+ *   - `not_found`, `not_public`, `config` (422) and `registry_unavailable`
+ *     (503): the portal's refusal of the reference ({@link IMAGE_ADMISSION_ERRORS}),
+ *     its `detail` quoted;
+ *   - `images_unavailable` (503): the portal does not serve images yet
+ *     (the rollout's guard: the list, when its `GET /api/images/base` is a
+ *     404; an add, a Refresh or the administrator's view, when the portal
+ *     route they call is);
+ *   - `portal_unavailable` (503): the portal could not be asked.
+ */
+export const WORKSPACE_IMAGE_ERRORS = [
+  "codespace_not_granted",
+  "too_many_images",
+  "name_taken",
+  "image_in_use",
+  "image_not_ready",
+  ...IMAGE_ADMISSION_ERRORS,
+  "images_unavailable",
+  "portal_unavailable",
+] as const;
+export type WorkspaceImageError = (typeof WORKSPACE_IMAGE_ERRORS)[number];
+
+/** `/app/api/courses/:id/workspace-images` (list, add). */
+export const courseWorkspaceImagesPath = (courseId: string): string =>
+  `/app/api/courses/${encodeURIComponent(courseId)}/workspace-images`;
+/** `/app/api/courses/:id/workspace-images/:imageId` (rename, remove); `/refresh` appended, the Refresh. */
+export const courseWorkspaceImagePath = (courseId: string, imageId: string): string =>
+  `${courseWorkspaceImagesPath(courseId)}/${encodeURIComponent(imageId)}`;
+/** `PUT`: a project's image (the staff's workspace setting). */
+export const projectWorkspaceImagePath = (projectId: string): string =>
+  `/app/api/projects/${encodeURIComponent(projectId)}/workspace/image`;
+/** `GET`: the administrator's view of the engine's image store (ADR-146 §8). */
+export const ADMIN_WORKSPACE_IMAGES_PATH = "/app/api/admin/workspace-images";
+
+/** `/courses/:id/workspace-images/:imageId`. */
+export const CourseWorkspaceImageParams = z.object({ id: z.uuid(), imageId: z.uuid() });
+export type CourseWorkspaceImageParams = z.infer<typeof CourseWorkspaceImageParams>;
+
+/** A name as a person typed it: trimmed, one line, not empty. */
+const WorkspaceImageName = z
+  .string()
+  .trim()
+  .min(1)
+  .max(WORKSPACE_IMAGE_NAME_MAX)
+  .refine((name) => !/[\u0000-\u001f\u007f]/.test(name), "A name is one line of text");
+
+/**
+ * `POST /app/api/courses/:id/workspace-images`: a name and a reference, by
+ * tag or by digest; the reference is stored canonical ({@link ImageReference})
+ * and never changes (to change it, remove the image and add another).
+ */
+export const CourseWorkspaceImageCreate = z.strictObject({ name: WorkspaceImageName, reference: ImageReference });
+export type CourseWorkspaceImageCreate = z.infer<typeof CourseWorkspaceImageCreate>;
+
+/** `PATCH /app/api/courses/:id/workspace-images/:imageId`: its name. */
+export const CourseWorkspaceImagePatch = z.strictObject({ name: WorkspaceImageName });
+export type CourseWorkspaceImagePatch = z.infer<typeof CourseWorkspaceImagePatch>;
+
+/** A project, as an image's users are named. */
+const NamedProject = z.object({ id: z.uuid(), name: z.string() });
+
+/**
+ * One image of a course, as its staff read it. `reference` is what the owner
+ * gave (canonical); `digestReference` the digest IN SERVICE — what a project
+ * runs, null until the first admission was ready: only then may a project
+ * pick it. `state`, `reason` and `detail` are the LAST admission's (a
+ * Refresh's candidate while the state is one of {@link ADMISSION_IN_FLIGHT});
+ * a refused Refresh leaves the digest in service, so a `refused` image with
+ * a `digestReference` still runs. `baseVersion` and `diskBytes` are the
+ * image in service's. `obsolete`: its base is older than the current
+ * `quiz-base` release (ADR-146 §7); null while either version is unknown.
+ * `projects`: the course's projects that pick it.
+ */
+export const CourseWorkspaceImage = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  reference: z.string(),
+  digestReference: z.string().nullable(),
+  state: z.enum(ADMISSION_STATES),
+  reason: z.enum(IMAGE_REFUSALS).nullable(),
+  detail: ImageDetail,
+  baseVersion: z.string().nullable(),
+  diskBytes: z.number().int().min(0).nullable(),
+  obsolete: z.boolean().nullable(),
+  projects: z.array(NamedProject),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export type CourseWorkspaceImage = z.infer<typeof CourseWorkspaceImage>;
+
+/**
+ * `GET /app/api/courses/:id/workspace-images` (every staff member of the
+ * course): its images, the current `quiz-base` release (null before the
+ * first one, or when the portal could not be asked), whether the CALLER may
+ * add, rename, refresh and remove (an owner with the workspace grant), and
+ * the cap.
+ */
+export const CourseWorkspaceImages = z.object({
+  images: z.array(CourseWorkspaceImage),
+  base: z.object({ reference: z.string(), version: z.string().nullable() }).nullable(),
+  canManage: z.boolean(),
+  max: z.number().int().min(1),
+});
+export type CourseWorkspaceImages = z.infer<typeof CourseWorkspaceImages>;
+
+/** `PUT /app/api/projects/:id/workspace/image`: one image of the project's course, or null for the default (`quiz-base`). */
+export const ProjectWorkspaceImageBody = z.strictObject({ imageId: z.uuid().nullable() });
+export type ProjectWorkspaceImageBody = z.infer<typeof ProjectWorkspaceImageBody>;
+
+/**
+ * One image of the engine's store as the administrator reads it (ADR-146
+ * §8): the portal's {@link CodespaceEngineImage}, and per admission of this
+ * instance the course images that name its reference (in service or as a
+ * Refresh's candidate), with the projects that pick them.
+ */
+export const AdminWorkspaceImage = CodespaceEngineImage.extend({
+  admissions: z.array(
+    CodespaceEngineImageAdmission.extend({
+      uses: z.array(
+        z.object({
+          course: z.object({ id: z.uuid(), name: z.string(), code: z.string() }),
+          image: z.object({ id: z.uuid(), name: z.string() }),
+          projects: z.array(NamedProject),
+        }),
+      ),
+    }),
+  ),
+});
+export type AdminWorkspaceImage = z.infer<typeof AdminWorkspaceImage>;
 
 /**
  * A repository's last collection, for its staff (ADR-130 §7): the outcome
@@ -813,6 +960,8 @@ export const ProjectWorkspace = z.object({
    * a quota holder or without a grant.
    */
   quota: z.object({ max: z.number().int().min(0), seats: z.number().int().min(0) }).nullable(),
+  /** The course image the project runs (ADR-146 §4); null: the default, `quiz-base`. */
+  image: z.object({ id: z.uuid(), name: z.string() }).nullable(),
 });
 export type ProjectWorkspace = z.infer<typeof ProjectWorkspace>;
 

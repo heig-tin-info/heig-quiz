@@ -48,6 +48,7 @@ const UNINDEXED_FOREIGN_KEYS: readonly { reason: string; keys: readonly ForeignK
       "contestations(resolved_by) -> users",
       "course_concepts(added_by) -> users",
       "course_documents(uploaded_by) -> users",
+      "course_workspace_images(created_by) -> users",
       "deadline_reminders(user_id) -> users",
       "evaluations(created_by) -> users",
       "github_classroom_links(linked_by) -> users",

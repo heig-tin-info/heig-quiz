@@ -1,7 +1,7 @@
 /**
  * Quiz's server-to-server call to the portal (ADR-047, ADR-078 §10): the
  * `codespace` module's one door to it, shared by `service.ts` and
- * `collect.ts`.
+ * `collect.ts` and `images.ts`.
  */
 import { randomUUID } from "node:crypto";
 

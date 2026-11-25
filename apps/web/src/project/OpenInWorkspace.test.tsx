@@ -35,6 +35,7 @@ const workspace = (over: Partial<ProjectWorkspace> = {}): ProjectWorkspace => ({
   syncError: null,
   review: true,
   quota: null,
+  image: null,
   ...over,
 });
 const project = (over: Partial<ProjectDetail> = {}) =>

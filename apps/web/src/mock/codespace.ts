@@ -76,6 +76,8 @@ function view(ws: MockWorkspace): ProjectWorkspace {
     review: true,
     // ADR-089 point 7: the persona's grant (mock/org.ts, 3 at once) against PRG1-2026's claimed students.
     quota: { max: 3, seats: classroomRoster("r1").filter((s) => s.status === "claimed" && !s.staff).length },
+    // ADR-146: the default image until the course images screen exists (PR4).
+    image: null,
   };
 }
 

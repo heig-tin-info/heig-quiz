@@ -9,7 +9,15 @@ import { randomUUID } from "node:crypto";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { defaultProjectGradingScale, StudentHome, StudentProject, type AdminTeacher } from "@quiz/contracts";
+import {
+  ADMIN_WORKSPACE_IMAGES_PATH,
+  courseWorkspaceImagesPath,
+  defaultProjectGradingScale,
+  projectWorkspaceImagePath,
+  StudentHome,
+  StudentProject,
+  type AdminTeacher,
+} from "@quiz/contracts";
 
 import { githubOrganizations, projects } from "../../db/schema.js";
 import { appKey } from "../../github/testing.js";
@@ -71,6 +79,13 @@ describe("the online workspace off (CODESPACE_URL empty)", () => {
     expect((await inject("PUT", `/app/api/projects/${id}/workspace/mode`, teacher.headers, { mode: "free" })).statusCode).toBe(404);
     expect((await inject("POST", `/app/api/projects/${id}/workspace/sync`, teacher.headers)).statusCode).toBe(404);
     expect((await inject("GET", `/app/api/projects/${id}/workspace/sessions`, teacher.headers)).statusCode).toBe(404);
+    // The workspace images (ADR-146) do not exist either.
+    const images = courseWorkspaceImagesPath(room.courseId);
+    expect((await inject("GET", images, teacher.headers)).statusCode).toBe(404);
+    expect((await inject("POST", images, teacher.headers, { name: "C", reference: "ghcr.io/acme/lab:1" })).statusCode).toBe(404);
+    expect((await inject("POST", `${images}/${randomUUID()}/refresh`, teacher.headers)).statusCode).toBe(404);
+    expect((await inject("PUT", projectWorkspaceImagePath(id), teacher.headers, { imageId: null })).statusCode).toBe(404);
+    expect((await inject("GET", ADMIN_WORKSPACE_IMAGES_PATH, admin.headers)).statusCode).toBe(404);
 
     const created = await inject("POST", "/app/api/admin/teachers", admin.headers, { email: "off@heig.test" });
     const gid = created.json().id as string;
