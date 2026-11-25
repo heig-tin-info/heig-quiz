@@ -812,6 +812,9 @@ live in `ui/state.ts`, each written once.
   "?" and "…" at its top right, the other actions on a row of their own
   under both — so once the primary has left for the FAB, the "?" never
   stands alone on a line under the description. From `lg`, one action row.
+  On a phone held in the hand ("Touch") it is `hidden`, as the help
+  assistant is gone (ADR-080 §7, amendment of 2026-11-24); the fields' "?"
+  stay, and the header keeps the layout the width gives it.
 - Help "?" (`HelpIcon`): **16 px**, `fg-faint` at rest, accent on hover, the
   same beside a 16 px section heading, a dialog title and a 13 px field
   label — it is a mark next to a word, not an action of its own, and one size
@@ -823,6 +826,9 @@ live in `ui/state.ts`, each written once.
   `0.0625em`, onto the letters, between the cap-height middle and the
   x-height middle. In `em` because the error it corrects is a fraction of the
   font size, so one value holds at 13 px and at 28 px.
+- The help drawer it opens (`help.tsx`): 340 px on the right, the whole width
+  under `sm` — beside a 340 px drawer, a phone kept a strip of page nobody
+  could read.
 - ToggleChip: a value you switch on, as a pill — `border-line-strong` on
   `surface` in `fg-muted` at rest, `accent-soft` on an `accent` border in
   `accent` when pressed, 28 px tall by default (a `size` of the control
@@ -1782,7 +1788,15 @@ questions) and the grade table (duration, e-mail).
 
 `T.container` is also `relative`: an `sr-only` label is `absolute`, and with
 no positioned ancestor inside the scroller it is placed against the page, past
-the scroller's clip, and widens the whole page on a phone.
+the scroller's clip, and widens the whole page on a phone (the admin's
+teachers table made a 390 px page 747 px wide). So EVERY wrapper that scrolls
+a table sideways carries `T.container`, or `relative` in a package that has
+no `T`; `ui/controlsGuard.test.ts` refuses an `overflow-x-auto` wrapper whose
+first child is a `<table>` without either. The page itself never scrolls
+sideways at 360 or 390 px: a wide grid (the grading table, the gradebook,
+the criteria matrix, the live grid, the heatmap) and the tab strip scroll
+inside their card. The screenshot script prints `OVERFLOW` for a scene whose
+page is wider than the window.
 
 ### Row cards (phone)
 
@@ -1880,7 +1894,17 @@ pinch zoom (`maximum-scale`, `user-scalable=no`): that fails WCAG 1.4.4, and
 iOS ignores it anyway — the cure for an unwanted zoom is the 16 px, not a
 locked page.
 
-`screenshots.mjs --touch` renders a scene as a touch screen.
+A phone may LOSE a feature only when it is held in the hand: narrow AND
+touch, `useTouchPhone` (`ui/layers.tsx`), never the width alone — a desktop
+zoomed to 200 % (N-A11Y-04) is as narrow and keeps every control, and a
+tablet keeps them too. A change of LAYOUT follows the width alone. Applied:
+the help assistant and the page's "?" (ADR-080 §7, amendment of 2026-11-24).
+What a touch phone removes is HIDDEN where a coach mark points at it (the
+page's "?" is `hidden`): the step then waits, unread, for the day it shows.
+
+`screenshots.mjs --touch` renders a scene as a touch screen; add `--fold`
+to see what a touch phone hides (a full-page capture drops the touch
+emulation while it resizes the window).
 
 ## The grading table (ADR-044)
 
@@ -2859,7 +2883,8 @@ moves to a floating action button at the bottom right under `lg`
   `--bottom-nav-h` is for the bar:
   - the toasts rise above it;
   - the help assistant's button (a tool dock) sits ABOVE it, and its panel
-    with it: the primary keeps the place nearest the thumb;
+    with it: the primary keeps the place nearest the thumb (on a phone held
+    in the hand there is no assistant, and its `--tool-dock-h` is zero);
   - the page's end spacer grows by it, so the last row's actions are never
     behind it;
   - the coach treats it as a bottom dock (`data-bottom-dock` on a wrapper
@@ -2881,7 +2906,8 @@ and a tool dock there, so nothing more stacks on them:
 - **Toasts go to the top** — every toast, not only the `top` corner's
   (`notify.tsx`). A toast may cover the top bar's avatar for its 6 s; that
   beats covering the actions at the bottom.
-- **The help assistant opens as a sheet**: full width, the window's height
+- **The help assistant opens as a sheet** (a narrow window with a mouse: on a
+  phone held in the hand there is no assistant at all): full width, the window's height
   less a 12 px strip of the page, its top corners rounded, over a dimmed
   page — the bottom sheet of `Sheet` under `lg`. Above the docks, the
   floating panel had a few lines left (about 98 px at 844×390, 40 on iOS).
@@ -3380,6 +3406,11 @@ placement over an `offset` and `Z.tool`.
   wider than the screen less 32 px, at most 576 px tall and never taller
   than the window under the top bar. The page stays usable behind it;
   Escape or the cross closes it and focus returns to the button.
+- **Not on a phone held in the hand** ("Touch"; ADR-080 §7, amendment of
+  2026-11-24): no button, no sheet, nothing asked of the server, and the
+  page's "?" is hidden with it. The conversations stay in the history, for
+  a computer. With no dock drawn, `--tool-dock-h` falls back to zero and the
+  page's end spacer shrinks by itself.
 - **On a phone** (`usePhoneScreen`): under `sm` wide (held upright, #849)
   or a low screen (in landscape, #450), the panel opens as a modal
   full-height bottom sheet instead (`ToolDock`'s `sheetOnPhone`) — the

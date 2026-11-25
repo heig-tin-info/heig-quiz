@@ -2,7 +2,9 @@
  * The teacher assistant (ADR-080, F-LLM-07): a `ToolDock` on every teacher
  * screen — the round button at the bottom right, in the neutral ink, and the
  * chat it opens above it. Under `lg`, while the pool's bulk bar is up, the
- * dock steps aside (`data-assist-dock`, `style.css`).
+ * dock steps aside (`data-assist-dock`, `style.css`). A phone held in the
+ * hand (`useTouchPhone`) gets no dock at all (ADR-080 §7, amendment of
+ * 2026-11-24).
  *
  * What it sends is the route pattern, the screen's help topic (the slot its
  * `PageHelpButton` fills), the UI language and the ids of the screen's
@@ -53,7 +55,7 @@ import { useI18n } from "../i18n";
 import { Markdown } from "../markdown";
 import { assistAvailabilityKey, assistConversationKey, assistConversationsKey } from "../queryKeys";
 import { parsePath, type Navigate, type Route } from "../router";
-import { Alert, Badge, Button, cx, IconButton, QueryError, RelativeTime, Spinner, ToolDock } from "../ui";
+import { Alert, Badge, Button, cx, IconButton, QueryError, RelativeTime, Spinner, ToolDock, useTouchPhone } from "../ui";
 import { isProposal, runAssistActions, type ActionOutcome } from "./actions";
 import { AssistCards } from "./AssistCards";
 import { assistContext, assistVisible } from "./context";
@@ -90,7 +92,10 @@ export function AssistDock({
   /** The app's router: an answer's in-app link moves the app without a reload. */
   navigate?: Navigate;
 }) {
-  const visible = assistVisible({ teacherUi, me, view: route.view });
+  // Not on a phone held in the hand (ADR-080 §7, amendment of 2026-11-24):
+  // the conversations stay on the server, for the computer.
+  const touchPhone = useTouchPhone();
+  const visible = assistVisible({ teacherUi, me, view: route.view }) && !touchPhone;
   const availability = useQuery({
     queryKey: assistAvailabilityKey,
     queryFn: () => api<AssistAvailability>("/app/api/assist/availability"),

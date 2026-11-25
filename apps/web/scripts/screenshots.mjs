@@ -7,7 +7,9 @@
 //
 // Flags: --dark, --width=390|768|1440 (repeatable), --height=<px>, --only=<substring> (=name: that scene only),
 //        --fold (viewport only, instead of the full page), --touch (a touch
-//        screen: coarse pointer, no hover), --lang=<tag> (the browser's language
+//        screen: coarse pointer, no hover; a full-page capture loses it while
+//        it resizes the window, so what a touch phone hides shows: add --fold),
+//        --lang=<tag> (the browser's language
 //        for every scene, over a scene's own: `--lang=de-CH` for German; it
 //        serves the scenes without `act` and those whose locators name no
 //        word, the others look for English or French labels), --list.
@@ -3108,6 +3110,7 @@ if (picked.length === 0) {
 fs.mkdirSync(OUT, { recursive: true });
 const browser = await chromium.launch();
 let failures = 0;
+let overflows = 0;
 
 for (const width of widths.length ? widths : [1440]) {
   const ctx = await browser.newContext({
@@ -3158,6 +3161,15 @@ for (const width of widths.length ? widths : [1440]) {
     } catch (e) {
       problems.push(`scene failed: ${String(e).split("\n")[0]}`);
     }
+    // The page itself never scrolls sideways (DESIGN.md, Tables): a wide grid scrolls inside its card.
+    // Measured before the shot: a full-page capture resizes the window and drops `--touch` while it lasts.
+    const overflow = await page
+      .evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth }))
+      .catch(() => null);
+    if (overflow && overflow.scroll > overflow.client) {
+      overflows += 1;
+      console.warn(`  OVERFLOW ${scene.name} at ${width}: the page is ${overflow.scroll} px wide in ${overflow.client} px`);
+    }
     const suffix = `${dark ? "-dark" : ""}${width === 1440 ? "" : `-${width}`}`;
     const file = path.join(OUT, `${scene.name}${suffix}.png`);
     await page.screenshot({ path: file, fullPage: fullPage && !scene.fold });
@@ -3172,3 +3184,4 @@ for (const width of widths.length ? widths : [1440]) {
 
 await browser.close();
 if (failures) console.error(`${failures} scene(s) reported console or page errors.`);
+if (overflows) console.error(`${overflows} scene(s) scroll sideways (OVERFLOW above).`);

@@ -175,7 +175,7 @@ export function CodeReview({
       ) : null}
 
       {shown.length === 0 ? null : (
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className={table.table}>
             <caption className="sr-only">{s.cases}</caption>
             <HeadRow>

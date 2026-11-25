@@ -16,11 +16,14 @@ function stubMedia(matches: (query: string) => boolean) {
 
 /**
  * A viewport at least `width` wide: `useMinWidth` reads `matchMedia`, and
- * jsdom has no layout. Undo it with the setup's narrow stub, kept before the
- * call (`const narrow = window.matchMedia`).
+ * jsdom has no layout. `coarse`: a touch screen (a tablet). Undo it with the
+ * setup's narrow stub, kept before the call
+ * (`const narrow = window.matchMedia`).
  */
-export function viewport(width: number) {
-  stubMedia((query) => Number(/min-width: (\d+)px/.exec(query)?.[1] ?? Infinity) <= width);
+export function viewport(width: number, { coarse = false }: { coarse?: boolean } = {}) {
+  stubMedia((query) =>
+    query === "(pointer: coarse)" ? coarse : Number(/min-width: (\d+)px/.exec(query)?.[1] ?? Infinity) <= width,
+  );
 }
 
 /**
@@ -34,9 +37,10 @@ export function lowScreen() {
 
 /**
  * A phone held upright (#849): under `sm` wide — `usePhoneScreen`'s query
- * matches, and neither a low screen's nor any `min-width` one does. Undo it
- * as `viewport`'s.
+ * matches, and neither a low screen's nor any `min-width` one does.
+ * `coarse`: a touch screen, which `useTouchPhone` needs as well (a narrow
+ * window with a mouse is a zoomed desktop). Undo it as `viewport`'s.
  */
-export function phoneScreen() {
-  stubMedia((query) => query.includes("max-width: 639.98px"));
+export function phoneScreen({ coarse = false }: { coarse?: boolean } = {}) {
+  stubMedia((query) => query.includes("max-width: 639.98px") || (coarse && query === "(pointer: coarse)"));
 }

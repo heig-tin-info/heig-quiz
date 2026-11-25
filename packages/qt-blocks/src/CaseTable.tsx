@@ -53,7 +53,7 @@ export function CaseTable({
   onSelect?: ((index: number) => void) | undefined;
 }): ReactNode {
   return (
-    <div className="overflow-x-auto">
+    <div className="relative overflow-x-auto">
       <table className={table.table}>
         <thead className={table.head}>
           <tr>

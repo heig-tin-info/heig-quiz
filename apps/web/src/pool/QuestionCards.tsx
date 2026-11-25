@@ -84,14 +84,19 @@ function QuestionCard({
     >
       <div className="flex min-w-0 items-start gap-2">
         <TypeGlyph type={row.type} />
-        <span className="min-w-0 flex-1 break-words text-[13px] font-semibold group-aria-[current=true]:text-accent">
-          {row.internalName}
-        </span>
-        {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}
-        {row.randomizable ? <ParameterizedBadge /> : null}
-        <ReviewBadge review={row.review} />
-        <ReportBadge count={row.openReports} />
-        <RowStatsButton row={row} statsFor={statsFor} />
+        {/* The badges wrap under the name rather than squeeze it: on a phone,
+            on one line with the star and the tick box, the name was left a
+            letter wide. The star and the tick box keep their place. */}
+        <div className="flex min-w-0 flex-1 flex-wrap items-start gap-x-2 gap-y-1">
+          <span className="min-w-[min(100%,10rem)] flex-1 break-words text-[13px] font-semibold group-aria-[current=true]:text-accent">
+            {row.internalName}
+          </span>
+          {row.deletedAt ? <Badge tone="zinc">{t("pool.deleted")}</Badge> : null}
+          {row.randomizable ? <ParameterizedBadge /> : null}
+          <ReviewBadge review={row.review} />
+          <ReportBadge count={row.openReports} />
+          <RowStatsButton row={row} statsFor={statsFor} />
+        </div>
         <StarButton row={row} onToggle={onStar} />
         {readOnly ? null : (
           <span onClick={(e) => e.stopPropagation()}>

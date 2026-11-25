@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { elapse, flowingClock } from "../test/clock";
 import { makeMe } from "../test/fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
+import { phoneScreen } from "../test/viewport";
+import { PageHeader } from "../ui";
 import { CoachLayer, visibleBottom } from "./CoachLayer";
 
 /*
@@ -15,7 +17,7 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
     this: HTMLElement,
   ) {
-    const box = this.hasAttribute("data-coach") ? { width: 120, height: 32 } : { width: 0, height: 0 };
+    const box = this.hasAttribute("data-coach") && !this.hidden ? { width: 120, height: 32 } : { width: 0, height: 0 };
     return { x: 400, y: 80, left: 400, top: 80, right: 400 + box.width, bottom: 80 + box.height, ...box, toJSON: () => ({}) };
   });
 });
@@ -129,6 +131,47 @@ describe("CoachLayer", () => {
     );
     await elapse(500);
     expect(await screen.findByText("Write a question")).toBeInTheDocument();
+  });
+});
+
+describe("the page's \"?\" on a phone held in the hand (ADR-080 §7, amendment of 2026-11-24)", () => {
+  const initial = window.matchMedia;
+  afterEach(() => vi.stubGlobal("matchMedia", initial));
+
+  async function skipHomeTour() {
+    const user = flowingClock();
+    const { calls } = mockFetch({ "POST /app/api/me/coach": ok({ seen: [] }) });
+    renderWithProviders(
+      <>
+        <PageHeader
+          title="Courses"
+          help="home"
+          actions={
+            <button type="button" data-coach="home.new-course">
+              New course
+            </button>
+          }
+        />
+        <CoachLayer me={makeMe({ coach: { enabled: null, seen: [] } })} view="home" teacherUi />
+      </>,
+    );
+    await elapse(1_000);
+    expect(await screen.findByText("Add a course")).toBeInTheDocument();
+    // Escape skips: everything left in the walk is read (a lone bubble has no "Skip").
+    await user.keyboard("{Escape}");
+    await elapse(500);
+    await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+    return calls.find((c) => c.method === "POST")?.body;
+  }
+
+  it("leaves the step on it, hidden there, unread", async () => {
+    phoneScreen({ coarse: true });
+    expect(await skipHomeTour()).toEqual({ seen: ["home.new-course"] });
+  });
+
+  it("keeps it in the walk with a mouse, however narrow", async () => {
+    phoneScreen();
+    expect(await skipHomeTour()).toEqual({ seen: ["home.new-course", "home.help"] });
   });
 });
 

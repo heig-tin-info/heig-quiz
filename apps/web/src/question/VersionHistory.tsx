@@ -142,7 +142,7 @@ export function VersionHistory({
 
   return (
     <div className="space-y-4">
-      <Card className="overflow-x-auto">
+      <Card className={cx(T.container, "overflow-x-auto")}>
         <table className={T.table}>
           <TableHead columns={columns} sort={sort} onToggle={toggle} />
           <tbody>

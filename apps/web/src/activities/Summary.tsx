@@ -91,9 +91,12 @@ function Chip({ tone, children }: { tone: "success" | "warning"; children: React
   );
 }
 
-/** The tile's last line, on its bottom edge whatever the tiles beside it hold. */
+/**
+ * The tile's last line, on its bottom edge whatever the tiles beside it hold.
+ * A title of one long word breaks: half a phone's width does not hold it.
+ */
 const Foot = ({ children }: { children: ReactNode }) => (
-  <span className="mt-auto block pt-1 leading-snug">{children}</span>
+  <span className="mt-auto block break-words pt-1 leading-snug">{children}</span>
 );
 
 

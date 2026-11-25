@@ -225,7 +225,9 @@ export function ActivityTable({ rows, navigate, onEnd }: ViewProps) {
 export function ActivityCards({ rows, navigate, onEnd }: ViewProps) {
   const t = useT();
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    // `grid-cols-1` and `min-w-0`: a track and a card sized by a long title
+    // that should truncate widen the page on a phone.
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {rows.map((row) => {
         const Icon = TYPE_ICON[typeOf(row)];
         const anchor = anchorOf(row);
@@ -236,7 +238,7 @@ export function ActivityCards({ rows, navigate, onEnd }: ViewProps) {
             interactive
             {...openProps(row, navigate)}
             aria-label={row.title}
-            className="flex flex-col gap-3 p-5"
+            className="flex min-w-0 flex-col gap-3 p-5"
           >
             <div className="flex items-center gap-2 text-[13px] text-fg-muted">
               <Icon aria-hidden className="size-4 shrink-0 text-fg-faint" />
@@ -324,7 +326,7 @@ export function ActivitySchedule({ rows, navigate, onEnd, now }: ViewProps & { n
         <section key={week.start ?? "undated"} aria-label={week.start === null ? t("activities.week.undated") : undefined}>
           <h2
             className={cx(
-              "mb-2 text-sm font-semibold",
+              "mb-2 break-words text-sm font-semibold",
               week.start === thisWeek ? "text-fg" : "text-fg-muted",
             )}
           >
