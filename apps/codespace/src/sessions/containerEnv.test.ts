@@ -140,7 +140,6 @@ describe("engine.runArgs — the container environment carries only these variab
     network: "codespace",
     gateway: "10.77.0.254",
     seccompProfile: "/repo/infra/seccomp/codespace.json",
-    image: "codespace/c-dev:4.137.0",
     memory: "1536m",
     cpus: "1",
     pidsLimit: 256,
@@ -152,7 +151,7 @@ describe("engine.runArgs — the container environment carries only these variab
     URLS,
     user(),
   );
-  const args = engine.runArgs({ sessionId: "s1", name: "cs-s1", workDir: "/vol/a/b/work", env });
+  const args = engine.runArgs({ sessionId: "s1", name: "cs-s1", workDir: "/vol/a/b/work", env, image: "codespace/c-dev:4.137.0" });
 
   /** The values of every `-e` on the command line. */
   function envArgs(argv: string[]): string[] {
@@ -170,6 +169,7 @@ describe("engine.runArgs — the container environment carries only these variab
       sessionId: "s4",
       name: "cs-s4",
       workDir: "/vol/a/b/work",
+      image: "codespace/c-dev:4.137.0",
       env: containerEnvFor(session({ launchJti: "jti-1", sebVerified: true }), assignment(), URLS, user()),
     });
     expect(envArgs(seb)).toContain("CODESPACE_SEB=1");
@@ -188,6 +188,7 @@ describe("engine.runArgs — the container environment carries only these variab
       sessionId: "s3",
       name: "cs-s3",
       workDir: "/vol/a/b/work",
+      image: "codespace/c-dev:4.137.0",
       env: containerEnvFor(session(), assignment(), URLS, user({ displayName: "Jean-Luc D'Arc" })),
     });
     expect(envArgs(spaced)).toContain("GIT_AUTHOR_NAME=Jean-Luc D'Arc");
@@ -199,7 +200,7 @@ describe("engine.runArgs — the container environment carries only these variab
   });
 
   it("sets no variable when the caller gives none", () => {
-    const bare = engine.runArgs({ sessionId: "s2", name: "cs-s2", workDir: "/vol/a/b/work" });
+    const bare = engine.runArgs({ sessionId: "s2", name: "cs-s2", workDir: "/vol/a/b/work", image: "codespace/c-dev:4.137.0" });
     expect(envArgs(bare)).toEqual([]);
   });
 

@@ -42,7 +42,7 @@ const fakeEngine: Engine = {
     state: "running",
     ip: "10.77.0.9",
   }),
-  inspect: async (name): Promise<ContainerInfo | null> => ({
+  inspect: async (name): Promise<ContainerInfo | null> => name.startsWith("dead-") ? null : ({
     id: "ctr",
     name,
     sessionId: "s1",
@@ -262,6 +262,26 @@ describe("one origin for every session (audit L24, invariant 14)", () => {
 });
 
 describe("proxy refusals", () => {
+  it("409 with its own page when a dead container's restart names an image not admitted (ADR-146 §6)", async () => {
+    const now = new Date();
+    handle.db
+      .insert(assignments)
+      .values({ id: "go", title: "go", mode: "lab", image: "x", imageRef: `ghcr.io/heig/lab-go@sha256:${"c".repeat(64)}`, createdAt: now })
+      .run();
+    handle.db
+      .insert(sessions)
+      .values({ id: "s3", userId: "u1", student: "student", assignmentId: "go", containerName: "dead-s3", volumeDir: "/tmp/vol/s3", state: "running", createdAt: now, lastSeen: now, cookieToken: TOKEN })
+      .run();
+    const res = await portal.app.inject({
+      method: "GET",
+      url: "/s/s3/",
+      cookies: { [SESSION_COOKIE]: cookieValue("s3", TOKEN) },
+      headers: { "accept-language": "en" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.body).toContain("Workspace not ready");
+  });
+
   it("403 without a session cookie", async () => {
     const res = await portal.app.inject({ method: "GET", url: "/s/s1/" });
     expect(res.statusCode).toBe(403);

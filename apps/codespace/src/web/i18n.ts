@@ -77,6 +77,9 @@ const en = {
   sessionUnavailableTitle: "Session unavailable",
   sessionRestartFailed: "The container could not be restarted. Your volume is intact; try again.",
   sessionNoAddress: "The container has no address.",
+  // --- an image the portal has not admitted (ADR-146 §5)
+  imageRefusedTitle: "Workspace not ready",
+  imageRefusedDetail: "This project's image is not ready on the workspace server. Your work is kept. Tell your teacher.",
   portProxyTitle: "Port forwarding unavailable",
   portProxyDetail: "The online workspace does not open a program's ports in the browser.",
 };
@@ -89,13 +92,13 @@ const fr: Record<MessageKey, string> = {
   back: "Retour",
   workspaceErrorTitle: "Espace de travail impossible à préparer",
   workspaceErrorDetail:
-    "Espace de travail impossible à préparer : {cause} ; signalez-le à votre enseignant.",
+    "Espace de travail impossible à préparer : {cause} ; signalez-le à l'équipe enseignante.",
   sourceRepository: "le dépôt source",
   causeNoAccess: "le portail n'a pas les accès à {where}",
   causeNotFound: "dépôt {where} introuvable",
   causeDenied: "accès refusé au dépôt {where}",
   causeFetchFailed: "récupération de {where} impossible",
-  causeEmptyTemplate: "le modèle de l'enseignant ne contient aucune branche",
+  causeEmptyTemplate: "le modèle de l'équipe enseignante ne contient aucune branche",
   launchRefused: "Lancement refusé",
   launchMissingToken: "Aucun jeton de lancement.",
   launchExpired:
@@ -106,7 +109,7 @@ const fr: Record<MessageKey, string> = {
   launchReplayed:
     "Ce lien de lancement a déjà servi. Retournez sur la plateforme et ouvrez de nouveau l'activité.",
   launchUnknownAssignment:
-    "Activité non synchronisée depuis la plateforme. Prévenez votre enseignant : l'activité doit être enregistrée sur la plateforme avant d'être lancée.",
+    "Activité non synchronisée depuis la plateforme. Prévenez l'équipe enseignante : l'activité doit être enregistrée sur la plateforme avant d'être lancée.",
   launchClosed: "La fenêtre d'ouverture de cette activité est close.",
   launchSittingClosed: "Votre session sur ce poste est terminée. Appelez la surveillance.",
   launchRepoMissing:
@@ -114,7 +117,7 @@ const fr: Record<MessageKey, string> = {
   launchBadAssignmentId: "Cette activité porte un identifiant inutilisable par le portail.",
   quotaTitle: "Quota atteint",
   quotaDetail:
-    "Toutes les places d'environnement de votre enseignant sont occupées. Réessayez plus tard.",
+    "Toutes les places d'environnement de l'équipe enseignante sont occupées. Réessayez plus tard.",
   reviewExpired:
     "Ce lien a expiré. Retournez sur la page du projet et ouvrez de nouveau le dépôt dans l'espace de travail.",
   reviewInvalid:
@@ -128,7 +131,7 @@ const fr: Record<MessageKey, string> = {
   unknownAssignment: "Activité inconnue",
   outsideSebTitle: "Session hors Safe Exam Browser",
   outsideSebIntro:
-    "Cette épreuve ne peut être ouverte que depuis Safe Exam Browser, lancé par le lien fourni par l'enseignant.",
+    "Cette épreuve ne peut être ouverte que depuis Safe Exam Browser, lancé par le lien fourni par l'équipe enseignante.",
   outsideSebHelp:
     "Si vous pensez que c'est une erreur, appelez le surveillant : ne recommencez pas depuis un autre navigateur.",
   sebOtherMachine: "Cette session a été ouverte depuis un autre poste.",
@@ -147,6 +150,9 @@ const fr: Record<MessageKey, string> = {
   sessionUnavailableTitle: "Session indisponible",
   sessionRestartFailed: "Le conteneur n'a pas pu être relancé. Votre volume est intact ; réessayez.",
   sessionNoAddress: "Le conteneur n'a pas d'adresse.",
+  imageRefusedTitle: "Espace de travail pas prêt",
+  imageRefusedDetail:
+    "L'image de ce projet n'est pas prête sur le serveur de l'espace de travail. Votre travail est conservé. Signalez-le à l'équipe enseignante.",
   portProxyTitle: "Redirection de port indisponible",
   portProxyDetail: "L'espace de travail en ligne n'ouvre pas les ports d'un programme dans le navigateur.",
 };
@@ -215,6 +221,9 @@ const de: Record<MessageKey, string> = {
   sessionRestartFailed:
     "Der Container konnte nicht neu gestartet werden. Ihr Volume ist intakt. Versuchen Sie es erneut.",
   sessionNoAddress: "Der Container hat keine Adresse.",
+  imageRefusedTitle: "Arbeitsbereich nicht bereit",
+  imageRefusedDetail:
+    "Das Image dieses Projekts ist auf dem Server des Arbeitsbereichs nicht bereit. Ihre Arbeit bleibt erhalten. Wenden Sie sich an das Lehrteam.",
   portProxyTitle: "Portweiterleitung nicht verfügbar",
   portProxyDetail: "Der Online-Arbeitsbereich öffnet die Ports eines Programms nicht im Browser.",
 };
@@ -284,6 +293,9 @@ const it: Record<MessageKey, string> = {
   sessionRestartFailed:
     "Non è stato possibile riavviare il container. Il suo volume è intatto. Riprovare.",
   sessionNoAddress: "Il container non ha un indirizzo.",
+  imageRefusedTitle: "Spazio di lavoro non pronto",
+  imageRefusedDetail:
+    "L'immagine di questo progetto non è pronta sul server dello spazio di lavoro. Il lavoro è conservato. Informare il team docente.",
   portProxyTitle: "Inoltro delle porte non disponibile",
   portProxyDetail: "Lo spazio di lavoro online non apre nel browser le porte di un programma.",
 };

@@ -2,8 +2,29 @@ import { signHs256, verifyHs256 } from "@quiz/domain";
 import { describe, expect, it } from "vitest";
 
 import {
+  ADMISSION_STATES,
   CODESPACE_ISSUERS,
   CodespaceAssignmentSync,
+  CodespaceBaseImage,
+  CodespaceEngineImage,
+  CodespaceImageAdmission,
+  CodespaceImageAdmissionError,
+  CodespaceImageAdmissionRequest,
+  CodespaceImageQuery,
+  DigestReference,
+  ENGINE_IMAGE_KINDS,
+  IMAGE_ADMISSION_ERRORS,
+  IMAGE_ADMISSIONS_PATH,
+  IMAGE_REMOVE_REFUSALS,
+  IMAGE_SOURCES,
+  IMAGE_BASE_PATH,
+  IMAGE_DETAIL_MAX,
+  IMAGE_REFUSALS,
+  IMAGES_PATH,
+  ImageDigest,
+  ImageReference,
+  imageAdmissionPath,
+  imagePath,
   CodespaceAssignmentSyncResult,
   CodespaceCollectionRequest,
   CodespaceCollectionResult,
@@ -120,11 +141,12 @@ describe("LaunchTokenClaims", () => {
 describe("ServiceTokenClaims", () => {
   const claims = { iss: "heig-quiz", aud: SERVICE_AUDIENCE, iat: 1, exp: 121, jti: "j", method: "PUT", path: "/api/assignments/a1", bodyHash: "h" };
 
-  it("comes from Quiz only, for the portal's three methods", () => {
+  it("comes from Quiz only, for the portal's four methods (DELETE since ADR-146)", () => {
     expect(ServiceTokenClaims.safeParse({ ...claims, iss: "heig-classroom" }).success).toBe(false);
     expect(ServiceTokenClaims.safeParse({ ...claims, iss: PORTAL_ISSUER }).success).toBe(false);
     expect(ServiceTokenClaims.safeParse({ ...claims, method: "POST" }).success).toBe(true);
-    expect(ServiceTokenClaims.safeParse({ ...claims, method: "DELETE" }).success).toBe(false);
+    expect(ServiceTokenClaims.safeParse({ ...claims, method: "DELETE" }).success).toBe(true);
+    expect(ServiceTokenClaims.safeParse({ ...claims, method: "PATCH" }).success).toBe(false);
   });
 
   it("is bound to one request, with a jti, for two minutes at most", () => {
@@ -364,5 +386,87 @@ describe("the collection at the deadline (ADR-130)", () => {
     expect(CodespaceCollectionResult.safeParse({ outcome: "failed", reason: "push_rejected" }).success).toBe(true);
     expect(CodespaceCollectionResult.safeParse({ outcome: "failed", reason: "anything" }).success).toBe(false);
     expect(CodespaceCollectionResult.safeParse({ outcome: "collected" }).success).toBe(false);
+  });
+});
+
+describe("workspace images (ADR-146)", () => {
+  const digest = `sha256:${"a".repeat(64)}`;
+
+  it("a sync's image is a digest reference or null, normalized", () => {
+    const base = {
+      id: "asg-1",
+      slug: "lab1",
+      name: "Lab 1",
+      classroomId: "c1",
+      classroomName: "Class",
+      mode: "online",
+      sourceRepo: { fullName: "org/tpl", defaultBranch: "main" },
+      browserExamKeys: [],
+      teacher: { id: "t1", email: "t@heig-vd.ch" },
+      quota: { maxActiveSessions: 2 },
+      startAt: "2026-10-05T08:00:00.000Z",
+      deadlineAt: null,
+    };
+    expect(CodespaceAssignmentSync.parse({ ...base, image: null }).image).toBeNull();
+    expect(CodespaceAssignmentSync.parse({ ...base, image: `ghcr.io/org/lab:1@${digest}` }).image).toBe(`ghcr.io/org/lab@${digest}`);
+    expect(CodespaceAssignmentSync.parse({ ...base, image: `org/lab@${digest}` }).image).toBe(`docker.io/org/lab@${digest}`);
+    for (const bad of ["ghcr.io/org/lab:1", "codespace/c-dev:4.137.0", `quay.io/org/lab@${digest}`, ""]) {
+      expect(CodespaceAssignmentSync.safeParse({ ...base, image: bad }).success, bad).toBe(false);
+    }
+  });
+
+  it("an admission request takes a tag or a digest, canonical, and nothing else", () => {
+    expect(CodespaceImageAdmissionRequest.parse({ reference: "debian" })).toEqual({ reference: "docker.io/library/debian:latest" });
+    expect(CodespaceImageAdmissionRequest.parse({ reference: `ghcr.io/o/i@${digest}` }).reference).toBe(`ghcr.io/o/i@${digest}`);
+    expect(ImageReference.safeParse("ghcr.io/O/i").success).toBe(false);
+    expect(CodespaceImageAdmissionRequest.safeParse({ reference: "ghcr.io/o/i", extra: 1 }).success).toBe(false);
+    expect(DigestReference.safeParse("ghcr.io/o/i:1").success).toBe(false);
+    expect(ImageDigest.safeParse(digest).success).toBe(true);
+  });
+
+  it("an admission, the base, an engine image and the errors", () => {
+    const admission = {
+      reference: `ghcr.io/o/i@${digest}`,
+      digest,
+      state: "refused",
+      reason: "not_on_base",
+      detail: "x",
+      baseVersion: null,
+      compressedBytes: 10,
+      diskBytes: null,
+      updatedAt: "2026-11-25T08:00:00.000Z",
+    };
+    expect(CodespaceImageAdmission.safeParse(admission).success).toBe(true);
+    expect(CodespaceImageAdmission.safeParse({ ...admission, reason: "other" }).success).toBe(false);
+    expect(CodespaceImageAdmission.safeParse({ ...admission, detail: "x".repeat(IMAGE_DETAIL_MAX + 1) }).success).toBe(false);
+    expect(ADMISSION_STATES).toContain("ready");
+    expect(IMAGE_REFUSALS).toContain("interrupted");
+    expect(CodespaceBaseImage.safeParse({ reference: `ghcr.io/o/b@${digest}`, digest, version: "1.0.0" }).success).toBe(true);
+    const admitted = { reference: "codespace/c-dev:4.137.0", digest: "sha256:1", source: "default", state: "ready", lastUsedAt: null, liveSessions: 0 };
+    expect(CodespaceEngineImage.safeParse({ id: "sha256:1", names: ["localhost/codespace/c-dev:4.137.0"], diskBytes: 1, kind: "default", admissions: [admitted] }).success).toBe(true);
+    expect(CodespaceEngineImage.safeParse({ id: null, names: [], diskBytes: null, kind: "admitted", admissions: [{ ...admitted, source: "other" }] }).success).toBe(false);
+    expect(IMAGE_SOURCES).toEqual(["default", "course"]);
+    expect(IMAGE_REMOVE_REFUSALS).toContain("image_in_use");
+    expect(ENGINE_IMAGE_KINDS).toContain("orphan");
+    expect(CodespaceImageAdmissionError.safeParse({ error: "registry_unavailable" }).success).toBe(true);
+    // Only what a 422 or a 503 carries.
+    expect(CodespaceImageAdmissionError.safeParse({ error: "too_large" }).success).toBe(false);
+    expect(IMAGE_ADMISSION_ERRORS).toEqual(["not_found", "not_public", "config", "registry_unavailable"]);
+    expect(IMAGE_BASE_PATH).toBe("/api/images/base");
+  });
+
+  it("addresses an admission by its reference, in the query, URL-encoded", () => {
+    const reference = `ghcr.io/o/i@${digest}`;
+    expect(imageAdmissionPath(reference)).toBe(`${IMAGE_ADMISSIONS_PATH}?reference=ghcr.io%2Fo%2Fi%40sha256%3A${"a".repeat(64)}`);
+    expect(imagePath(reference)).toBe(`${IMAGES_PATH}?reference=ghcr.io%2Fo%2Fi%40sha256%3A${"a".repeat(64)}`);
+    expect(CodespaceImageQuery.parse({ reference: `o/i@${digest}` })).toEqual({ reference: `docker.io/o/i@${digest}` });
+    expect(CodespaceImageQuery.safeParse({ reference: "ghcr.io/o/i:1" }).success).toBe(false);
+    expect(CodespaceImageQuery.safeParse({ reference, x: 1 }).success).toBe(false);
+  });
+
+  it("a service token may bind a DELETE", () => {
+    const claims = { iss: "heig-quiz", aud: SERVICE_AUDIENCE, iat: 1, exp: 100, jti: "j", method: "DELETE", path: imagePath(digest) };
+    expect(ServiceTokenClaims.safeParse(claims).success).toBe(true);
+    expect(ServiceTokenClaims.safeParse({ ...claims, method: "PATCH" }).success).toBe(false);
   });
 });

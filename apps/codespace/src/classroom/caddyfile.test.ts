@@ -32,9 +32,17 @@ const DEPLOYMENT = readFileSync(
 
 /** The service routes of `routes.ts`, which only Quiz's API calls. */
 const SERVICE_ROUTES = [
+  "DELETE /api/images",
   "GET /api/assignments/:assignmentId/sessions",
+  "GET /api/images",
+  "GET /api/images/admissions",
+  "GET /api/images/base",
   "HEAD /api/assignments/:assignmentId/sessions",
+  "HEAD /api/images",
+  "HEAD /api/images/admissions",
+  "HEAD /api/images/base",
   "POST /api/assignments/:assignmentId/collections",
+  "POST /api/images/admissions",
   "POST /api/sittings/close",
   "PUT /api/assignments/:assignmentId",
 ];
@@ -122,8 +130,8 @@ describe("the Caddy allow-list of the service API", () => {
     // Each restricted route is a service route: without a token, the
     // service token's 401.
     for (const route of restricted.filter((r) => !r.startsWith("HEAD "))) {
-      const [method, path] = route.split(" ") as ["GET" | "PUT", string];
-      const reply = await portal.app.inject({ method, url: concrete(path), ...(method === "PUT" ? { payload: {} } : {}) });
+      const [method, path] = route.split(" ") as ["GET" | "PUT" | "POST" | "DELETE", string];
+      const reply = await portal.app.inject({ method, url: concrete(path), ...(method === "PUT" || method === "POST" ? { payload: {} } : {}) });
       expect(reply.statusCode, route).toBe(401);
     }
   });

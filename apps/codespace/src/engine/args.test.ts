@@ -3,6 +3,8 @@
  * adds `--cgroup-parent=<slice>` to the Podman arguments, and nothing else.
  * Pure (no Podman), so in the unit suite, unlike `index.test.ts`.
  */
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import { loadConfig } from "../auth/config.js";
@@ -17,12 +19,11 @@ function runArgs(cgroupParent?: string): string[] {
     gateway: "10.77.0.254",
     seccompProfile: "/repo/infra/seccomp/codespace.json",
     apparmorProfile: "codespace",
-    image: "codespace/c-dev:4.137.0",
     memory: "1536m",
     cpus: "1",
     pidsLimit: 256,
     ...(cgroupParent === undefined ? {} : { cgroupParent }),
-  }).runArgs({ sessionId: "s1", name: "cs-s1", workDir: "/vol/student/tp/work" });
+  }).runArgs({ sessionId: "s1", name: "cs-s1", workDir: "/vol/student/tp/work", image: "codespace/c-dev:4.137.0" });
 }
 
 describe("engine.runArgs — the slice (M6-05)", () => {
@@ -36,6 +37,16 @@ describe("engine.runArgs — the slice (M6-05)", () => {
     ]);
     expect(plain.some((a) => a.startsWith("--cgroup-parent"))).toBe(false);
     expect(runArgs("")).toEqual(plain);
+  });
+
+  it("never pulls at a start, and runs as the image's student (ADR-146 §1, §5), as run-hardened.sh says", () => {
+    const script = readFileSync(new URL("../../images/quiz-base/run-hardened.sh", import.meta.url), "utf8");
+    expect(script).toMatch(/^\s+--pull=never \\$/m);
+    expect(script).toMatch(/^\s+--user 1000:1000 \\$/m);
+    const args = runArgs();
+    expect(args).toContain("--pull=never");
+    expect(args[args.indexOf("--user") + 1]).toBe("1000:1000");
+    expect(args.at(-1)).toBe("codespace/c-dev:4.137.0");
   });
 
   it("takes a slice unit name or nothing", () => {

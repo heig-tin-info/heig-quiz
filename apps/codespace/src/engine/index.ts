@@ -8,7 +8,7 @@
  *     creates its containers in a pasta network namespace and everything
  *     measured afterwards is wrong (docs/setup-workstation.md, pitfall 2).
  *  2. **The hardening options are those of
- *     `images/c-dev/run-hardened.sh`, taken as they are** (invariant 3).
+ *     `images/quiz-base/run-hardened.sh`, taken as they are** (invariant 3).
  *     `runArgs()` returns them explicitly so that a test can compare them
  *     against the script.
  *
@@ -35,6 +35,12 @@ const execFileAsync = promisify(execFile);
 
 /** Label that marks a session container, and nothing else. */
 export const SESSION_LABEL = "heig-codespace.session";
+
+/**
+ * Every container the portal starts names an image already on the engine
+ * (ADR-146 §1): Podman never pulls at a start. `run-hardened.sh` says the same.
+ */
+export const PULL_NEVER = "--pull=never";
 
 /** Label naming the portal instance a session container belongs to (M6-04). */
 export const INSTANCE_LABEL = "heig-codespace.instance";
@@ -88,10 +94,9 @@ export interface EngineOptions {
    * allows `ptrace peer=<bare profile name>` only, and since kernel
    * 7.0.0-31 the traced process carries the stacked label `<profile>//&crun`,
    * so gdb is denied. See `infra/apparmor/codespace` and
-   * `images/c-dev/README.md` § AppArmor.
+   * `images/quiz-base/README.md` § AppArmor.
    */
   apparmorProfile?: string;
-  image: string;
   memory: string;
   cpus: string;
   pidsLimit: number;
@@ -111,8 +116,11 @@ export interface RunRequest {
   name: string;
   /** `<VOLUMES_ROOT>/<student>/<assignment>/work`, mounted at `/work`. */
   workDir: string;
-  /** Overrides `EngineOptions.image` when the assignment mandates another image. */
-  image?: string;
+  /**
+   * The image, always named by the caller (ADR-146 §3): the session manager
+   * owns which one, the default or an admitted course image.
+   */
+  image: string;
   /**
    * Environment variables set on the container, in addition to those of the
    * image. **Invariant 1**: no secret ever gets in. The only caller is
@@ -174,7 +182,7 @@ export type Confinement = Pick<EngineOptions, "seccompProfile" | "apparmorProfil
 export type Limits = Pick<EngineOptions, "pidsLimit" | "memory" | "cpus">;
 
 /**
- * The hardening of `images/c-dev/run-hardened.sh` (invariant 3), the same for
+ * The hardening of `images/quiz-base/run-hardened.sh` (invariant 3), the same for
  * every container the portal starts: a session's (`runArgs`) and the
  * collection's confined reader (`engine/reader.ts`). Only the tmpfs list and
  * the limits differ; nothing here can be relaxed by one caller alone.
@@ -201,6 +209,12 @@ export function hardeningArgs(c: Confinement, tmpfs: readonly string[], limits: 
     ...(c.cgroupParent ? [`--cgroup-parent=${c.cgroupParent}`] : []),
   ];
 }
+
+/** The user every container of the portal runs as: `quiz-base`'s student, uid and gid 1000. */
+export const SESSION_USER = "1000:1000";
+
+/** A session's tmpfs mounts, those of run-hardened.sh: the admission container has them too. */
+export const SESSION_TMPFS: readonly string[] = ["/tmp", "/run:rw,nosuid,nodev,mode=1777", "/home/student/.cache:rw,nosuid,nodev,mode=1777"];
 
 /** Minimal shape of what `podman inspect --format json` gives us back. */
 interface PodmanInspect {
@@ -252,6 +266,9 @@ export function createEngine(opts: EngineOptions): Engine {
     return [
       "run",
       "-d",
+      // Never an implicit pull (ADR-146 §1): an image runs only once it was
+      // pulled by digest, by an admission or a deploy.
+      PULL_NEVER,
       "--name",
       req.name,
       // The mark of a session. The garbage collector and reconciliation look
@@ -263,12 +280,16 @@ export function createEngine(opts: EngineOptions): Engine {
       `${INSTANCE_LABEL}=${opts.instance}`,
       "--label",
       "codespace.role=student",
-      // --- hardening, copied from images/c-dev/run-hardened.sh -------------
+      // --- hardening, copied from images/quiz-base/run-hardened.sh -------------
       ...hardeningArgs(
         opts,
-        ["/tmp", "/run:rw,nosuid,nodev,mode=1777", "/home/student/.cache:rw,nosuid,nodev,mode=1777"],
+        SESSION_TMPFS,
         opts,
       ),
+      // The image's own unprivileged user, said explicitly (ADR-146 §5): an
+      // image cannot make a session run as another one.
+      "--user",
+      SESSION_USER,
       // --- closed network, invariant 2 -------------------------------------
       "--network",
       opts.network,
@@ -286,7 +307,7 @@ export function createEngine(opts: EngineOptions): Engine {
       // option in order to make a test simpler.
       "-v",
       `${req.workDir}:/work:U`,
-      req.image ?? opts.image,
+      req.image,
     ];
   }
 

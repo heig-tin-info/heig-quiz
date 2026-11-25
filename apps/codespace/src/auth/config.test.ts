@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { loadConfig } from "./config.js";
+import { LEGACY_DEFAULT_IMAGE, imageConfigWarnings, loadConfig } from "./config.js";
 
 const production = {
   NODE_ENV: "production",
@@ -120,5 +120,41 @@ describe("production refusals", () => {
     expect(() =>
       loadConfig({ ...production, EXAM_COOKIE_SECRET: "dev-exam-cookie-secret-change-me" }),
     ).toThrow(/EXAM_COOKIE_SECRET/);
+  });
+});
+
+describe("the platform's image and the released bases (ADR-146 §3)", () => {
+  const BASE = `ghcr.io/heig-tin-info/quiz-base@sha256:${"b".repeat(64)}`;
+  const OLD = `ghcr.io/heig-tin-info/quiz-base@sha256:${"a".repeat(64)}`;
+
+  it("defaults to the local tag, reads CODESPACE_IMAGE as an alias, and the default wins", () => {
+    expect(loadConfig({}).CODESPACE_DEFAULT_IMAGE).toBe(LEGACY_DEFAULT_IMAGE);
+    expect(loadConfig({ CODESPACE_IMAGE: "codespace/c-dev:4.140.0" }).CODESPACE_DEFAULT_IMAGE).toBe("codespace/c-dev:4.140.0");
+    const both = loadConfig({ CODESPACE_IMAGE: "codespace/c-dev:4.140.0", CODESPACE_DEFAULT_IMAGE: BASE });
+    expect(both.CODESPACE_DEFAULT_IMAGE).toBe(BASE);
+    expect(imageConfigWarnings(both)).toEqual([expect.stringContaining("CODESPACE_IMAGE (codespace/c-dev:4.140.0) differs")]);
+  });
+
+  it("does not refuse a tag-only default in production yet: it warns", () => {
+    const config = loadConfig({ ...production, CODESPACE_DEFAULT_IMAGE: "codespace/c-dev:4.137.0" });
+    expect(config.baseReleases).toEqual([]);
+    const warnings = imageConfigWarnings(config);
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0]).toMatch(/not pinned by digest/);
+    expect(warnings[1]).toMatch(/not_on_base/);
+  });
+
+  it("includes a pinned default among the releases, canonical, without duplicates; refuses a tag there", () => {
+    const config = loadConfig({ CODESPACE_DEFAULT_IMAGE: BASE, CODESPACE_BASE_RELEASES: ` ${OLD}, ${BASE} ,` });
+    expect(config.baseReleases).toEqual([BASE, OLD]);
+    expect(imageConfigWarnings(config)).toEqual([]);
+    expect(() => loadConfig({ CODESPACE_BASE_RELEASES: "ghcr.io/heig-tin-info/quiz-base:1.0.0" })).toThrow(/CODESPACE_BASE_RELEASES/);
+  });
+
+  it("takes the ceilings, 4 GiB and a 20 GiB floor by default", () => {
+    expect(loadConfig({}).CODESPACE_IMAGE_MAX_BYTES).toBe(4 * 1024 ** 3);
+    expect(loadConfig({}).CODESPACE_IMAGE_MIN_FREE_BYTES).toBe(20 * 1024 ** 3);
+    expect(loadConfig({ CODESPACE_IMAGE_MAX_BYTES: "1000" }).CODESPACE_IMAGE_MAX_BYTES).toBe(1000);
+    expect(() => loadConfig({ CODESPACE_IMAGE_MAX_BYTES: "0" })).toThrow(/CODESPACE_IMAGE_MAX_BYTES/);
   });
 });

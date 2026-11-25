@@ -483,6 +483,74 @@ Edit `CODESPACE_LAUNCH_SECRET` in `/etc/quiz-codespace/<i>/env`, restart
 `.env.staging`) and recreate `app`. In between, a launch or a sync fails with
 a named refusal; nothing is lost.
 
+### Workspace images: admission, disk, removal (ADR-146)
+
+A session runs the default image (`CODESPACE_DEFAULT_IMAGE`, the platform's
+own) or a course image the portal admitted under the very reference the
+project names; nothing is pulled at a container start (`--pull=never`). The
+admitted set is the `admitted_images` table of each instance's database, one
+row per reference; the default is admitted at every startup without a check
+(a local tag until the first `quiz-base` release, then a digest), and an
+earlier default's row goes then. The deploy pulls the default (§7, the
+release `deploy/quiz-base.ref` pins, implicitly a released base;
+`CODESPACE_BASE_RELEASES` adds the earlier releases still allowed): the portal
+never does, and a session whose image the store does not hold gets the
+"Workspace not ready" page.
+
+- **What Quiz calls.** `POST /api/images/admissions` (a tag or a digest; the
+  portal resolves it, anonymously, to the `linux/amd64` digest), then
+  `GET /api/images/admissions?reference=<ref@digest>` until `ready` or
+  `refused`; `GET /api/images/base` (503 `base_unreleased` while the default
+  is a local tag), `GET /api/images`, `DELETE /api/images?reference=…`.
+  Service tokens, behind the same `/api/*` door as the other service routes.
+- **The released bases.** `CODESPACE_BASE_RELEASES` in
+  `/etc/quiz-codespace/<i>/env`: the `ref@sha256:…` of every `quiz-base`
+  release an image may still derive from (the default, when pinned, counts
+  without being listed). An image whose first layers are none of them is
+  refused `not_on_base`; with no release at all, every course image is.
+  The journal says so at startup.
+- **No credential on the engine.** An admission pulls through the rootful
+  socket, whose service runs as root: a registry login left in root's
+  `auth.json` could ride along. No login is left in place (the engine's
+  deploy logs out of `ghcr.io` after its own pulls). Check, as root:
+  `podman login --get-login ghcr.io` answers that it is not logged in. The
+  proof that an image is public is the registry read the portal makes
+  without any credential before it pulls; the pull itself proves nothing.
+  TODO(verify) Podman 5.7: whether the API service falls back to root's
+  `auth.json` on a pull that carries no `X-Registry-Auth`.
+- **Disk.** `CODESPACE_IMAGE_MIN_FREE_BYTES` (20 GiB): below it, no pull
+  starts, for a candidate or a released base (`disk_full`);
+  `CODESPACE_IMAGE_MAX_BYTES` (4 GiB): an image over it, compressed or on
+  disk, is refused (`too_large`). **The portal never removes an image**: a
+  refused admission leaves what it pulled. Both instances share the rootful
+  image store: `GET /api/images` on each lists the store's workspace images
+  (the default, the released bases, the admitted ones, and the orphans —
+  derived from a base, admitted by no row of that instance) with that
+  instance's admissions; `podman --remote system df` shows the total.
+  Nothing is removed automatically (ADR-146 §8).
+- **Un-admitting an image.** From Quiz's administration console, or by hand
+  with a service token: `DELETE /api/images?reference=<ref@digest>` answers
+  409 `image_in_use` while a live session of THAT instance runs it,
+  `default_image` for the default, `admission_running` during its
+  admission; else it removes the row only. A project that still names it
+  gets the "Workspace not ready" page at its next start; its running
+  containers are not touched.
+- **Freeing disk, by hand.** Read `GET /api/images` on BOTH instances first:
+  remove an image only when neither admits it nor runs it, and it is not a
+  released base still in `CODESPACE_BASE_RELEASES`. Then, as root:
+  `podman --remote --url unix:///run/podman/podman.sock rmi <ref@digest>`
+  (Podman refuses while a container uses it). An admitted reference whose
+  image is gone shows with no id in the list, and its sessions are refused
+  until it is admitted again: a Refresh from Quiz (a new admission request
+  for it) re-pulls and re-checks it.
+- **An admission left halfway** by a restart is `refused` `interrupted`
+  (ask again from Quiz); its container (`heig-codespace.role=admission`) is
+  swept at startup. To list leftovers by hand: `podman --remote --url
+  unix:///run/podman/podman.sock ps --all --filter
+  label=heig-codespace.role=admission`.
+- **Why one was refused.** The `detail` of the admission, and the portal's
+  journal: `journalctl -u quiz-codespace-<i> | grep 'image refused'`.
+
 ### Capacity
 
 The two portals, their sessions, the shadow snapshots and the backup export

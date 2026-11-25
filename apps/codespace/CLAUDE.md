@@ -5,7 +5,8 @@ rootful Podman containers, one per (student, assignment), with an SEB exam
 mode. A separate deployable on the engine VM, beside `apps/runner`: it
 imports only `packages/*` (`@quiz/domain` for HS256, `@quiz/seb` for the SEB hashes, `@quiz/contracts` for
 the codespace schemas, `@quiz/core/tar` and `@quiz/core/runner` for the tar header helpers and the
-path rule it shares with the runner) and talks to the platform through two HS256-signed
+path rule it shares with the runner, `@quiz/core/oci` for the anonymous registry reads of an
+image's admission) and talks to the platform through two HS256-signed
 HTTP messages (ADR-047). Imported from heig-classroom's `apps/codespace` at
 classroom `a676c8c` (merge task M6-03).
 
@@ -103,7 +104,9 @@ them on exactly two points, and on nothing else:
    is swept (rows go before directories, so a crash leaves exactly those;
    ADR-129 §10, correction of 2026-11-15). The deadline collection's reader
    (invariant 15) mounts a volume read-only, never `:U`, with `--network
-   none`: narrower than both divergences, not a third one.
+   none`: narrower than both divergences, not a third one. So is an image's
+   admission container (invariant 16): nothing mounted, `/work` a tmpfs,
+   `--network none`.
 2. **A git channel on an internal bridge.** Containers run on the Podman
    network `codespace` (`--internal --disable-dns`, subnet `10.77.0.0/24`,
    gateway `10.77.0.254`), started with `--dns=none --add-host
@@ -136,7 +139,9 @@ channel divergence for its containers.
    `codespace-anchor` container (label `heig-codespace.role=anchor`) keeps
    the bridge alive; never delete it, never count it as a session. No
    per-session firewall rule. The collection's readers
-   (`heig-codespace.role=reader`, invariant 15) run `--network none`.
+   (`heig-codespace.role=reader`, invariant 15) and the admission
+   containers (`heig-codespace.role=admission`, invariant 16) run
+   `--network none`.
 3. **Hardening from the very first `podman run`**: the exact options are in
    `images/quiz-base/run-hardened.sh` and `src/engine/` reuses them as they
    are. A test that needs an option relaxed says so in the docs, not in a
@@ -219,6 +224,33 @@ channel divergence for its containers.
     `shadow.git` is the sandboxed root timer's, untrusted, exported with the
     daily backup (deploy/RUNBOOK.md). The reader is the platform's, not a
     session: not in the quota, removed on every exit path, swept at startup.
+16. **Only admitted digests run, and nothing is pulled at a start**
+    ([ADR-146](../../docs/adr/ADR-146-images-publiques-de-l-espace-de-travail.md)).
+    Every container the portal starts carries `--pull=never` (`PULL_NEVER`)
+    and `--user 1000:1000` (`SESSION_USER`), `run-hardened.sh` too; an image
+    reaches the engine only by a deploy or an admission, pulled by digest.
+    A null `imageRef` runs the default (`CODESPACE_DEFAULT_IMAGE`, the
+    platform's own, admitted at startup without a check); any other
+    reference runs only once `admitted_images` holds it `ready` under that
+    very reference (one row per reference), else the start is refused
+    (`ImageNotAdmittedError`, a page of its own, no container) — and so is
+    an image the store no longer holds. The reader and the review sessions
+    run the default, never a course's image. The sync stores a reference
+    not admitted; a running container keeps the image it started with
+    (`sessions.image`). The admission (`images/admission.ts`) reads the
+    registry anonymously, decides on the manifest (`manifestVerdict`: the
+    first uncompressed layers against a released `quiz-base`,
+    `CODESPACE_BASE_RELEASES`, never a label; `User`, `Entrypoint`, `Cmd`;
+    the size ceiling), keeps the free-disk floor before every pull, then
+    runs the BASE's contract check, read from the base's own image and
+    piped over stdin, in an admission container (`engine/admission.ts`, a
+    helper of `engine/helper.ts` like the reader) under a session's
+    hardening, `--network none`, nothing mounted: no session, not in the
+    quota, removed on every exit path, swept at startup. **The portal never
+    removes an image**: staging and production share the store, so an
+    un-admission removes the row only and the administrator frees disk by
+    hand. Admission catches accidents, not the image's author: protection
+    is the run time's flags.
 
 ## Commands
 
@@ -233,8 +265,8 @@ The unit suite needs `git` (the git channel and staging tests run real git
 on temporary repositories) and nothing else. The integration suite needs
 `sudo infra/net/setup.sh` (the `codespace` network and nftables), the
 sessions' image (`images/build.sh`, then `images/quiz-base/test.sh` and its
-two siblings, README § Testing; `CODESPACE_IMAGE` and
-`CODESPACE_DEFAULT_IMAGE` in `.env` naming the tag it built), the rootful socket `/run/podman/podman.sock` (the
+two siblings, README § Testing; `CODESPACE_DEFAULT_IMAGE` in `.env` naming
+the tag it built, `CODESPACE_IMAGE` its alias), the rootful socket `/run/podman/podman.sock` (the
 user in the `podman` group, docs/setup-workstation.md) and, for the relay,
 the Forgejo of `infra/compose.dev.yml` with `FORGE_KIND=forgejo`. The portal
 listens on :3100 (`pnpm --filter @quiz/codespace dev`, with

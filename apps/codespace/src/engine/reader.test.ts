@@ -43,6 +43,7 @@ describe("readerArgs — the reader's podman run, flag for flag", () => {
       "run",
       "-d",
       "--rm",
+      "--pull=never",
       "--name",
       NAME,
       "--label",
@@ -85,6 +86,7 @@ describe("readerArgs — the reader's podman run, flag for flag", () => {
       sessionId: "s1",
       name: "cs-prod-s1",
       workDir: WORK,
+      image: "codespace/c-dev:4.137.0",
     });
     const shared = hardeningArgs(OPTIONS, [], { pidsLimit: 0, memory: "", cpus: "" }).filter((a) => !["--pids-limit", "--memory", "--cpus", "0", ""].includes(a));
     for (const flag of shared) {

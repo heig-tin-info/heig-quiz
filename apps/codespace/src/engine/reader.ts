@@ -12,24 +12,36 @@
  * It is no session (no session label: neither the listing, the
  * reconciliation nor the quota sees it); its only process sleeps for the
  * budget left and it runs `--rm`, so it goes on its own if the portal dies;
- * it is removed on every exit path and swept at startup. The image is
- * `CODESPACE_IMAGE`, which carries `/usr/bin/git`, GNU `/usr/bin/tar` and
- * `/usr/bin/sleep`.
+ * it is removed on every exit path and swept at startup. The image is the
+ * platform's default (`CODESPACE_DEFAULT_IMAGE`, the current `quiz-base`,
+ * never a course's: ADR-146 §3), which carries `/usr/bin/git`, GNU
+ * `/usr/bin/tar` and `/usr/bin/sleep`; started `--pull=never`.
  *
  * The streaming exec and the label sweep live here rather than on
  * `Engine`: the session tests' fake engines implement `Engine` whole, and
  * the reader's injectable spawner is what its own tests drive.
  */
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
 import type { Readable } from "node:stream";
 
 import { ArchiveTooLarge, workPathProblem, type WorkPathProblem } from "../git/workArchive.js";
 import { COLLECTION_ENTRIES_MAX, LISTING_MAX_BYTES } from "../git/workTree.js";
-import { INSTANCE_LABEL, hardeningArgs, type Confinement, type EngineOptions, type Limits } from "./index.js";
+import {
+  OutputOverCap,
+  ReaderError,
+  ReaderTimeout,
+  finish,
+  helperArgs,
+  helperName,
+  removeHelper,
+  runPodman,
+  sweepHelpers,
+  type PodmanRun,
+  type SpawnPodman,
+} from "./helper.js";
+import { SESSION_USER, type Confinement, type EngineOptions, type Limits } from "./index.js";
 
-/** The role label of the portal's helpers: never `SESSION_LABEL`. */
-export const ROLE_LABEL = "heig-codespace.role";
+export { ROLE_LABEL, ReaderError, ReaderTimeout, type SpawnPodman } from "./helper.js";
 export const READER_ROLE = "reader";
 
 /**
@@ -40,8 +52,6 @@ export const READER_ROLE = "reader";
 export const READER_LIMITS: Limits = { pidsLimit: 32, memory: "64m", cpus: "1" };
 /** The throwaway repository `ls-files` needs, and nothing else writable. */
 export const READER_TMPFS = "/tmp:rw,nosuid,nodev,noexec,size=8m";
-/** The image's own unprivileged user, said explicitly. */
-export const READER_USER = "1000:1000";
 
 const LIST_GIT_DIR = "/tmp/list.git";
 /** A throwaway repository for the listing: never the student's `.git`. */
@@ -77,38 +87,30 @@ export const READER_ARCHIVE = [
   "--files-from=-",
 ] as const;
 
-/** What a command other than the listing may print (a container id, a name). */
-const OUTPUT_MAX_BYTES = 64 * 1024;
-/** Removal runs whatever the budget says. */
-const REMOVE_TIMEOUT_MS = 15_000;
-
-export type ReaderOptions = Confinement & Pick<EngineOptions, "podmanUrl" | "instance" | "image">;
+/** The reader's image is the platform's default (`CODESPACE_DEFAULT_IMAGE`), never a course's. */
+export type ReaderOptions = Confinement & Pick<EngineOptions, "podmanUrl" | "instance"> & { image: string };
 
 /** `podman run` of a reader over `workDir`, living `lifetimeSeconds` at most. */
 export function readerArgs(o: ReaderOptions, name: string, workDir: string, lifetimeSeconds: number): string[] {
-  return [
-    "run",
-    "-d",
-    "--rm",
-    "--name",
+  return helperArgs(o, {
+    role: READER_ROLE,
     name,
-    "--label",
-    `${ROLE_LABEL}=${READER_ROLE}`,
-    "--label",
-    `${INSTANCE_LABEL}=${o.instance}`,
-    ...hardeningArgs(o, [READER_TMPFS], READER_LIMITS),
-    "--network",
-    "none",
-    "--user",
-    READER_USER,
+    detach: true,
+    rm: true,
+    tmpfs: [READER_TMPFS],
+    limits: READER_LIMITS,
     // Read-only, and never `:U`: the session's ownership of its volume stays as it is.
-    "-v",
-    `${workDir}:/work:ro,nosuid,nodev,noexec`,
-    "--entrypoint",
-    "/usr/bin/sleep",
-    o.image,
-    String(lifetimeSeconds),
-  ];
+    tail: [
+      "--user",
+      SESSION_USER,
+      "-v",
+      `${workDir}:/work:ro,nosuid,nodev,noexec`,
+      "--entrypoint",
+      "/usr/bin/sleep",
+      o.image,
+      String(lifetimeSeconds),
+    ],
+  });
 }
 
 /** What the reader listed: the paths to archive, the directories it could not open, the names it leaves out. */
@@ -120,28 +122,6 @@ export interface WorkListing {
   skipped: number;
 }
 
-/** The reader could not run, or answered something it never would. */
-export class ReaderError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ReaderError";
-  }
-}
-
-/** A command printed more than its cap. */
-class OutputOverCap extends ReaderError {
-  constructor() {
-    super("the reader's output is over its cap");
-  }
-}
-
-/** The time given ran out. */
-export class ReaderTimeout extends Error {
-  constructor() {
-    super("the confined reader ran out of time");
-    this.name = "ReaderTimeout";
-  }
-}
 
 const strict = new TextDecoder("utf-8", { fatal: true });
 const CLOSED_LINE = "warning: could not open directory '";
@@ -190,9 +170,6 @@ export function parseListing(stdout: Buffer, stderr: string, maxEntries = COLLEC
   return listing;
 }
 
-/** Starts `podman --remote …`; injectable so that the tests drive a fake engine. */
-export type SpawnPodman = (args: string[]) => ChildProcessWithoutNullStreams;
-
 export interface WorkspaceReader {
   /**
    * Lists and archives `workDir` in a fresh reader, hands both to `consume`,
@@ -206,76 +183,17 @@ export interface WorkspaceReader {
   readerName(): string;
 }
 
-interface Ran {
-  code: number | null;
-  stdout: Buffer;
-  stderr: string;
-  /** stderr went past what is kept: a list read from it would be incomplete. */
-  stderrCut: boolean;
-}
-
-/** What is kept of a reader's stderr. */
-const STDERR_MAX = 64 * 1024;
-
-/** Waits for `child`, collecting its output, killed past `deadline` (then {@link ReaderTimeout}). */
-function finish(child: ChildProcessWithoutNullStreams, deadline: number, maxStdout: number, collect = true): Promise<Ran> {
-  return new Promise((resolve, reject) => {
-    const out: Buffer[] = [];
-    let size = 0;
-    let err = "";
-    let stderrCut = false;
-    let failure: Error | null = null;
-    let settled = false;
-    const settle = (fn: () => void) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      fn();
-    };
-    const stop = (e: Error) => {
-      failure ??= e;
-      child.kill("SIGKILL");
-      // Output nobody reads would hold `close` back.
-      child.stdout.destroy();
-      child.stderr.destroy();
-    };
-    const timer = setTimeout(() => stop(new ReaderTimeout()), Math.max(0, deadline - Date.now()));
-    if (collect) {
-      child.stdout.on("data", (chunk: Buffer) => {
-        size += chunk.length;
-        if (size > maxStdout) stop(new OutputOverCap());
-        else out.push(chunk);
-      });
-    }
-    child.stderr.on("data", (chunk: Buffer) => {
-      if (err.length + chunk.length <= STDERR_MAX) err += chunk.toString("utf8");
-      else stderrCut = true;
-    });
-    // A podman that cannot even start (no binary): its own error, at once.
-    child.on("error", (e) => settle(() => reject(failure ?? new ReaderError(e.message))));
-    child.on("close", (code) => settle(() => (failure ? reject(failure) : resolve({ code, stdout: Buffer.concat(out), stderr: err, stderrCut }))));
-  });
-}
-
 export function createWorkspaceReader(o: ReaderOptions, spawnPodman?: SpawnPodman): WorkspaceReader {
   const start: SpawnPodman =
     spawnPodman ?? ((args) => spawn("podman", ["--remote", "--url", o.podmanUrl, ...args], { stdio: "pipe" }));
 
-  async function podman(args: string[], deadline: number, maxStdout = OUTPUT_MAX_BYTES): Promise<Ran> {
-    if (Date.now() >= deadline) throw new ReaderTimeout();
-    const child = start(args);
-    child.stdin.on("error", () => undefined);
-    child.stdin.end();
-    return finish(child, deadline, maxStdout);
-  }
-
-  async function ok(args: string[], deadline: number, what: string, maxStdout?: number): Promise<Ran> {
-    const ran = await podman(args, deadline, maxStdout);
+  async function ok(args: string[], deadline: number, what: string, maxStdout?: number): Promise<PodmanRun> {
+    const ran = await runPodman(start, args, deadline, maxStdout === undefined ? {} : { maxStdout });
     if (ran.code !== 0) throw new ReaderError(`${what} failed (${ran.code}): ${ran.stderr.slice(0, 400)}`);
     return ran;
   }
 
-  const readerName = () => `cs-${o.instance}-reader-${randomUUID()}`;
+  const readerName = () => helperName(o.instance, READER_ROLE);
 
   return {
     readerName,
@@ -329,19 +247,10 @@ export function createWorkspaceReader(o: ReaderOptions, spawnPodman?: SpawnPodma
         if (ran.code !== 0 && ran.code !== 1) throw new ReaderError(`the archive failed (${ran.code}): ${ran.stderr.slice(0, 400)}`);
         return result;
       } finally {
-        await podman(["rm", "-f", "-t", "0", name], Date.now() + REMOVE_TIMEOUT_MS).catch(() => undefined);
+        await removeHelper(start, name);
       }
     },
 
-    async sweep() {
-      const listed = await ok(
-        ["ps", "--all", "--filter", `label=${ROLE_LABEL}=${READER_ROLE}`, "--filter", `label=${INSTANCE_LABEL}=${o.instance}`, "--format", "{{.Names}}"],
-        Date.now() + REMOVE_TIMEOUT_MS,
-        "listing the readers",
-      );
-      const names = listed.stdout.toString("utf8").split("\n").map((n) => n.trim()).filter((n) => n.startsWith(`cs-${o.instance}-reader-`));
-      for (const name of names) await podman(["rm", "-f", "-t", "0", name], Date.now() + REMOVE_TIMEOUT_MS).catch(() => undefined);
-      return names.length;
-    },
+    sweep: () => sweepHelpers(start, o.instance, READER_ROLE),
   };
 }

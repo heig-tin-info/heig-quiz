@@ -16,7 +16,6 @@ const engine = createEngine({
   gateway: "10.77.0.254",
   seccompProfile: "/repo/infra/seccomp/codespace.json",
   apparmorProfile: "codespace",
-  image: "codespace/c-dev:4.137.0",
   memory: "1536m",
   cpus: "1",
   pidsLimit: 256,
@@ -26,6 +25,7 @@ const args = engine.runArgs({
   sessionId: "s1",
   name: "cs-s1",
   workDir: "/vol/student/tp/work",
+  image: "codespace/c-dev:4.137.0",
 });
 
 /** `--x a` or `--x=a`: both forms exist in run-hardened.sh. */
@@ -46,6 +46,8 @@ describe("engine.runArgs — invariant 3, the hardening comes from run-hardened.
   // The test does not rewrite the list: it *reads* it from the P1 script, so
   // that a hardening option removed over there makes the portal fail here.
   const required = [
+    "--pull=never",
+    "--user 1000:1000",
     "--userns=auto",
     "--cap-drop=ALL",
     "--read-only",
@@ -100,11 +102,10 @@ describe("engine.runArgs — invariant 3, the hardening comes from run-hardened.
         gateway: "10.77.0.254",
         seccompProfile: "/repo/infra/seccomp/codespace.json",
         ...(apparmorProfile === undefined ? {} : { apparmorProfile }),
-        image: "codespace/c-dev:4.137.0",
         memory: "1536m",
         cpus: "1",
         pidsLimit: 256,
-      }).runArgs({ sessionId: "s1", name: "cs-s1", workDir: "/vol/a/b/work" });
+      }).runArgs({ sessionId: "s1", name: "cs-s1", workDir: "/vol/a/b/work", image: "codespace/c-dev:4.137.0" });
       expect(bare.some((a) => a.startsWith("apparmor="))).toBe(false);
       // …and nothing else is lost along the way: seccomp is still there.
       expect(hasOption(bare, "--security-opt", "seccomp=/repo/infra/seccomp/codespace.json")).toBe(
