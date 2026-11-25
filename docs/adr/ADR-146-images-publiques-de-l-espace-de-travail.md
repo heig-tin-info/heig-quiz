@@ -2,9 +2,10 @@
 
 ## Status
 
-Proposed (2026-11-25). Decisions 1 to 9 are the product owner's
-(2026-11-25, discussion of issue #1111); the admission checks of decision 5
-and the assumptions under Open are the orchestrator's, within them.
+Accepted (2026-11-25, product owner: "on peut aller de l'avant").
+Decisions 1 to 9 are the owner's (discussion of issue #1111); the admission
+checks of decision 5 and the assumptions under Open are the orchestrator's,
+stated to the owner and not objected to.
 
 Scope: which container image a student's online workspace session runs,
 where it comes from, who chooses it and what Quiz checks before running it.
@@ -48,11 +49,11 @@ know what the students run, only that the image keeps the contract.
    session runs a public OCI image pulled from a registry (GitHub Container
    Registry or Docker Hub), always by digest.
 2. **The platform publishes `quiz-base`**, public, built and pushed by the
-   repository's CI: today's `c-dev` without Baygon — Debian, code-server
+   repository's CI: today's `c-dev` — Debian, code-server
    and its extensions (status bar, clangd, debug), the Safe Exam Browser
    workarounds, the entrypoint and the rest of the contract, and gcc, g++,
-   gdb, make, git, python3, pytest and the man pages. Its contract tests
-   ship in the image.
+   gdb, make, git, python3, pytest and the man pages, and Baygon 0.7 for
+   the labs that run it today. Its contract tests ship in the image.
 3. **The default image is the portal's configuration**
    (`CODESPACE_DEFAULT_IMAGE`), a `quiz-base` reference by digest, changed
    by a deploy.
@@ -96,11 +97,11 @@ know what the students run, only that the image keeps the contract.
    per session (open question 70) stays the fix, tracked with the
    Jupyter-in-the-workspace issue (#1217).
 
-**Baygon leaves `quiz-base`.** It becomes the first image derived outside
-the platform (a repository of its own: `FROM quiz-base`, Baygon at the
-version its labs need, a CI that pushes it), which proves the cycle. The
-courses whose labs run Baygon add it and switch their projects before the
-default moves from `c-dev` to `quiz-base`.
+**Baygon 0.7 stays in `quiz-base` for now** (owner, 2026-11-25), so the
+labs that run it keep working. Once this decision is delivered, a derived
+image with Baygon 0.10 (a repository of its own, `FROM quiz-base`, a CI
+that pushes it) is the first custom image and proves the cycle. Whether
+Baygon later leaves the base is decided then.
 
 **A public image is public content.** The teachers' guide says it plainly:
 no hidden test, no solution, no exam data in an image; they stay in the
@@ -118,7 +119,7 @@ distribution repository.
 - Everything a lab needs is installed at build time, so the session needs
   no network, under Safe Exam Browser or not.
 - Work owed: `quiz-base` and its contract tests split out of `c-dev`
-  (`test.sh` keeps a toolchain part and a Baygon part moves out), its CI
+  (`test.sh` split into the contract and the toolchain), its CI
   publication; the course's image list (a table of the `codespace`
   module), the Images screen and the project's choice; the portal's pull
   and admission job and its admitted set; the obsolete mark; the console's
