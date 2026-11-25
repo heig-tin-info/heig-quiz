@@ -14,11 +14,11 @@ import { useToast } from "./notify";
 import { adminTasksKey } from "./queryKeys";
 import {
   Badge,
-  Button,
   Card,
   cx,
   QueryError,
   RelativeTime,
+  RowActions,
   SectionHeading,
   Select,
   Skeleton,
@@ -121,18 +121,20 @@ export function TasksSection() {
         <QueryError title={t("admin.tasks")} query={tasks} />
       ) : (
         <Card className={cx("overflow-x-auto", T.container)}>
-          <table className={cx(T.table, "min-w-160")}>
+          {/* A row card on a phone: the task and its "…" on the first line,
+              its switch, period and last run under them. */}
+          <table role="table" className={cx(T.table, T.stack.table, "@md:min-w-160")}>
             <TableHead
               columns={[
-                { key: "task", label: t("admin.tasks.col.task") },
-                { key: "enabled", label: t("admin.tasks.col.enabled") },
-                { key: "every", label: t("admin.tasks.col.every") },
-                { key: "lastRun", label: t("admin.tasks.col.lastRun") },
+                { key: "task", label: t("admin.tasks.col.task"), stack: "main" },
+                { key: "enabled", label: t("admin.tasks.col.enabled"), stack: "sub" },
+                { key: "every", label: t("admin.tasks.col.every"), stack: "sub" },
+                { key: "lastRun", label: t("admin.tasks.col.lastRun"), stack: "sub" },
                 { key: "nextRun", label: t("admin.tasks.col.nextRun"), className: T.colMid },
-                { key: "actions", label: t("common.actions"), srOnly: true },
+                { key: "actions", label: t("common.actions"), srOnly: true, stack: "end" },
               ]}
             />
-            <tbody>
+            <tbody role="rowgroup">
               {rows.map((r) => {
                 const name = t(taskName(r.key));
                 const status = STATUS[r.lastStatus ?? "never"];
@@ -141,12 +143,13 @@ export function TasksSection() {
                   : [...PERIODS, r.intervalMinutes].sort((a, b) => a - b);
                 const busy = configure.isPending && configure.variables?.key === r.key;
                 return (
-                  <tr key={r.key} className={T.row}>
-                    <td className={cx(T.td, "min-w-44 max-w-80")}>
+                  <tr role="row" key={r.key} className={cx(T.row, T.stack.row)}>
+                    <td role="cell" className={cx(T.td, T.stack.main, "min-w-44 max-w-80 @max-md:max-w-none @max-md:whitespace-normal")}>
                       <div className="font-semibold">{name}</div>
                       <div className="text-xs text-fg-muted">{t(taskDesc(r.key))}</div>
                     </td>
-                    <td className={T.td}>
+                    <td role="cell" className={cx(T.td, T.stack.sub, "@max-md:flex @max-md:items-center")}>
+                      <span className={T.stack.label}>{t("admin.tasks.col.enabled")}</span>
                       <Switch
                         checked={r.enabled}
                         disabled={busy}
@@ -154,7 +157,7 @@ export function TasksSection() {
                         onChange={(enabled) => configure.mutate({ key: r.key, patch: { enabled } })}
                       />
                     </td>
-                    <td className={T.td}>
+                    <td role="cell" className={cx(T.td, T.stack.sub)}>
                       <Select
                         size="sm"
                         width="w-40"
@@ -177,7 +180,7 @@ export function TasksSection() {
                         ))}
                       </Select>
                     </td>
-                    <td className={T.td}>
+                    <td role="cell" className={cx(T.td, T.stack.sub, "@max-md:basis-full")}>
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <Badge tone={status.tone} icon={status.icon}>{t(status.label)}</Badge>
                         {r.lastRunAt ? (
@@ -206,7 +209,7 @@ export function TasksSection() {
                         </div>
                       ) : null}
                     </td>
-                    <td className={cx(T.td, T.colMid, "whitespace-nowrap text-fg-muted")}>
+                    <td role="cell" className={cx(T.td, T.colMid, "whitespace-nowrap text-fg-muted")}>
                       {!r.enabled ? (
                         t("admin.tasks.paused")
                       ) : r.nextRunAt ? (
@@ -215,18 +218,21 @@ export function TasksSection() {
                         "—"
                       )}
                     </td>
-                    <td className={cx(T.td, "text-right")}>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        loading={run.isPending && run.variables === r.key}
-                        disabled={r.lastStatus === "running"}
-                        aria-label={t("admin.tasks.runNamed", { name })}
-                        onClick={() => run.mutate(r.key)}
-                      >
-                        {run.isPending && run.variables === r.key ? null : <Play />}
-                        {t("admin.tasks.run")}
-                      </Button>
+                    <td role="cell" className={cx(T.td, T.stack.end, "text-right")}>
+                      <RowActions
+                        worded
+                        label={t("common.rowActions", { name })}
+                        items={[
+                          {
+                            label: t("admin.tasks.run"),
+                            name: t("admin.tasks.runNamed", { name }),
+                            icon: Play,
+                            pending: run.isPending && run.variables === r.key,
+                            disabled: r.lastStatus === "running",
+                            onSelect: () => run.mutate(r.key),
+                          },
+                        ]}
+                      />
                     </td>
                   </tr>
                 );

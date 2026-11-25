@@ -275,7 +275,7 @@ function ReposAccessLine({ project, owner }: { project: ProjectDetail; owner: bo
  * A deleted repository stays, muted: it is a fact of the project.
  *
  * The staff's *Open in workspace* (ADR-129 §11, F-PROJ-27) is the last
- * column's icon, where the platform offers it; a phone drops the column and keeps the page's button.
+ * column's icon, where the platform offers it; a narrow table drops the column, a row card (`T.stack`) shows it again.
  *
  * Nothing here waits for GitHub: `live` only adds counters when the cache
  * had them, and `liveStale` is said on the heading while the next refetch
@@ -349,12 +349,12 @@ export function ProjectRepos({
   }
 
   const columns: Column<SortKey>[] = [
-    { key: "student", label: t(project.groupMode ? "project.col.group" : "results.col.student") },
+    { key: "student", label: t(project.groupMode ? "project.col.group" : "results.col.student"), stack: "main" },
     { key: "repo", label: t("project.col.repo"), sortable: false, className: T.colMid },
     { key: "commit", label: t("project.col.commit"), sortable: false, className: T.colLow },
     { key: "ci", label: t("project.col.ci"), sortable: false, className: T.colMid },
-    ...(graded ? [{ key: "score", label: t("project.col.score"), right: true } satisfies Column<SortKey>] : []),
-    { key: "state", label: t("project.col.state"), sortable: false },
+    ...(graded ? [{ key: "score", label: t("project.col.score"), right: true, stack: "sub" } satisfies Column<SortKey>] : []),
+    { key: "state", label: t("project.col.state"), sortable: false, stack: "sub" },
     ...(reviewOf
       ? [{ key: "actions", label: t("common.actions"), sortable: false, srOnly: true, className: cx(T.colHigh, T.stickyEnd) } satisfies Column<SortKey>]
       : []),
@@ -376,45 +376,47 @@ export function ProjectRepos({
           </Button>
         </p>
       ) : null}
+      {/* A row card on a phone: the student, then the score and the state. */}
       <Card className={`${T.container} overflow-x-auto`}>
-        <table className={T.table}>
+        <table role="table" className={cx(T.table, T.stack.table)}>
           <TableHead columns={columns} sort={sort} onToggle={toggle} />
-          <tbody>
+          <tbody role="rowgroup">
             {sorted.map((entry, index) => {
               const { repo } = entry;
               const rowId = entryRowId(entry);
               const opens = rowId ? () => onOpen(rowId) : undefined;
               return (
-                <tr
+                <tr role="row"
                   key={entry.key}
                   className={cx(
                     T.row,
+                    T.stack.row,
                     opens && `${T.rowHover} cursor-pointer`,
                     repo?.flags.deleted && "text-fg-faint",
                   )}
                   {...(opens ? pressable(opens, "row") : {})}
                   {...(index === firstOpenable ? { "data-coach": "project.repo" } : {})}
                 >
-                  <td className={T.td}>
+                  <td role="cell" className={cx(T.td, T.stack.main)}>
                     <IdentityCell entry={entry} groupMode={project.groupMode} />
                   </td>
-                  <td className={`${T.td} ${T.colMid}`}>
+                  <td role="cell" className={`${T.td} ${T.colMid}`}>
                     <RepoCell repo={repo} />
                   </td>
-                  <td className={`${T.td} ${T.colLow} text-fg-muted`}>
+                  <td role="cell" className={`${T.td} ${T.colLow} text-fg-muted`}>
                     <CommitCell repo={repo} group={entry.kind === "group"} />
                   </td>
-                  <td className={`${T.td} ${T.colMid}`}>
+                  <td role="cell" className={`${T.td} ${T.colMid}`}>
                     <CiBadge status={repo?.ciStatus ?? "none"} />
                   </td>
                   {graded ? (
-                    <td className={`${T.td} text-right`}>
+                    <td role="cell" className={cx(T.td, T.stack.sub, "text-right")}>
                       <Score score={repo?.scores.final ?? null} gradingMode={project.gradingMode} adjustment={repo?.scores.adjustment ?? null} />
                     </td>
                   ) : null}
-                  <td className={T.td}>{repo ? <StateCell repo={repo} /> : null}</td>
+                  <td role="cell" className={cx(T.td, T.stack.sub)}>{repo ? <StateCell repo={repo} /> : null}</td>
                   {reviewOf ? (
-                    <td className={cx(T.td, T.colHigh, "whitespace-nowrap text-right", T.stickyEnd)}>
+                    <td role="cell" className={cx(T.td, T.colHigh, "whitespace-nowrap text-right", T.stickyEnd, T.stack.end, "@max-md:block")}>
                       {repo ? <OpenInWorkspaceIcon projectId={project.id} repo={repo} action={reviewOf(repo)} /> : null}
                     </td>
                   ) : null}

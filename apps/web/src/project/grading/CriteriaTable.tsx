@@ -86,7 +86,7 @@ export function CriteriaTable({
   ];
   return (
     <div className={`${T.container} overflow-x-auto`}>
-      <table className={cx(T.table, T.stack.table)} aria-label={label}>
+      <table role="table" className={cx(T.table, T.stack.table)} aria-label={label}>
         <TableHead columns={columns} />
         <tbody role="rowgroup">
           {rows.map((row) => (

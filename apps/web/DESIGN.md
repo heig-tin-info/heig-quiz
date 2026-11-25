@@ -1800,8 +1800,8 @@ page is wider than the window.
 
 ### Row cards (phone)
 
-A teacher's list that cannot shed enough columns to fit a phone — the pool's
-questions, the pools, the courses in list view — turns into ROW CARDS under a
+On a phone a LIST is cards, never a table that scrolls sideways (owner's
+decision, 2026-11-24): a teacher's list turns into ROW CARDS under a
 28 rem container (`@max-md`), with `T.stack` (`ui/table.tsx`). The `<table>`
 takes `T.stack.table`, every row `T.stack.row`, and each visible cell its
 role:
@@ -1819,16 +1819,36 @@ aligned on the identity. A full-width band (a group label) takes
 hidden on a narrow desktop but is the card's status may come back with
 `@max-md:block` (the pool's version). The head declares the roles on its
 `Column`s (`stack`), so `TableHead` keeps the select-all box and the main
-sort on the card's head line and drops the `sub` headers. A number that
-stands alone on the second line says what it counts ("11 questions", not
-"11"). From 28 rem the classes do nothing: the desktop table is untouched.
+sort on the card's head line and drops the `sub` headers. From 28 rem the
+classes do nothing: the desktop table is untouched.
 
-Per table: the pool's questions, the pools and the courses (list view) are
-row cards. The grading table and the gradebook are inherently wide (one
-column per answer part, one per evaluation): they keep the sideways scroll
-INSIDE their card, under a sticky first column (the verdict and the name;
-the student). The roster, the evaluation list and the results' grade table
-already fit 390 px through their priorities.
+A figure alone on the second line takes its column's label before it, on
+the card only: `T.stack.label` on a span ("Calls 12", "Questions 11").
+The table, its row groups, rows and cells carry their explicit `role`
+(`ui/controlsGuard.test.ts` refuses a `T.stack.table` file without them).
+
+The exceptions are the wide GRIDS, which are not lists: the gradebook, the
+live grid, the grading table, the criteria matrix and the heatmap (one
+column per evaluation, question, answer part, criterion or hour) stay
+tables that scroll sideways INSIDE their card, under a sticky first column.
+A list that already fits 390 px through its priorities may stay a table.
+
+A control that IS the row's content stays on the card (a task's switch and
+period, a teacher's workspace switch and quota); a row's BUTTONS go into
+the card's "…", a single icon included, so a card's actions are always in
+the same place. `RowActions` (`ui/actions.tsx`) is that one rule: it renders
+the row's form (`Actions`, or `worded`: one labelled button per item, "Run
+now", "Anonymize…") and the card's ONE `Menu`, each hidden by the same
+28 rem container query as `T.stack` (`@max-md:hidden` / `@md:hidden`), so
+the card and its menu cannot disagree; it needs the table's `T.container`.
+Its trigger is named for the row (`common.rowActions`, "Actions for Ada
+Lovelace"). One exception: an action whose held state carries its reason
+(a repository's *Open in workspace*, `disabledReason`) keeps its icon on
+the card.
+
+The Activities page shows its cards and no list / cards / schedule switch on
+a phone in the hand (`useTouchPhone`: the switch is a feature, § Touch); a
+narrow window with a mouse keeps it. The stored choice is never overwritten.
 
 A table a STUDENT reads on a phone does not scroll sideways: under 32 rem of
 container (`@lg`) its rows collapse into a divided list of small cards — the
@@ -1871,7 +1891,8 @@ A phone has no hover and a finger is not a cursor. Two classes in
 - `touch-hit` gives a small control a 44 × 44 px HIT AREA around its centre
   (an invisible `::before`) under `@media (pointer: coarse)`, without
   changing its drawn size. Built into `IconButton`, `IconLink`, the page's
-  "?" and `Checkbox`; on the journal strip's entries, whose strip grows
+  "?", `Checkbox`, a sortable column's label (16 px tall) and the phone's
+  "‹ Back" link (20 px); on the journal strip's entries, whose strip grows
   8 px of padding under a coarse pointer so its scroller does not clip the
   area. Touch-hit controls stand at least 8 px apart under a coarse pointer:
   a cluster of them (a row's icon buttons, `Actions`, a strip entry's link
@@ -1898,7 +1919,7 @@ A phone may LOSE a feature only when it is held in the hand: narrow AND
 touch, `useTouchPhone` (`ui/layers.tsx`), never the width alone — a desktop
 zoomed to 200 % (N-A11Y-04) is as narrow and keeps every control, and a
 tablet keeps them too. A change of LAYOUT follows the width alone. Applied:
-the help assistant and the page's "?" (ADR-080 §7, amendment of 2026-11-24).
+the help assistant and the page's "?" (ADR-080 §7, amendment of 2026-11-24), the Activities view switch.
 What a touch phone removes is HIDDEN where a coach mark points at it (the
 page's "?" is `hidden`): the step then waits, unread, for the day it shows.
 

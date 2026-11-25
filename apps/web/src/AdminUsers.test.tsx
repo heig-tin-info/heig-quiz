@@ -78,7 +78,8 @@ describe("UsersSection — inactive accounts", () => {
     });
     renderWithProviders(<UsersSection />);
     const u = await openInactive();
-    await u.click(await screen.findByRole("button", { name: "Anonymize Test Old" }));
+    const row = await screen.findByRole("group", { name: "Actions for Test Old" });
+    await u.click(within(row).getByRole("button", { name: "Anonymize Test Old" }));
     const go = within(await screen.findByRole("dialog")).getByRole("button", { name: "Anonymize" });
     expect(go).toBeDisabled();
     await u.type(screen.getByRole("textbox", { name: /to confirm/i }), "teacher@heig-vd.ch");
@@ -94,7 +95,20 @@ describe("UsersSection — inactive accounts", () => {
       "GET /app/api/me": ok(session(new Date(Date.now() + 3_600_000).toISOString())),
     });
     renderWithProviders(<UsersSection />);
-    expect(await screen.findByRole("button", { name: "Anonymize Test Present" })).toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: /^anonymize test/i })).toHaveLength(USERS.length);
+    expect(await screen.findByRole("group", { name: "Actions for Test Present" })).toBeInTheDocument();
+    expect(screen.getAllByRole("group", { name: /^actions for test/i })).toHaveLength(USERS.length);
+  });
+
+  // DESIGN.md › Row cards: on a card the worded button is an item of its "…", and acts from there.
+  it("offers Anonymize in the card's menu as well", async () => {
+    mockFetch({
+      "GET /app/api/admin/users": ok(USERS),
+      "GET /app/api/me": ok(session(new Date(Date.now() + 3_600_000).toISOString())),
+    });
+    renderWithProviders(<UsersSection />);
+    const u = userEvent.setup();
+    await u.click(await screen.findByRole("button", { name: "Actions for Test Old" }));
+    await u.click(await screen.findByRole("menuitem", { name: "Anonymize…" }));
+    expect(await screen.findByRole("textbox", { name: /to confirm/i })).toBeInTheDocument();
   });
 });

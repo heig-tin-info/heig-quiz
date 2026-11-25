@@ -30,6 +30,7 @@ export const common = {
   "ui.points.bonus": "bonus points, at most {n}",
   "ui.points.range": "From {min} to {max}",
   "common.actions": "Actions",
+  "common.rowActions": "Actions for {name}",
   "common.loading": "Loading…",
   "common.retry": "Retry",
   "common.showAll": "Show all ({n})",

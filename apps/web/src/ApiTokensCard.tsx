@@ -33,6 +33,7 @@ import {
   Modal,
   QueryError,
   RadioRow,
+  RowActions,
   SectionHeading,
   Select,
   Skeleton,
@@ -266,7 +267,7 @@ export function ConnectionsCard() {
   } else {
     body = (
       <div className={cx(T.container, "overflow-x-auto")}>
-        <table className={T.table}>
+        <table role="table" className={T.table}>
           <TableHead
             columns={[
               { key: "assistant", label: t("connections.assistant") },
@@ -275,19 +276,19 @@ export function ConnectionsCard() {
               { key: "actions", label: t("common.actions"), srOnly: true },
             ]}
           />
-          <tbody>
+          <tbody role="rowgroup">
             {connections.data.map((c) => (
-              <tr key={c.id} className={cx(T.row, T.rowHover)}>
-                <td className={T.td}>
+              <tr role="row" key={c.id} className={cx(T.row, T.rowHover)}>
+                <td role="cell" className={T.td}>
                   <p className="font-semibold">{c.clientName}</p>
                   <p className="font-mono text-xs text-fg-faint">{c.redirectHost}</p>
                   {c.consentRevision < CONTESTATIONS_CONSENT ? <OlderConsent>{t("connections.olderConsent")}</OlderConsent> : null}
                 </td>
-                <td className={cx(T.td, T.colHigh, "tabular-nums text-fg-muted")}>{isoDateTime(c.createdAt)}</td>
-                <td className={cx(T.td, T.colMid, "tabular-nums text-fg-muted")}>
+                <td role="cell" className={cx(T.td, T.colHigh, "tabular-nums text-fg-muted")}>{isoDateTime(c.createdAt)}</td>
+                <td role="cell" className={cx(T.td, T.colMid, "tabular-nums text-fg-muted")}>
                   {c.lastUsedAt ? isoDateTime(c.lastUsedAt) : "—"}
                 </td>
-                <td className={cx(T.td, T.stickyEnd, "text-right")}>
+                <td role="cell" className={cx(T.td, T.stickyEnd, "text-right")}>
                   <Actions
                     size="sm"
                     items={[
@@ -380,41 +381,42 @@ export function ApiTokensCard() {
   } else {
     body = (
       <div className={cx(T.container, "overflow-x-auto")}>
-        <table className={T.table}>
+        <table role="table" className={cx(T.table, T.stack.table)}>
           <TableHead
             columns={[
-              { key: "name", label: t("tokens.name") },
-              { key: "access", label: t("tokens.access") },
+              { key: "name", label: t("tokens.name"), stack: "main" },
+              { key: "access", label: t("tokens.access"), stack: "sub" },
               { key: "lastUsed", label: t("tokens.lastUsed"), className: T.colHigh },
               { key: "expires", label: t("tokens.expires"), className: T.colMid },
-              { key: "status", label: t("tokens.status") },
-              { key: "actions", label: t("common.actions"), srOnly: true },
+              { key: "status", label: t("tokens.status"), stack: "sub" },
+              { key: "actions", label: t("common.actions"), srOnly: true, stack: "end" },
             ]}
           />
-          <tbody>
+          <tbody role="rowgroup">
             {tokens.data.map((token) => {
               const status = statusOf(token);
               return (
-                <tr key={token.id} className={cx(T.row, T.rowHover)}>
-                  <td className={T.td}>
+                <tr role="row" key={token.id} className={cx(T.row, T.rowHover, T.stack.row)}>
+                  <td role="cell" className={cx(T.td, T.stack.main, "@max-md:whitespace-normal")}>
                     <p className="font-semibold">{token.name}</p>
                     <p className="font-mono text-xs text-fg-faint">{token.prefix}…</p>
                     {olderConsent(token, status) ? <OlderConsent>{t("tokens.olderConsent")}</OlderConsent> : null}
                   </td>
-                  <td className={cx(T.td, "text-fg-muted")}>{t(`tokens.scope.${SCOPE_KEY[token.scope]}`)}</td>
-                  <td className={cx(T.td, T.colHigh, "tabular-nums text-fg-muted")}>
+                  <td role="cell" className={cx(T.td, T.stack.sub, "text-fg-muted")}>{t(`tokens.scope.${SCOPE_KEY[token.scope]}`)}</td>
+                  <td role="cell" className={cx(T.td, T.colHigh, "tabular-nums text-fg-muted")}>
                     {token.lastUsedAt ? isoDateTime(token.lastUsedAt) : "—"}
                   </td>
-                  <td className={cx(T.td, T.colMid, "tabular-nums text-fg-muted")}>
+                  <td role="cell" className={cx(T.td, T.colMid, "tabular-nums text-fg-muted")}>
                     {token.expiresAt ? isoDateTime(token.expiresAt) : t("tokens.never")}
                   </td>
-                  <td className={T.td}>
+                  <td role="cell" className={cx(T.td, T.stack.sub)}>
                     <Badge tone={STATUS_TONE[status]}>{t(`tokens.status.${status}`)}</Badge>
                   </td>
-                  <td className={cx(T.td, T.stickyEnd, "text-right")}>
+                  <td role="cell" className={cx(T.td, T.stickyEnd, T.stack.end, "text-right")}>
                     {status === "revoked" ? null : (
-                      <Actions
+                      <RowActions
                         size="sm"
+                        label={t("common.rowActions", { name: token.name })}
                         items={[
                           {
                             label: t("tokens.revoke"),

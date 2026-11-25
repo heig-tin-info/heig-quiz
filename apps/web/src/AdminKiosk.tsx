@@ -11,7 +11,6 @@ import { useT } from "./i18n";
 import { useToast } from "./notify";
 import { adminKioskKey } from "./queryKeys";
 import {
-  Actions,
   Badge,
   Button,
   Card,
@@ -20,6 +19,7 @@ import {
   EmptyState,
   QueryError,
   RelativeTime,
+  RowActions,
   SectionHeading,
   Skeleton,
   T,
@@ -88,11 +88,11 @@ export function KioskSection() {
 
   const waiting = rows.filter((d) => d.status === "unnamed").length;
   const columns: Column<SortKey>[] = [
-    { key: "station", label: t("admin.kiosk.col.station") },
-    { key: "status", label: t("admin.kiosk.col.status") },
+    { key: "station", label: t("admin.kiosk.col.station"), stack: "main" },
+    { key: "status", label: t("admin.kiosk.col.status"), stack: "sub" },
     { key: "checked", label: t("admin.kiosk.col.checked"), className: T.colHigh },
     { key: "attested", label: t("admin.kiosk.col.attested"), className: T.colMid },
-    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true },
+    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true, stack: "end" },
   ];
 
   return (
@@ -119,9 +119,9 @@ export function KioskSection() {
             <p className="text-sm text-fg-muted">{t("admin.kiosk.waiting", { n: waiting })}</p>
           ) : null}
           <Card className={cx("overflow-x-auto", T.container)}>
-            <table className={T.table}>
+            <table role="table" className={cx(T.table, T.stack.table)}>
               <TableHead columns={columns} sort={sort} onToggle={toggle} />
-              <tbody>
+              <tbody role="rowgroup">
                 {sorted.map((d) => (
                   <StationRow key={d.id} device={d} />
                 ))}
@@ -176,8 +176,8 @@ function StationRow({ device: d }: { device: KioskDevice }) {
   };
 
   return (
-    <tr className={cx(T.row, T.rowHover)}>
-      <td className={T.td}>
+    <tr role="row" className={cx(T.row, T.rowHover, T.stack.row)}>
+      <td role="cell" className={cx(T.td, T.stack.main, "@max-md:whitespace-normal")}>
         {editing ? (
           <NameForm
             initial={d.label ?? ""}
@@ -201,10 +201,10 @@ function StationRow({ device: d }: { device: KioskDevice }) {
         {/* The serial printed on the machine: which Chromebook this row is. */}
         <div className="mt-0.5 font-mono text-xs text-fg-muted">{d.googleDeviceId}</div>
       </td>
-      <td className={`${T.td} whitespace-nowrap`}>
+      <td role="cell" className={cx(T.td, T.stack.sub, "whitespace-nowrap")}>
         <Badge tone={STATUS_TONE[d.status]}>{t(`admin.kiosk.status.${d.status}`)}</Badge>
       </td>
-      <td className={cx(T.td, T.colHigh, "whitespace-nowrap")}>
+      <td role="cell" className={cx(T.td, T.colHigh, "whitespace-nowrap")}>
         {d.attestation && d.checkedAt ? (
           <span className="inline-flex items-center gap-2">
             <Badge tone={ATTESTATION_TONE[d.attestation]}>
@@ -218,13 +218,13 @@ function StationRow({ device: d }: { device: KioskDevice }) {
           "—"
         )}
       </td>
-      <td className={cx(T.td, T.colMid, "whitespace-nowrap text-fg-muted")}>
+      <td role="cell" className={cx(T.td, T.colMid, "whitespace-nowrap text-fg-muted")}>
         {d.attestedAt ? <RelativeTime iso={d.attestedAt} /> : "—"}
       </td>
-      <td className={cx(T.td, T.stickyEnd, "text-right")}>
+      <td role="cell" className={cx(T.td, T.stickyEnd, T.stack.end, "text-right")}>
         {editing ? null : (
-          <Actions
-            label={d.label ?? undefined}
+          <RowActions
+            label={t("common.rowActions", { name: d.label ?? d.googleDeviceId })}
             items={[
               { label: t("admin.kiosk.rename"), icon: Pencil, onSelect: () => setEditing("name") },
               d.status === "retired"

@@ -21,6 +21,7 @@ import {
   PersonAvatar,
   QueryError,
   RelativeTime,
+  RowActions,
   SearchInput,
   SectionHeading,
   Segmented,
@@ -64,8 +65,8 @@ function Person({ u }: { u: AdminUser }) {
     <div className="flex items-center gap-2.5">
       <PersonAvatar name={[u.givenName, u.familyName]} src={u.avatarUrl} />
       <div className="min-w-0">
-        <div className="font-semibold">{displayName(u) || u.email}</div>
-        {displayName(u) ? <div className="text-xs text-fg-muted">{u.email}</div> : null}
+        <div className="truncate font-semibold">{displayName(u) || u.email}</div>
+        {displayName(u) ? <div className="truncate text-xs text-fg-muted">{u.email}</div> : null}
       </div>
     </div>
   );
@@ -74,7 +75,7 @@ function Person({ u }: { u: AdminUser }) {
 function RoleCell({ u, className }: { u: AdminUser; className?: string }) {
   const t = useT();
   return (
-    <td className={cx(T.td, className, "whitespace-nowrap")}>
+    <td role="cell" className={cx(T.td, className, T.stack.sub, "whitespace-nowrap")}>
       <Badge tone={ROLE_TONE[u.role]}>{t(`settings.role.${u.role}` as "settings.role.student")}</Badge>
       {u.reason ? (
         <span className="ml-2 text-xs text-fg-muted">{t(`admin.reason.${u.reason}` as "admin.reason.grant")}</span>
@@ -118,23 +119,28 @@ function useAnonymize() {
 type Anonymize = ReturnType<typeof useAnonymize>;
 
 function anonymizeColumn<K extends string>(t: ReturnType<typeof useT>): Column<K> {
-  return { key: "actions", label: t("common.actions"), sortable: false, srOnly: true, className: T.stickyEnd };
+  return { key: "actions", label: t("common.actions"), sortable: false, srOnly: true, className: T.stickyEnd, stack: "end" };
 }
 
 function AnonymizeCell({ u, anonymize }: { u: AdminUser; anonymize: Anonymize }) {
   const t = useT();
+  const name = displayName(u) || u.email;
   return (
-    <td className={cx(T.td, T.stickyEnd, "text-right")}>
-      <Button
-        variant="danger-quiet"
-        size="sm"
-        aria-label={t("admin.inactive.anonymizeLabel", { name: displayName(u) || u.email })}
-        loading={anonymize.pending(u.id)}
-        onClick={() => void anonymize.ask(u)}
-      >
-        {/* The icon alone on a phone: the row's name and dates need the width. */}
-        <UserX /> <span className="max-sm:sr-only">{t("admin.inactive.anonymize")}</span>
-      </Button>
+    <td role="cell" className={cx(T.td, T.stickyEnd, T.stack.end, "text-right")}>
+      <RowActions
+        worded
+        label={t("common.rowActions", { name })}
+        items={[
+          {
+            label: t("admin.inactive.anonymize"),
+            name: t("admin.inactive.anonymizeLabel", { name }),
+            icon: UserX,
+            danger: true,
+            pending: anonymize.pending(u.id),
+            onSelect: () => void anonymize.ask(u),
+          },
+        ]}
+      />
     </td>
   );
 }
@@ -268,8 +274,8 @@ function AllTable({ rows, anonymize }: { rows: AdminUser[]; anonymize: Anonymize
   const { shown, footer } = useFirstRows(sorted);
 
   const columns: Column<SortKey>[] = [
-    { key: "name", label: t("admin.col.person") },
-    { key: "role", label: t("admin.col.role") },
+    { key: "name", label: t("admin.col.person"), stack: "main" },
+    { key: "role", label: t("admin.col.role"), stack: "sub" },
     // The last activity as the lifecycle reads it (ADR-107, ADR-117 §2): the
     // last request, sign-in or token use, the creation when none; the
     // sign-in itself in the cell's tooltip.
@@ -286,27 +292,27 @@ function AllTable({ rows, anonymize }: { rows: AdminUser[]; anonymize: Anonymize
 
   return (
     <Card className={cx("overflow-x-auto", T.container)}>
-      <table className={T.table}>
+      <table role="table" className={cx(T.table, T.stack.table)}>
         <TableHead columns={columns} sort={sort} onToggle={toggle} />
-        <tbody>
+        <tbody role="rowgroup">
           {shown.map((u) => (
-            <tr key={u.id} className={cx(T.row, T.rowHover)}>
-              <td className={T.td}>
+            <tr role="row" key={u.id} className={cx(T.row, T.rowHover, T.stack.row)}>
+              <td role="cell" className={cx(T.td, T.stack.main)}>
                 <Person u={u} />
               </td>
               <RoleCell u={u} />
-              <td
+              <td role="cell"
                 className={cx(T.td, T.colHigh, "whitespace-nowrap text-fg-muted")}
                 title={u.lastLoginAt ? t("admin.signedIn", { when: isoDateTime(u.lastLoginAt) }) : undefined}
               >
                 <RelativeTime iso={u.lastActivityAt} />
               </td>
-              <td className={cx(T.td, T.colLow, "whitespace-nowrap text-fg-muted")}>
+              <td role="cell" className={cx(T.td, T.colLow, "whitespace-nowrap text-fg-muted")}>
                 <RelativeTime iso={u.createdAt} />
               </td>
-              <td className={cx(T.td, T.colMid, "text-right tabular-nums")}>{count(u, u.pools)}</td>
-              <td className={cx(T.td, T.colMid, "text-right tabular-nums")}>{count(u, u.questions)}</td>
-              <td className={cx(T.td, T.colMid, "text-right tabular-nums")}>{count(u, u.classrooms)}</td>
+              <td role="cell" className={cx(T.td, T.colMid, "text-right tabular-nums")}>{count(u, u.pools)}</td>
+              <td role="cell" className={cx(T.td, T.colMid, "text-right tabular-nums")}>{count(u, u.questions)}</td>
+              <td role="cell" className={cx(T.td, T.colMid, "text-right tabular-nums")}>{count(u, u.classrooms)}</td>
               {anonymize ? <AnonymizeCell u={u} anonymize={anonymize} /> : null}
             </tr>
           ))}
@@ -332,28 +338,32 @@ function InactiveTable({ rows, anonymize }: { rows: AdminUser[]; anonymize: Anon
   );
   const { shown, footer } = useFirstRows(sorted);
   const columns: Column<InactiveSortKey>[] = [
-    { key: "name", label: t("admin.col.person") },
-    { key: "role", label: t("admin.col.role"), className: T.colMid },
-    { key: "lastActivityAt", label: t("admin.col.lastActivity") },
-    { key: "dormantSince", label: t("admin.inactive.col.dormant"), className: T.colMid },
+    { key: "name", label: t("admin.col.person"), stack: "main" },
+    { key: "role", label: t("admin.col.role"), className: T.colMid, stack: "sub" },
+    { key: "lastActivityAt", label: t("admin.col.lastActivity"), stack: "sub" },
+    { key: "dormantSince", label: t("admin.inactive.col.dormant"), className: T.colMid, stack: "sub" },
     ...(anonymize ? [anonymizeColumn<InactiveSortKey>(t)] : []),
   ];
 
+  // On a card the role and the dormancy come back beside the last activity:
+  // they are what this list is read for (`@max-md:block`, as the pool's version).
   return (
     <Card className={cx("overflow-x-auto", T.container)}>
-      <table className={T.table}>
+      <table role="table" className={cx(T.table, T.stack.table)}>
         <TableHead columns={columns} sort={sort} onToggle={toggle} />
-        <tbody>
+        <tbody role="rowgroup">
           {shown.map((u) => (
-            <tr key={u.id} className={cx(T.row, T.rowHover)}>
-              <td className={T.td}>
+            <tr role="row" key={u.id} className={cx(T.row, T.rowHover, T.stack.row)}>
+              <td role="cell" className={cx(T.td, T.stack.main)}>
                 <Person u={u} />
               </td>
-              <RoleCell u={u} className={T.colMid} />
-              <td className={cx(T.td, "whitespace-nowrap text-fg-muted")}>
+              <RoleCell u={u} className={cx(T.colMid, "@max-md:block")} />
+              <td role="cell" className={cx(T.td, T.stack.sub, "whitespace-nowrap text-fg-muted")}>
+                <span className={T.stack.label}>{t("admin.col.lastActivity")}</span>
                 <RelativeTime iso={u.lastActivityAt} />
               </td>
-              <td className={cx(T.td, T.colMid, "whitespace-nowrap text-fg-muted")}>
+              <td role="cell" className={cx(T.td, T.colMid, T.stack.sub, "@max-md:block whitespace-nowrap text-fg-muted")}>
+                <span className={T.stack.label}>{t("admin.inactive.col.dormant")}</span>
                 {u.dormantSince ? <RelativeTime iso={u.dormantSince} /> : "—"}
                 {u.due ? (
                   <span className="ml-2" title={t("admin.inactive.dueHint")}>

@@ -30,6 +30,7 @@ export const common: Record<keyof typeof en, string> = {
   "ui.points.bonus": "points de bonus, au plus {n}",
   "ui.points.range": "De {min} à {max}",
   "common.actions": "Actions",
+  "common.rowActions": "Actions pour {name}",
   "common.loading": "Chargement…",
   "common.retry": "Réessayer",
   "common.showAll": "Tout afficher ({n})",

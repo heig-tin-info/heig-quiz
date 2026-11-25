@@ -48,7 +48,7 @@ export function Breadcrumb({
         <a
           href={parent.href}
           aria-label={backLabel(parent.label)}
-          className="flex min-w-0 shrink-[3] items-center gap-1 transition-colors hover:text-fg hover:underline sm:hidden"
+          className="touch-hit flex min-w-0 shrink-[3] items-center gap-1 transition-colors hover:text-fg hover:underline sm:hidden"
           onClick={(e) => {
             if (!parent.onNavigate || !isPlainClick(e)) return;
             e.preventDefault();
