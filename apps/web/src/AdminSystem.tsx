@@ -32,6 +32,7 @@ import { api, ApiError, apiErrorMessage } from "./api";
 import { formatBytes, formatDecimal, formatMs, useI18n, useT, type Dict } from "./i18n";
 import { useToast } from "./notify";
 import { adminSystemKey } from "./queryKeys";
+import { WorkspaceImagesSection } from "./AdminWorkspaceImages";
 import {
   Alert,
   Badge,
@@ -91,7 +92,9 @@ const POLL_MS = 30_000;
 /**
  * The system status (N-OPS-03, F-ADMIN-07, ADR-055): ONE question — can an
  * exam run now, and does anything need me? A summary line, then the checks
- * as compact rows (status, name, value, cause), then what is deployed. No
+ * as compact rows (status, name, value, cause), the engine's workspace
+ * images where the platform has the online workspace (ADR-146 §8, the
+ * disk they take), then what is deployed. No
  * chart, no log: a check says how bad things are, never who.
  *
  * No primary action: "Refresh" is secondary; the page's primary action
@@ -162,6 +165,7 @@ export function SystemSection({ onOpenTasks }: { onOpenTasks: () => void }) {
           </Card>
         </section>
       ))}
+      <WorkspaceImagesSection />
       <Deployment deployment={deployment} />
     </div>
   );

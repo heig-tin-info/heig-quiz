@@ -214,6 +214,14 @@ const scenes = [
   { name: "course-documents-empty", role: "teacher", path: "/courses/c2/documents" },
   { name: "course-documents-full", role: "teacher", path: "/courses/c1/documents?many=1" },
   { name: "course-documents-admin", role: "admin", path: "/courses/c1/documents" },
+  // ADR-146 §4 (`?codespace=1`): PRG1's workspace images — ready, in flight,
+  // a refused Refresh still running its previous version, obsolete — an empty
+  // list, an assistant who reads, the Add dialog and a row's menu.
+  { name: "course-images", role: "teacher", path: "/courses/c1/images?codespace=1&projects=1" },
+  { name: "course-images-empty", role: "teacher", path: "/courses/c2/images?codespace=1&projects=1" },
+  { name: "course-images-assistant", role: "teacher", path: "/courses/c1/images?codespace=1&projects=1&assistant=1" },
+  { name: "course-images-add", role: "teacher", path: "/courses/c1/images?codespace=1&projects=1", fold: true, act: (p) => p.getByRole("button", { name: /^(add image|ajouter une image)$/i }).first().click() },
+  { name: "course-images-menu", role: "teacher", path: "/courses/c1/images?codespace=1&projects=1", act: (p) => p.getByTestId("workspace-image").nth(2).getByRole("button", { name: /^actions$/i }).click() },
   // ADR-144 §6: a document's preview, the viewer in the expand layer; the
   // title opens it. A PDF (the mock's sample, searched for "résistance") and
   // a Markdown document (its outline open).
@@ -2533,6 +2541,8 @@ const scenes = [
   { name: "admin-system-degraded", role: "admin", path: "/admin?tab=system&degraded=1" },
   { name: "admin-system-error", role: "admin", path: "/admin?tab=system&fail=1", settle: 2500 },
   { name: "admin-system-loading", role: "admin", path: "/admin?tab=system&slow=1", settle: 300 },
+  // ADR-146 §8 (`?codespace=1`): the engine's store of workspace images, under the checks.
+  { name: "admin-system-images", role: "admin", path: "/admin?tab=system&degraded=0&codespace=1&projects=1" },
   // ADR-055 §5: the administrators' health alert, in the bell and in the settings.
   { name: "notifications-admin", role: "admin", path: "/", fold: true, act: async (p) => { await p.getByRole("button", { name: /^user menu/i }).first().click(); await p.getByRole("menuitem", { name: /^notifications/i }).click(); } },
   // ADR-034 §6: a session an administrator opened in the student's name, told afterwards.

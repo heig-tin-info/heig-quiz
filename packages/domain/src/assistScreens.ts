@@ -16,8 +16,12 @@ import { ASSIST_MAX_WRITES, type AssistPendingWrite } from "./assistWrites.js";
 
 // --- The tabs a screen reads off its address ----------------------------------
 
-/** A course page's tabs, each a path of its own (`/courses/:id/<tab>`); the classrooms are the bare path. */
-export const COURSE_TABS = ["classrooms", "templates", "pools", "documents", "members", "settings"] as const;
+/**
+ * A course page's tabs, each a path of its own (`/courses/:id/<tab>`); the
+ * classrooms are the bare path. `images` (ADR-146 §4) where the platform has
+ * the online workspace.
+ */
+export const COURSE_TABS = ["classrooms", "templates", "pools", "documents", "images", "members", "settings"] as const;
 export type CourseTab = (typeof COURSE_TABS)[number];
 /** The Administration page's tabs (`?tab=`); `kiosk` where the platform has kiosk stations (ADR-051). */
 export const ADMIN_TABS = ["people", "kiosk", "activity", "system", "tasks", "llm", "concepts"] as const;

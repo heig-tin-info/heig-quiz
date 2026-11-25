@@ -692,7 +692,7 @@ export const WORKSPACE_IMAGE_NAME_MAX = 60;
  *   - `not_found`, `not_public`, `config` (422) and `registry_unavailable`
  *     (503): the portal's refusal of the reference ({@link IMAGE_ADMISSION_ERRORS}),
  *     its `detail` quoted;
- *   - `images_unavailable` (503): the portal does not serve images yet
+ *   - `images_unavailable` (404): the portal does not serve images yet, the feature is off
  *     (the rollout's guard: the list, when its `GET /api/images/base` is a
  *     404; an add, a Refresh or the administrator's view, when the portal
  *     route they call is);
@@ -748,6 +748,18 @@ export type CourseWorkspaceImagePatch = z.infer<typeof CourseWorkspaceImagePatch
 
 /** A project, as an image's users are named. */
 const NamedProject = z.object({ id: z.uuid(), name: z.string() });
+
+/** `409 image_in_use`'s body past its code: the course's projects that still pick the image. */
+export const ImageInUse = z.object({ projects: z.array(NamedProject) });
+export type ImageInUse = z.infer<typeof ImageInUse>;
+
+/**
+ * The body past its code of a refusal the portal words (`not_found`,
+ * `not_public`, `config` 422, `registry_unavailable` 503): its diagnostic,
+ * quoted as it is, never prose.
+ */
+export const ImageRefusalDetail = z.object({ detail: ImageDetail });
+export type ImageRefusalDetail = z.infer<typeof ImageRefusalDetail>;
 
 /**
  * One image of a course, as its staff read it. `reference` is what the owner

@@ -69,6 +69,8 @@ export const pairPreviewKey = (code: string) => ["pair-preview", code] as const;
  * refetch it; it polls on its own clock instead.
  */
 export const adminSystemKey = ["admin-system"] as const;
+/** The engine's store of workspace images (ADR-146 §8): read when the System tab opens, never polled. */
+export const adminWorkspaceImagesKey = ["admin-workspace-images"] as const;
 /** Whether the editor's "Generate answers" wand works now, and for which types (ADR-059). */
 export const generateAvailabilityKey = ["generate-availability"] as const;
 /** The teacher assistant (ADR-080): whether it answers, the caller's conversations and one of them. */
@@ -107,6 +109,8 @@ export const courseTemplatesKey = (id: string | null) => ["course", id, "templat
 export const courseConditionsKey = (id: string) => ["course", id, "conditions"] as const;
 /** A course's library of documents (ADR-144). */
 export const courseLibraryKey = (id: string) => ["course", id, "documents"] as const;
+/** A course's workspace images (ADR-146 §4): under the course, so a course refresh reaches them. */
+export const courseWorkspaceImagesKey = (id: string) => ["course", id, "workspace-images"] as const;
 /** A Markdown document's HTML, for the preview: under the library's key, so what refreshes the library refreshes it. */
 export const courseDocumentHtmlKey = (id: string, documentId: string) => ["course", id, "documents", documentId, "html"] as const;
 /**

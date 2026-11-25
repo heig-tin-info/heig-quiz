@@ -1016,6 +1016,12 @@ function projectOr404(id: string): MockProject {
  * ADR-131 §13): graded and not archived, in any state, a draft's included;
  * null otherwise (`gradebook.ts`).
  */
+/** A project's name, as a course image names its users (ADR-146, `workspaceImages.ts`); the id when unknown. */
+export function mockProjectName(id: string): string {
+  seeded();
+  return PROJECTS.get(id)?.summary.name ?? id;
+}
+
 export function projectColumnOf(id: string): { classroomId: string; released: boolean } | null {
   seeded();
   const p = PROJECTS.get(id);

@@ -12,7 +12,7 @@
  * service — never a tag, never a candidate.
  *
  * The rollout's guard: while the portal has no image route (an older
- * portal), the list answers `503 images_unavailable` (its `GET
+ * portal), the list answers `404 images_unavailable` (its `GET
  * /api/images/base` is a 404), and so do an add, a Refresh and the
  * administrator's view (the route they call is); no image can be admitted,
  * so a sync keeps `image: null`.
@@ -38,7 +38,9 @@ import {
   type AdmissionState,
   type CourseWorkspaceImage,
   type CourseWorkspaceImages,
+  type ImageInUse,
   type ImageRefusal,
+  type ImageRefusalDetail,
   type WorkspaceImageError,
 } from "@quiz/contracts";
 import { imageObsolete } from "@quiz/domain";
@@ -72,7 +74,8 @@ const IMAGE_ERROR_STATUS: Record<WorkspaceImageError, number> = {
   not_public: 422,
   config: 422,
   registry_unavailable: 503,
-  images_unavailable: 503,
+  // A portal without the image routes is the feature off: the 404 of a missing entity, never an outage.
+  images_unavailable: 404,
   portal_unavailable: 503,
 };
 
@@ -209,7 +212,7 @@ export async function imageOfCourse(db: Db | Tx, courseId: string, imageId: stri
  * Asks the portal to admit `reference` (a tag or a digest; it resolves the
  * tag): its admission, or the portal's refusal — `422 not_found |
  * not_public | config` and `503 registry_unavailable` with its `detail`,
- * `503 images_unavailable` from an older portal, `503 portal_unavailable`
+ * `404 images_unavailable` from an older portal, `503 portal_unavailable`
  * otherwise.
  */
 async function requestAdmission(config: AppConfig, now: Date, reference: string): Promise<CodespaceImageAdmission> {
@@ -226,7 +229,9 @@ async function requestAdmission(config: AppConfig, now: Date, reference: string)
     if (admission.success) return admission.data;
   } else if (response.status === 422 || response.status === 503) {
     const refusal = CodespaceImageAdmissionError.safeParse(body);
-    if (refusal.success) throw imageError(refusal.data.error, "The workspace portal refused the image", { detail: refusal.data.detail ?? null });
+    if (refusal.success) {
+      throw imageError(refusal.data.error, "The workspace portal refused the image", { detail: refusal.data.detail ?? null } satisfies ImageRefusalDetail);
+    }
   }
   throw portalUnavailable(`answered ${response.status}`);
 }
@@ -520,7 +525,7 @@ export async function removeImage(db: Db, row: ImageRow, actor: AuditActor, now:
   await db.transaction(async (tx) => {
     await tx.select({ id: courseWorkspaceImages.id }).from(courseWorkspaceImages).where(eq(courseWorkspaceImages.id, row.id)).for("update");
     const using = (await usersOf(tx, [row.id])).get(row.id) ?? [];
-    if (using.length > 0) throw imageError("image_in_use", "A project of this course runs this image", { projects: using });
+    if (using.length > 0) throw imageError("image_in_use", "A project of this course runs this image", { projects: using } satisfies ImageInUse);
     await tx.delete(courseWorkspaceImages).where(eq(courseWorkspaceImages.id, row.id));
     await audit(tx, {
       ...actor,
@@ -586,7 +591,7 @@ const EngineImages = z.array(CodespaceEngineImage);
 /**
  * `GET /app/api/admin/workspace-images`: the engine's store as the portal
  * lists it (`GET /api/images`), each admission with the course images that
- * name its reference and the projects that pick them. `503
+ * name its reference and the projects that pick them. `404
  * images_unavailable` from an older portal, `503 portal_unavailable` when
  * the portal cannot be asked.
  */

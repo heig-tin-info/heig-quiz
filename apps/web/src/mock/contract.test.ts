@@ -49,6 +49,8 @@ import {
   CourseCondition,
   CourseDetail,
   CourseLibrary,
+  CourseWorkspaceImages,
+  AdminWorkspaceImage,
   DocumentHtml,
   DashboardView,
   DrillCalibrationLevel,
@@ -291,6 +293,8 @@ const CHECKED: Case[] = [
   one("/app/api/courses/:id", `/app/api/courses/${courses[0]!.id}`, CourseDetail),
   each("/app/api/courses/:id/conditions", `/app/api/courses/${courses[0]!.id}/conditions`, CourseCondition),
   one("/app/api/courses/:id/documents", `/app/api/courses/${courses[0]!.id}/documents`, CourseLibrary),
+  // ADR-146 §4 (`?codespace=1`): PRG1's workspace images, one in each state.
+  one("/app/api/courses/:id/workspace-images", `/app/api/courses/${courses[0]!.id}/workspace-images`, CourseWorkspaceImages),
   one(
     "/app/api/courses/:id/documents/:documentId/html",
     `/app/api/courses/${courses[0]!.id}/documents/5b0c8a1e-2f7d-4c3a-9e61-0d4b7a2c1f02/html`,
@@ -480,6 +484,7 @@ const CHECKED: Case[] = [
   one("/app/api/kiosk/station", "/app/api/kiosk/station", KioskStation),
   one("/app/api/pair/:code", "/app/api/pair/BCDF-GHJK", PairPreview),
   one("/app/api/admin/system", "/app/api/admin/system", SystemStatus),
+  each("/app/api/admin/workspace-images", "/app/api/admin/workspace-images", AdminWorkspaceImage),
   one("/app/api/admin/llm", "/app/api/admin/llm", LlmSettings),
   one("/app/api/generate/availability", "/app/api/generate/availability", LlmAvailability),
   // The training course (ADR-105): installed, no course yet, without a flag.

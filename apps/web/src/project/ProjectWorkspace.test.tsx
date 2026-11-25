@@ -55,7 +55,7 @@ const sessions: ProjectWorkspaceSessions = {
 const render = () =>
   renderWithProviders(
     <>
-      <WorkModeSetting projectId="p1" archived={false} />
+      <WorkModeSetting projectId="p1" classroomId="r1" archived={false} />
       <ProjectWorkspace projectId="p1" archived={false} />
     </>,
   );
@@ -239,5 +239,92 @@ describe("the project's device level", () => {
     expect(await screen.findByText("Students reach their repository only after grading.")).toBeInTheDocument();
     expect(screen.getByText("Only in Safe Exam Browser, launched from the project page.")).toBeInTheDocument();
     expect(screen.getByText("In Safe Exam Browser or on a school kiosk station.")).toBeInTheDocument();
+  });
+});
+
+/*
+ * ADR-146 §4: online, the project runs the default (`quiz-base`) or one of
+ * its course's images with a digest in service. Whoever manages the course's
+ * images picks it; the others see a course image in force, and nothing for
+ * the default.
+ */
+describe("the project's workspace image", () => {
+  const IMAGES = "GET /app/api/courses/c1/workspace-images";
+  const PUT = "PUT /app/api/projects/p1/workspace/image";
+  const C = "1a6e0000-0000-4000-8000-000000000001";
+  const GO = "1a6e0000-0000-4000-8000-000000000002";
+  const at = "2026-11-20T08:00:00.000Z";
+  const img = (id: string, name: string, digestReference: string | null) => ({
+    id,
+    name,
+    reference: "ghcr.io/heig-tin-info/lab:latest",
+    digestReference,
+    state: digestReference ? "ready" : "checking",
+    reason: null,
+    detail: null,
+    baseVersion: "1.1.0",
+    diskBytes: 1_000_000_000,
+    obsolete: false,
+    projects: [],
+    createdAt: at,
+    updatedAt: at,
+  });
+  const list = (canManage: boolean) => ({
+    images: [img(C, "C with Baygon", `ghcr.io/heig-tin-info/c@sha256:${"a".repeat(64)}`), img(GO, "Go 1.24", null)],
+    base: { reference: `ghcr.io/heig-tin-info/quiz-base@sha256:${"b".repeat(64)}`, version: "1.1.0" },
+    canManage,
+    max: 5,
+  });
+  const world = (over: Record<string, ReturnType<typeof ok>> = {}) => ({
+    [WS]: ok(workspace({ mode: "online" })),
+    [SESSIONS]: ok({ reachable: true, sessions: [] }),
+    "GET /app/api/classrooms/r1": ok({ course: { id: "c1", name: "Programmation C", code: "PRG1" } }),
+    [IMAGES]: ok(list(true)),
+    "GET /app/api/projects/p1": ok({}),
+    ...over,
+  });
+
+  it("offers the default and the ready images, and writes the choice", async () => {
+    const { calls } = mockFetch(world({ [PUT]: ok(workspace({ mode: "online", image: { id: C, name: "C with Baygon" } })) }));
+    render();
+    const select = await screen.findByRole("combobox", { name: "Image" });
+    await waitFor(() =>
+      expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual(["Default (quiz-base)", "C with Baygon"]),
+    );
+    expect(select).toHaveValue("");
+    await userEvent.selectOptions(select, C);
+    await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ imageId: C }));
+    await waitFor(() => expect(select).toHaveValue(C));
+  });
+
+  it("words the refusal of an image not ready, the choice kept", async () => {
+    mockFetch(world({ [PUT]: fail(409, { error: "image_not_ready", message: "This image is not admitted yet" }) }));
+    render();
+    const select = await screen.findByRole("combobox", { name: "Image" });
+    await waitFor(() => expect(within(select).getAllByRole("option")).toHaveLength(2));
+    await userEvent.selectOptions(select, C);
+    expect(await screen.findByText("This image is not ready. Refresh it on the course's Images tab.")).toBeInTheDocument();
+    await waitFor(() => expect(select).toHaveValue(""));
+  });
+
+  it("shows a course image in force to a reader who may not change it, disabled", async () => {
+    mockFetch(world({ [WS]: ok(workspace({ mode: "online", image: { id: C, name: "C with Baygon" } })), [IMAGES]: ok(list(false)) }));
+    render();
+    const select = await screen.findByRole("combobox", { name: "Image" });
+    await waitFor(() => expect(select).toBeDisabled());
+    expect(select).toHaveValue(C);
+  });
+
+  it("draws nothing for the default to a reader who may not change it, nor in own tools", async () => {
+    const { calls } = mockFetch(world({ [IMAGES]: ok(list(false)) }));
+    const { unmount } = render();
+    await screen.findByRole("radiogroup", { name: "Where students work" });
+    await waitFor(() => expect(calls.some((c) => c.url === "/app/api/courses/c1/workspace-images")).toBe(true));
+    expect(screen.queryByRole("combobox", { name: "Image" })).toBeNull();
+    unmount();
+    mockFetch(world({ [WS]: ok(workspace()) }));
+    render();
+    await screen.findByRole("radiogroup", { name: "Where students work" });
+    expect(screen.queryByRole("combobox", { name: "Image" })).toBeNull();
   });
 });

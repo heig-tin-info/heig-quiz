@@ -62,6 +62,18 @@ image. A document's title opens it in a viewer, with its outline, a search
 and a zoom; **Close** or Escape brings you back. Upload only what you may
 hand out to your students.
 
+## Images
+
+Where the platform has the online workspace, the **Images** tab holds up
+to five workspace images: the tools a project's workspace starts with when
+the default, quiz-base, is not enough. You build an image from quiz-base and
+publish it, public, on ghcr.io or Docker Hub; **Add image** takes its
+reference, and the row follows its download and check until it is
+**ready**. **Refresh** takes a new version of its tag. A teacher of the
+course with the online workspace manages the list; the rest of the staff
+reads it. A public image is public: no hidden test nor solution in it. The
+documentation's *Workspace images* page says how to build one.
+
 ## Evaluation templates
 
 A template is an evaluation kept by the course rather than by one classroom:
