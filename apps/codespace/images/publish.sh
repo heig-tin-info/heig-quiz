@@ -44,12 +44,21 @@ rm -f "$tmp/basic"
 token=$(sed -n 's/.*"token":"\([^"]*\)".*/\1/p' <<<"$body")
 [ -n "$token" ] || { echo "publish: the registry gave no token for $REPO" >&2; exit 1; }
 printf 'header = "Authorization: Bearer %s"\n' "$token" > "$tmp/auth"
-code=$(curl -sS -m 30 -I -o /dev/null -w '%{http_code}' -K "$tmp/auth" \
-	-H 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
-	"https://ghcr.io/v2/$REPO/manifests/$VERSION")
+# The manifest's digest as the registry stores it, from its
+# Docker-Content-Digest header: `podman --remote push --digestfile` writes
+# nothing on the client side, so the registry is the one source.
+head_manifest() {
+	curl -sS -m 30 -I -o "$tmp/headers" -w '%{http_code}' -K "$tmp/auth" \
+		-H 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json, application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+		"https://ghcr.io/v2/$REPO/manifests/$VERSION"
+}
+header_digest() {
+	tr -d '\r' < "$tmp/headers" | sed -n 's/^[Dd]ocker-[Cc]ontent-[Dd]igest: *\(sha256:[0-9a-f]\{64\}\)$/\1/p'
+}
+code=$(head_manifest)
 case "$code" in
 	200)
-		echo "publish: $REF:$VERSION exists already: nothing published" >&2
+		echo "publish: $REF:$VERSION exists already ($(header_digest)): nothing published" >&2
 		exit 0
 		;;
 	404) ;;
@@ -72,7 +81,8 @@ case "$code" in
 esac
 
 printf '%s' "$GHCR_TOKEN" | pd login ghcr.io -u "$GHCR_USER" --password-stdin >/dev/null
-pd push --quiet --digestfile "$tmp/digest" "$LOCAL" "docker://$REF:$VERSION"
-digest=$(tr -d '[:space:]' < "$tmp/digest")
+pd push --quiet "$LOCAL" "docker://$REF:$VERSION"
+digest=
+[ "$(head_manifest)" = 200 ] && digest=$(header_digest)
 [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "publish: no digest for $REF:$VERSION ('$digest')" >&2; exit 1; }
 echo "$REF:$VERSION@$digest"
