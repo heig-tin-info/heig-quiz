@@ -64,6 +64,21 @@ image. Le titre d'un document l'ouvre dans un lecteur, avec son sommaire,
 une recherche et un zoom ; **Fermer** ou Échap ramène à la liste. Déposez
 uniquement ce que vous pouvez distribuer à vos étudiants.
 
+## Images
+
+Là où la plateforme a l'espace de travail en ligne, l'onglet **Images**
+réunit jusqu'à cinq images d'espace de travail : les outils avec lesquels
+démarre l'espace d'un projet quand l'image par défaut, quiz-base, ne suffit
+pas. Vous construisez une image à partir de quiz-base et la publiez,
+publique, sur ghcr.io ou Docker Hub ; **Ajouter une image** prend sa
+référence, et la ligne suit son téléchargement et sa vérification jusqu'à
+**prête**. **Actualiser** reprend une nouvelle version de son tag. Les
+personnes responsables du cours qui disposent de l'espace de travail en
+ligne gèrent la liste ; le reste de l'équipe enseignante la consulte. Tout
+le monde peut télécharger une image publique : les tests cachés et les solutions
+restent dans le dépôt de distribution. La page *Workspace images* de la
+documentation explique comment en construire une.
+
 ## Modèles d'évaluation
 
 Un modèle est une évaluation gardée par le cours plutôt que par une classe :

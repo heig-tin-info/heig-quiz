@@ -126,7 +126,7 @@ export function ProjectSettings({
         source={source}
         onChange={(protectedFiles) => write({ protectedFiles })}
       />
-      <WorkModeSetting projectId={project.id} archived={project.archivedAt !== null} />
+      <WorkModeSetting projectId={project.id} classroomId={project.classroomId} archived={project.archivedAt !== null} />
       {projectGradebookRow(project)}
       {project.gradingMode === "criteria" ? (
         <>

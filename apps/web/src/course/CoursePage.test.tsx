@@ -145,6 +145,69 @@ describe("CoursePage", () => {
     expect(screen.getAllByRole("button").filter((b) => /bg-accent\b/.test(b.className))).toEqual([]);
   });
 
+  // ADR-146 §4: the workspace images, a tab only where the platform has the online workspace.
+  const IMAGES = "GET /app/api/courses/c1/workspace-images";
+  const imageList = (canManage: boolean, n = 0) => ({
+    images: Array.from({ length: n }, (_, i) => ({
+      id: `1a6e0000-0000-4000-8000-00000000000${i + 1}`,
+      name: `Image ${i + 1}`,
+      reference: `ghcr.io/me/image-${i + 1}:latest`,
+      digestReference: null,
+      state: "checking",
+      reason: null,
+      detail: null,
+      baseVersion: null,
+      diskBytes: null,
+      obsolete: null,
+      projects: [],
+      createdAt: "2026-11-20T08:00:00.000Z",
+      updatedAt: "2026-11-20T08:00:00.000Z",
+    })),
+    base: null,
+    canManage,
+    max: 5,
+  });
+  const accented = () => screen.getAllByRole("button").filter((b) => /bg-accent\b/.test(b.className)).map((b) => b.textContent?.trim());
+
+  it("has an Images tab where the platform has the online workspace, Add image its primary for a manager", async () => {
+    mockFetch({ ...world(), [IMAGES]: ok(imageList(true)) });
+    renderWithProviders(<CoursePage id="c1" tab="images" navigate={vi.fn()} />);
+
+    const tabs = await screen.findByRole("tablist", { name: "Course sections" });
+    expect(await within(tabs).findByRole("tab", { name: /^Images/ })).toHaveAttribute("aria-selected", "true");
+    expect(await screen.findByText("No images yet")).toBeInTheDocument();
+    expect(accented()).toEqual(["Add image"]);
+    await userEvent.click(screen.getByRole("button", { name: "Add image" }));
+    expect(await screen.findByRole("dialog", { name: "Add an image" })).toBeVisible();
+  });
+
+  it("offers Add image neither to a reader of the list nor under the cap", async () => {
+    mockFetch({ ...world(), [IMAGES]: ok(imageList(false)) });
+    const { unmount } = renderWithProviders(<CoursePage id="c1" tab="images" navigate={vi.fn()} />);
+    expect(await screen.findByText("No images yet")).toBeInTheDocument();
+    expect(accented()).toEqual([]);
+    unmount();
+
+    mockFetch({ ...world(), [IMAGES]: ok(imageList(true, 5)) });
+    renderWithProviders(<CoursePage id="c1" tab="images" navigate={vi.fn()} />);
+    expect(await screen.findByText("A course holds 5 images at most. Remove one to add another.")).toBeInTheDocument();
+    expect(accented()).toEqual([]);
+  });
+
+  it.each([
+    ["without the online workspace", { error: "not_found" }],
+    ["whose portal serves no image (images_unavailable)", { error: "images_unavailable", message: "not yet" }],
+  ])("has no Images tab %s, the list's 404: its address opens the classrooms", async (_, body) => {
+    const { calls } = mockFetch({ ...world(), [IMAGES]: fail(404, body) });
+    renderWithProviders(<CoursePage id="c1" tab="images" navigate={vi.fn()} />);
+
+    const tabs = await screen.findByRole("tablist", { name: "Course sections" });
+    await waitFor(() => expect(calls.some((c) => c.url === "/app/api/courses/c1/workspace-images")).toBe(true));
+    await waitFor(() => expect(within(tabs).getByRole("tab", { name: /Classrooms/ })).toHaveAttribute("aria-selected", "true"));
+    expect(within(tabs).queryByRole("tab", { name: /^Images/ })).toBeNull();
+    expect(screen.getByText("24 students")).toBeVisible();
+  });
+
   it("opens a new classroom from the header", async () => {
     mockFetch(world());
     renderWithProviders(<CoursePage id="c1" navigate={vi.fn()} />);

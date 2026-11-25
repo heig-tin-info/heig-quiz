@@ -8,6 +8,8 @@ import {
   CourseWorkspaceImageParams,
   CourseWorkspaceImagePatch,
   CourseWorkspaceImages,
+  ImageInUse,
+  ImageRefusalDetail,
   ProjectWorkspaceImageBody,
   WORKSPACE_IMAGE_NAME_MAX,
   ADMISSION_STATES,
@@ -525,5 +527,14 @@ describe("a course's workspace images (ADR-146 §4–§8, Quiz's routes)", () =>
     const stored = { id: "x", names: [], diskBytes: 1, kind: "admitted", admissions: [{ ...admission, uses }] };
     expect(AdminWorkspaceImage.safeParse(stored).success).toBe(true);
     expect(AdminWorkspaceImage.safeParse({ ...stored, admissions: [admission] }).success).toBe(false);
+  });
+
+  it("describes the bodies of image_in_use and of a refusal the portal words", () => {
+    const projects = [{ id: crypto.randomUUID(), name: "Lab 1" }];
+    expect(ImageInUse.parse({ error: "image_in_use", projects })).toEqual({ projects });
+    expect(ImageInUse.safeParse({ error: "image_in_use" }).success).toBe(false);
+    expect(ImageRefusalDetail.parse({ error: "not_public", detail: "401" })).toEqual({ detail: "401" });
+    expect(ImageRefusalDetail.parse({ error: "not_public", detail: null })).toEqual({ detail: null });
+    expect(ImageRefusalDetail.safeParse({ error: "not_public", detail: "x".repeat(501) }).success).toBe(false);
   });
 });

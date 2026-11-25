@@ -13,7 +13,7 @@
  *   sync as its digest in service, or null for the default;
  * - removal refused while a project picks it; the portal un-admits a
  *   reference no other course names;
- * - the rollout's guard: an older portal makes every route `503
+ * - the rollout's guard: an older portal makes every route `404
  *   images_unavailable`;
  * - the administrator's view of the store.
  */
@@ -438,7 +438,7 @@ describe("Refresh (ADR-146 §6)", () => {
 // ---------------------------------------------------------------- the rollout's guard and the administrator
 
 describe("an older portal (the rollout's guard)", () => {
-  it("answers 503 images_unavailable on the list, an add and the administrator's view; the sync keeps null", async () => {
+  it("answers 404 images_unavailable (the feature off) on the list, an add and the administrator's view; the sync keeps null", async () => {
     const room = await connected();
     const lab = await onlineProject(room, "Old portal lab");
     portal.images.base = 404;
@@ -448,13 +448,13 @@ describe("an older portal (the rollout's guard)", () => {
       await add(room, { name: "C lab", reference: "ghcr.io/acme/lab:1" }),
       await call("GET", ADMIN_WORKSPACE_IMAGES_PATH, admin.headers),
     ];
-    for (const res of answers) expect([res.statusCode, res.json().error]).toEqual([503, "images_unavailable"]);
+    for (const res of answers) expect([res.statusCode, res.json().error]).toEqual([404, "images_unavailable"]);
     // The default needs no image route.
     expect((await pick(lab, null)).statusCode).toBe(200);
     expect((await syncPayload(server.app.db, lab))!.image).toBeNull();
     // Cached five minutes: a portal deployed meanwhile is read again after.
     portal.images.base = fakeImages().base;
-    expect((await list(room)).statusCode).toBe(503);
+    expect((await list(room)).statusCode).toBe(404);
     server.clock.set(new Date(server.clock.now().getTime() + 6 * 60_000));
     expect((await list(room)).statusCode).toBe(200);
   });

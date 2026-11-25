@@ -17,6 +17,7 @@
  */
 import {
   ProjectWorkModeBody,
+  ProjectWorkspaceImageBody,
   type DeviceLevel,
   type ProjectWorkspace,
   type ProjectWorkspaceSessions,
@@ -28,6 +29,7 @@ import { workModeChoices, workModeRefusal, workSettingOf } from "@quiz/domain";
 
 import { classroomRoster } from "./org";
 import { flags, H, iso, MockError, MockPayload, on, refuse } from "./runtime";
+import { mockProjectImage, setMockProjectImage } from "./workspaceImages";
 
 interface MockWorkspace {
   mode: WorkMode;
@@ -64,7 +66,7 @@ function workspaceOr404(id: string): MockWorkspace {
 }
 
 /** The project's workspace for the persona: an owner with the grant, unless `?assistant=1`. */
-function view(ws: MockWorkspace): ProjectWorkspace {
+function view(projectId: string, ws: MockWorkspace): ProjectWorkspace {
   const facts = { owner: !flags.assistant, granted: true, launched: ws.launched, groupMode: false, kioskOffered: KIOSK_OFFERED };
   return {
     mode: ws.mode,
@@ -76,15 +78,15 @@ function view(ws: MockWorkspace): ProjectWorkspace {
     review: true,
     // ADR-089 point 7: the persona's grant (mock/org.ts, 3 at once) against PRG1-2026's claimed students.
     quota: { max: 3, seats: classroomRoster("r1").filter((s) => s.status === "claimed" && !s.staff).length },
-    // ADR-146: the default image until the course images screen exists (PR4).
-    image: null,
+    // ADR-146 §4: "Labo 2 — pointeurs" runs a course image (`mock/workspaceImages.ts`), the others the default.
+    image: mockProjectImage(projectId),
   };
 }
 
-on("GET", "/app/api/projects/:id/workspace", (m) => view(workspaceOr404(m.groups!.id!)));
+on("GET", "/app/api/projects/:id/workspace", (m) => view(m.groups!.id!, workspaceOr404(m.groups!.id!)));
 
 /** The project's workspace as the staff's review launch reads it (ADR-129 §5, `mock/project.ts`); 404 without the portal. */
-export const mockWorkspace = (projectId: string): ProjectWorkspace => view(workspaceOr404(projectId));
+export const mockWorkspace = (projectId: string): ProjectWorkspace => view(projectId, workspaceOr404(projectId));
 
 on("PUT", "/app/api/projects/:id/workspace/mode", (m, raw) => {
   const ws = workspaceOr404(m.groups!.id!);
@@ -100,7 +102,17 @@ on("PUT", "/app/api/projects/:id/workspace/mode", (m, raw) => {
   ws.devices = to.devices;
   // The portal takes an online project at once, under Safe Exam Browser too (M6-07).
   if (ws.mode !== "free") ws.syncedAt = iso(0);
-  return view(ws);
+  return view(m.groups!.id!, ws);
+});
+
+/** ADR-146 §4: the project's image, the default or one of its course's with a digest in service. */
+on("PUT", "/app/api/projects/:id/workspace/image", (m, raw) => {
+  const ws = workspaceOr404(m.groups!.id!);
+  if (flags.assistant) throw refuse(403, "owner_required", "Only an owner of this course may do that");
+  const body = ProjectWorkspaceImageBody.safeParse(raw);
+  if (!body.success) throw new MockPayload(400, { error: "validation", message: body.error.message });
+  setMockProjectImage(m.groups!.id!, body.data.imageId);
+  return view(m.groups!.id!, ws);
 });
 
 /**

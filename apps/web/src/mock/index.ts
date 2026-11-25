@@ -152,6 +152,7 @@ import "./drill";
 import "./github";
 import "./projectNew";
 import "./codespace";
+import "./workspaceImages";
 import "./journal";
 import "./kiosk";
 import "./assist";

@@ -1,7 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type UseMutationResult } from "@tanstack/react-query";
 import { AlertTriangle, Laptop, RefreshCw } from "lucide-react";
 
 import {
+  COURSE_WORKSPACE_IMAGES_MAX,
+  ProjectWorkspaceImageBody,
+  projectWorkspaceImagePath,
   type CodespaceSessionState,
   type ProjectWorkModeBody,
   type ProjectWorkspace as Workspace,
@@ -11,6 +14,8 @@ import {
 import { acceptsKiosk, workSettingFor, workSettingOf, type DeviceLevel, type WorkSetting } from "@quiz/domain";
 
 import { api, isNotFound } from "../api";
+import { useClassroom } from "../course/parts";
+import { imageErrorText, useCourseWorkspaceImages } from "../course/workspaceImages";
 import { AllowedDevices } from "../evaluation/AllowedDevices";
 import { useT, type Dict } from "../i18n";
 import { useToast } from "../notify";
@@ -26,6 +31,7 @@ import {
   RelativeTime,
   SectionHeading,
   Segmented,
+  Select,
   SettingRow,
   Skeleton,
   T,
@@ -71,21 +77,43 @@ type Place = "own" | "online";
  * has the workspace grant, until a workspace was opened — the server says
  * which modes the caller may set, and why not the others: `allowed`,
  * `refusal`. Nothing at all when the feature is off (the route is then a 404).
+ * Online, the workspace's image follows ({@link ImageSetting}).
  */
-export function WorkModeSetting({ projectId, archived }: { projectId: string; archived: boolean }) {
+export function WorkModeSetting({
+  projectId,
+  classroomId,
+  archived,
+}: {
+  projectId: string;
+  /** The project's classroom: its course holds the images the project may pick. */
+  classroomId: string;
+  archived: boolean;
+}) {
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
   const workspace = useWorkspace(projectId);
+  // Both writes answer the workspace as it now is.
+  const answered = (next: Workspace) => qc.setQueryData(projectWorkspaceKey(projectId), next);
   const setMode = useMutation({
     mutationFn: (body: ProjectWorkModeBody) =>
       api<Workspace>(`/app/api/projects/${projectId}/workspace/mode`, { method: "PUT", body: JSON.stringify(body) }),
     onSuccess: (next) => {
-      qc.setQueryData(projectWorkspaceKey(projectId), next);
-      // The page itself only: the answer IS the workspace now.
+      answered(next);
+      // The page itself only: its mode shows in the header and the tabs.
       void qc.invalidateQueries({ queryKey: projectKey(projectId), exact: true });
     },
     onError: (error) => toast(refusalMessage(error, t), "error"),
+  });
+  // ADR-146 §4: `PUT /projects/:id/workspace/image`.
+  const setImage = useMutation({
+    mutationFn: (imageId: string | null) =>
+      api<Workspace>(projectWorkspaceImagePath(projectId), {
+        method: "PUT",
+        body: JSON.stringify(ProjectWorkspaceImageBody.parse({ imageId })),
+      }),
+    onSuccess: answered,
+    onError: (error) => toast(imageErrorText(error, t, COURSE_WORKSPACE_IMAGES_MAX), "error"),
   });
 
   if (isNotFound(workspace.error)) return null;
@@ -149,6 +177,7 @@ export function WorkModeSetting({ projectId, archived }: { projectId: string; ar
           descOf={PROJECT_DESC}
         />
       ) : null}
+      {place === "online" ? <ImageSetting classroomId={classroomId} current={ws.image} archived={archived} setImage={setImage} /> : null}
       {quota ? (
         <p className="-mt-1 flex items-start gap-1.5 pb-3 text-[13px] text-warning" data-testid="workspace-quota">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />
@@ -156,6 +185,62 @@ export function WorkModeSetting({ projectId, archived }: { projectId: string; ar
         </p>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * The image the project's workspaces run (ADR-146 §4): the default
+ * (`quiz-base`) or one of its course's images whose admission was ready —
+ * a digest in service. Changed by whoever manages the course's images (an
+ * owner with the workspace grant, the list's `canManage`), at any time: a
+ * change applies to the workspaces started afterwards. Shown to the others
+ * only when the project runs a course image, as a fact; a refusal (`409
+ * image_not_ready`) is a toast, the stored choice kept.
+ */
+function ImageSetting({
+  classroomId,
+  current,
+  archived,
+  setImage,
+}: {
+  classroomId: string;
+  current: Workspace["image"];
+  archived: boolean;
+  /** `WorkModeSetting`'s write of the image, beside its write of the mode. */
+  setImage: UseMutationResult<Workspace, Error, string | null>;
+}) {
+  const t = useT();
+  const classroom = useClassroom(classroomId, { retry: false });
+  const list = useCourseWorkspaceImages(classroom.data?.course.id);
+  const canManage = list.data?.canManage === true;
+  if (!canManage && current === null) return null;
+  const ready = (list.data?.images ?? []).filter((image) => image.digestReference !== null);
+  // The image in force stays an option even when it no longer is ready.
+  const options = [
+    { value: "", label: t("project.workspace.image.default") },
+    ...ready.map((image) => ({ value: image.id, label: image.name })),
+    ...(current && !ready.some((image) => image.id === current.id) ? [{ value: current.id, label: current.name }] : []),
+  ];
+  const value = setImage.isPending ? (setImage.variables ?? "") : (current?.id ?? "");
+  return (
+    <SettingRow
+      title={<span id="project-workspace-image">{t("project.workspace.image")}</span>}
+      desc={t("project.workspace.image.desc")}
+    >
+      <Select
+        aria-labelledby="project-workspace-image"
+        width="w-56"
+        value={value}
+        disabled={!canManage || archived || setImage.isPending}
+        onChange={(e) => setImage.mutate(e.target.value || null)}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </Select>
+    </SettingRow>
   );
 }
 

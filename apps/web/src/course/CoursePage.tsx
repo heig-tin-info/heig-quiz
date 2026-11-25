@@ -1,9 +1,10 @@
-import { FileStack, FileText, FileUp, FolderTree, Library, Plus, Settings as SettingsIcon, UserPlus, Users } from "lucide-react";
+import { Container, FileStack, FileText, FileUp, FolderTree, Library, Plus, Settings as SettingsIcon, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
 import type { CourseSummary } from "@quiz/contracts";
 import type { CourseTab } from "@quiz/domain";
 
+import { isNotFound } from "../api";
 import { CourseTemplates, useCourseTemplates } from "../evaluation/templates";
 import { useT } from "../i18n";
 import { CourseDocuments, useDocumentUploads } from "../library/CourseDocuments";
@@ -26,23 +27,28 @@ import {
   Tabs,
 } from "../ui";
 import { CourseIcon } from "./CourseIcon";
+import { CourseImages } from "./CourseImages";
 import { CourseSettings } from "./CourseSettings";
 import { LinkedPools, LinkPoolMenu } from "./CoursePools";
 import { ArchivedClassrooms, ClassroomRow, HiddenBadge, useClassroomSignals, useCourseDetail, useCourses } from "./parts";
 import { useCourseActions } from "./useCourseActions";
+import { useCourseWorkspaceImages } from "./workspaceImages";
 
 /**
  * The page of one course (F-ORG-12), in tabs as the classroom's: its
  * classrooms (the default), its evaluation templates, which live here and
  * nowhere else (ADR-031), the pools it draws from, its documents (F-ORG-18,
- * ADR-144), its members and its settings, which hold its catalog of
- * conditions (F-ORG-16). Each tab is a path of its own (`/courses/:id/<tab>`).
+ * ADR-144), its workspace images (ADR-146 §4, only where the platform has
+ * the online workspace: the list's 404 hides the tab), its members and its
+ * settings, which hold its catalog of conditions (F-ORG-16). Each tab is a
+ * path of its own (`/courses/:id/<tab>`).
  *
  * The header's one primary action is the open tab's: New classroom, New
- * template, Link a pool, Add a document, Add a staff member; Settings has
- * none. An assistant (ADR-068) is offered New template and Add a document
- * there: the classrooms, the linked pools and the staff are the owners' to
- * change. The course's
+ * template, Link a pool, Add a document, Add image, Add a staff member;
+ * Settings has none. An assistant (ADR-068) is offered New template and Add
+ * a document there: the classrooms, the linked pools and the staff are the
+ * owners' to change, and the images an owner's with the workspace grant
+ * (the list's `canManage`), until the course holds its maximum. The course's
  * actions are `useCourseActions`, the card's copy, so the two cannot drift —
  * the card keeps them in its menu, the page spreads them over its tabs.
  *
@@ -100,7 +106,7 @@ export function CoursePage({
 
 function Course({
   course,
-  tab,
+  tab: asked,
   navigate,
 }: {
   course: CourseSummary;
@@ -116,6 +122,14 @@ function Course({
   const pools = useCourseDetail(course.id).data?.pools;
   const documents = useCourseLibrary(course.id).data?.documents;
   const uploads = useDocumentUploads(course.id);
+  const [addingImage, setAddingImage] = useState(false);
+  const images = useCourseWorkspaceImages(course.id);
+  // ADR-146: a platform without the online workspace answers 404 and has no
+  // Images tab; `/courses/:id/images` there opens the classrooms.
+  const imagesOff = isNotFound(images.error);
+  const tab: CourseTab = asked === "images" && imagesOff ? "classrooms" : asked;
+  const imageList = images.data;
+  const canAddImage = !!imageList?.canManage && imageList.images.length < imageList.max;
   const signalsOf = useClassroomSignals();
   const open = (next: CourseTab) => navigate({ view: "course", id: course.id, tab: next });
 
@@ -128,6 +142,8 @@ function Course({
     templates: { icon: Plus, label: t("templates.new"), onClick: () => setCreatingTemplate(true) },
     // ADR-144: any member of the staff adds documents to the course.
     documents: { icon: FileUp, label: t("courses.docs.add"), onClick: uploads.pick },
+    // ADR-146 §4: an owner with the workspace grant (`canManage`), under the cap.
+    ...(canAddImage ? { images: { icon: Plus, label: t("courses.images.add"), onClick: () => setAddingImage(true) } } : {}),
   };
   const ownerPrimary: Partial<Record<CourseTab, PagePrimary>> = {
     classrooms: { icon: Plus, label: t("classrooms.new"), onClick: actions.newClassroom },
@@ -167,6 +183,10 @@ function Course({
             { value: "templates", label: t("courses.tab.templates"), count: templates.data?.length, icon: FileStack },
             { value: "pools", label: t("courses.tab.pools"), count: pools?.length, icon: FolderTree },
             { value: "documents", label: t("courses.tab.documents"), count: documents?.length, icon: FileText },
+            // Once the list answered anything but its 404 (the feature off), or while it is the open tab.
+            ...(imagesOff || (images.isPending && tab !== "images")
+              ? []
+              : [{ value: "images" as const, label: t("courses.tab.images"), count: imageList?.images.length, icon: Container }]),
             { value: "members", label: t("courses.tab.members"), count: course.staff.length, icon: Users },
             { value: "settings", label: t("courses.tab.settings"), icon: SettingsIcon },
           ]}
@@ -203,6 +223,8 @@ function Course({
           <LinkedPools course={course} navigate={navigate} />
         ) : tab === "documents" ? (
           <CourseDocuments courseId={course.id} uploads={uploads} />
+        ) : tab === "images" ? (
+          <CourseImages courseId={course.id} adding={addingImage} onAdding={setAddingImage} />
         ) : tab === "members" ? (
           <CourseMembers course={course} staffActions={actions.staffActions} />
         ) : (

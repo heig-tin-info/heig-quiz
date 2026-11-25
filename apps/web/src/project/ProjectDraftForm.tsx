@@ -202,7 +202,7 @@ export function ProjectDraftForm({
           source={source}
           onChange={(protectedFiles) => write({ protectedFiles })}
         />
-        <WorkModeSetting projectId={project.id} archived={project.archivedAt !== null} />
+        <WorkModeSetting projectId={project.id} classroomId={project.classroomId} archived={project.archivedAt !== null} />
       </Disclosure>
 
       {projectGraded(project.gradingMode) ? <ProjectRail project={project} /> : null}
