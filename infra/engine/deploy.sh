@@ -23,7 +23,10 @@
 # makes the pull `<image>@sha256:…` instead of the sha tag (audit M8,
 # lib.sh's pull_retag); without it the sha tag is pulled, as before. The
 # token is an ephemeral GHCR token, piped to `podman login`; root's auth
-# file is under /run, so nothing survives a reboot.
+# file is under /run, so nothing survives a reboot, and this script logs
+# out whenever it exits, so no later pull carries the credential (the
+# portal's install.sh logs out as soon as its own image is pulled: the
+# quiz-base release is pulled anonymously, ADR-146).
 #
 # The checkout moves to the deployed sha, detached, and the component's own
 # steps run from it (apps/runner/deploy/install.sh,
@@ -57,8 +60,11 @@ fi
 token=
 request="${SSH_ORIGINAL_COMMAND:-}"
 # The request carries the GHCR token: out of the environment that every
-# step below (install.sh, the student image's build and test) inherits.
+# step below (install.sh, the quiz-base release's tests) inherits.
 unset SSH_ORIGINAL_COMMAND
+# The credential lives at most as long as this deploy, whatever happens to
+# it. A hand-over (exec) replaces this trap with the new copy's own.
+trap 'pd logout ghcr.io >/dev/null 2>&1 || true' EXIT
 if [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
   QUIZ_DEPLOY_FORCE=
   QUIZ_DEPLOY_DIGEST=
@@ -124,7 +130,9 @@ if [ "$before" != "$(git rev-parse HEAD)" ] && [ -z "${QUIZ_DEPLOY_REEXEC:-}" ];
   QUIZ_DEPLOY_REEXEC=1 exec "$0" "$@"
 fi
 
+# Not exec'd: the EXIT trap above logs out once the step is done. Its exit
+# code is this script's (set -e).
 case "$QUIZ_DEPLOY_COMPONENT" in
-  runner) exec apps/runner/deploy/install.sh ;;
-  codespace) exec apps/codespace/deploy/install.sh "$QUIZ_DEPLOY_INSTANCE" ;;
+  runner) apps/runner/deploy/install.sh ;;
+  codespace) apps/codespace/deploy/install.sh "$QUIZ_DEPLOY_INSTANCE" ;;
 esac

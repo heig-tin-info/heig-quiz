@@ -1,0 +1,13 @@
+# The quiz-base release the portal's two instances run (ADR-146 §3), by
+# digest: their default image, the deadline collection's reader and the
+# staff's review sessions. One line,
+#   ghcr.io/heig-tin-info/quiz-base:<x.y.z>@sha256:<64 hex>
+# the digest .github/workflows/quiz-base.yml wrote in its run summary, once
+# the package is public. A pull request changes it; the production portal
+# deploy pulls it anonymously, runs the image's acceptance tests against it
+# and switches both instances only on a pass (deploy/base-image.sh,
+# RUNBOOK.md §7), then the CI moves the `latest` tag to it.
+#
+# No release is pinned yet: until a line names one, the instances keep the
+# image they ran so far, built on the engine VM before ADR-146 (RUNBOOK.md
+# §7, The first release).

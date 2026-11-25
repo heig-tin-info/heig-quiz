@@ -7,6 +7,13 @@ Decisions 1 to 9 are the owner's (discussion of issue #1111); the admission
 checks of decision 5 and the assumptions under Open are the orchestrator's,
 stated to the owner and not objected to.
 
+- 2026-11-25, amended (the orchestrator's, stated to the owner on
+  2026-11-25; scope: decision 2's "a release is
+  versioned and published only from a production-approved run"): a
+  `:<VERSION>` tag pushed from `main` is a candidate; it becomes a release
+  once the approved production deploy has pinned, tested and switched to
+  it ([amendment](#amendment-2026-11-25-candidate-tags)).
+
 Scope: which container image a student's online workspace session runs,
 where it comes from, who chooses it and what Quiz checks before running it.
 Out of scope: the `quiz-runner-*` images of `apps/runner` (root `CLAUDE.md`
@@ -178,3 +185,26 @@ distribution repository.
 
 - The ceilings. Assumed for now: 4 GB on disk per image, `quiz-base`
   included; a free-disk floor of 20 GB before a pull.
+
+## Amendment 2026-11-25: candidate tags
+
+*The orchestrator's, stated to the owner on 2026-11-25, during the delivery
+of decision 2; scope: what "a release"
+is. Operations: `apps/codespace/deploy/RUNBOOK.md` §7.*
+
+Decision 2 publishes a release "only from a production-approved run", but
+the image must exist in the registry before production can pull and test
+it. So:
+
+- The repository's CI pushes `ghcr.io/heig-tin-info/quiz-base:<VERSION>`
+  from `main`, from the bytes it built and tested, never overwriting an
+  existing tag. That tag is a **candidate**.
+- A candidate becomes a **release** when the approved production portal
+  deploy has pinned it (`apps/codespace/deploy/quiz-base.ref`), pulled it,
+  tested it on the engine VM and switched both instances to it. Only then
+  does `latest` move to it, and only then does the portal's released set
+  (decision 3: the pin, and `CODESPACE_BASE_RELEASES` once the admission
+  exists) include it.
+- Decision 5's prefix check admits a course image only on a **released**
+  base: an image derived from a candidate that never became a release is
+  refused (`not_on_base`).

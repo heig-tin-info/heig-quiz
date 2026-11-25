@@ -7,7 +7,7 @@ import { loadConfig } from "../auth/config.js";
 import { SESSION_LABEL, createEngine } from "./index.js";
 
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
-const RUN_HARDENED = readFileSync(`${REPO_ROOT}images/c-dev/run-hardened.sh`, "utf8");
+const RUN_HARDENED = readFileSync(`${REPO_ROOT}images/quiz-base/run-hardened.sh`, "utf8");
 
 const engine = createEngine({
   podmanUrl: "unix:///run/podman/podman.sock",

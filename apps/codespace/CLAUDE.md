@@ -19,7 +19,7 @@ and its M6-03 amendment, then [docs/merge/06-codespace-seb-infra.md](../../docs/
 
 | Kind | Documents |
 | --- | --- |
-| Reference | [docs/history/analyse.md](docs/history/analyse.md) (decisions D1–D8), [docs/history/integration-classroom.md](docs/history/integration-classroom.md) (the platform boundary, written for heig-classroom), [docs/setup-workstation.md](docs/setup-workstation.md), [images/c-dev/README.md](images/c-dev/README.md) (the student image), [src/git/README.md](src/git/README.md) (the Git channel), [src/seb/README.md](src/seb/README.md) (the SEB verification; its `.seb` and Config Key sections are history since M6-07), [infra/net/README.md](infra/net/README.md) (the closed network) |
+| Reference | [docs/history/analyse.md](docs/history/analyse.md) (decisions D1–D8), [docs/history/integration-classroom.md](docs/history/integration-classroom.md) (the platform boundary, written for heig-classroom), [docs/setup-workstation.md](docs/setup-workstation.md), [images/quiz-base/README.md](images/quiz-base/README.md) (the sessions' image, its contract and its releases), [src/git/README.md](src/git/README.md) (the Git channel), [src/seb/README.md](src/seb/README.md) (the SEB verification; its `.seb` and Config Key sections are history since M6-07), [infra/net/README.md](infra/net/README.md) (the closed network) |
 | History, superseded in places | [project.md](project.md), [docs/history/milestone-0.md](docs/history/milestone-0.md), [docs/history/v1.md](docs/history/v1.md), [docs/history/leads.md](docs/history/leads.md), [docs/proof-b-manual.md](docs/proof-b-manual.md) |
 
 These documents describe heig-classroom's portal: read *classroom* as the
@@ -68,9 +68,11 @@ Start button, its teacher dashboard and its YAML seed (all removed, below).
   engine VM (ADR-016's M6-04 amendment, [deploy/RUNBOOK.md](deploy/RUNBOOK.md)).
   `CODESPACE_INSTANCE` names an instance; its session containers carry its
   name and label, and an engine lists only its own (`engine/instance.test.ts`).
-  `images/` is built on the VM, never in CI: by the prod deploy when
-  `images/c-dev` changed, tested before it is tagged
-  (`deploy/student-image.sh`, RUNBOOK §7), or by hand.
+  The sessions' image, `quiz-base` (`images/quiz-base`, ADR-146), is
+  never built on the VM: its own workflow (`quiz-base.yml`) tests and
+  publishes it, public; the prod deploy pulls the release
+  `deploy/quiz-base.ref` pins, by digest, and switches both instances
+  only once its tests passed there (`deploy/base-image.sh`, RUNBOOK §7).
 - **Pages in English, French, German and Italian** (`src/web/i18n.ts`, the
   language from `Accept-Language`, English when the browser names none of
   the portal's `LANGS`, as on the platform; ADR-140 §4): `en` is the
@@ -128,7 +130,7 @@ channel divergence for its containers.
    for the status bar extension (a session gets three at most: `CODESPACE_SEB`
    replaces `CODESPACE_RETURN_URL` under SEB), four `GIT_{AUTHOR,COMMITTER}_{NAME,EMAIL}`
    for the student's git identity. None is a secret; a unit test and
-   `images/c-dev/test.sh` § 9 assert there is no other one. Adding a key is
+   `images/quiz-base/test.sh` § 6 assert there is no other one. Adding a key is
    done in that list, with its test.
 2. **The network is closed by construction** (divergence 2 above): the
    `codespace-anchor` container (label `heig-codespace.role=anchor`) keeps
@@ -136,7 +138,7 @@ channel divergence for its containers.
    per-session firewall rule. The collection's readers
    (`heig-codespace.role=reader`, invariant 15) run `--network none`.
 3. **Hardening from the very first `podman run`**: the exact options are in
-   `images/c-dev/run-hardened.sh` and `src/engine/` reuses them as they
+   `images/quiz-base/run-hardened.sh` and `src/engine/` reuses them as they
    are. A test that needs an option relaxed says so in the docs, not in a
    comment. `CODESPACE_APPARMOR_PROFILE` empty drops the AppArmor flag (a
    host without AppArmor, the WSL2 workstation).
@@ -200,7 +202,13 @@ channel divergence for its containers.
     `/absproxy/<port>/` (403), drops `Set-Cookie` and
     `Service-Worker-Allowed` from every upstream answer, and serves
     `/vscode-remote-resource` with `CSP: default-src 'none'; sandbox` and
-    `nosniff`; the student image ships no notebook support. Gaps and the full fix: [ADR-047, amendment of 2026-10-11](../../docs/adr/ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
+    `nosniff`; `quiz-base` ships no notebook support (its contract check,
+    `--base` only). A course image derived from it may bring notebooks
+    back ([ADR-146 §9](../../docs/adr/ADR-146-images-publiques-de-l-espace-de-travail.md)):
+    it then controls what code-server serves on the shared origin, a risk
+    the product owner accepted for that course's own sessions; the
+    platform's own runs (default, review sessions, the collection's reader)
+    are always `quiz-base`. Gaps and the full fix: [ADR-047, amendment of 2026-10-11](../../docs/adr/ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
 15. **Nothing published comes from a host-side read of `work/`**
     ([ADR-130, correction of 2026-11-16](../../docs/adr/ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md#correction-2026-11-16-the-collection-reads-through-a-confined-reader),
     which gives the reason). Whatever leaves the engine VM reads `work/`
@@ -224,8 +232,9 @@ pnpm --filter @quiz/codespace test:integration            # rootful Podman + For
 The unit suite needs `git` (the git channel and staging tests run real git
 on temporary repositories) and nothing else. The integration suite needs
 `sudo infra/net/setup.sh` (the `codespace` network and nftables), the
-student image (`podman build -t codespace/c-dev:4.137.0 images/c-dev`, then
-`images/c-dev/test.sh`), the rootful socket `/run/podman/podman.sock` (the
+sessions' image (`images/build.sh`, then `images/quiz-base/test.sh` and its
+two siblings, README § Testing; `CODESPACE_IMAGE` and
+`CODESPACE_DEFAULT_IMAGE` in `.env` naming the tag it built), the rootful socket `/run/podman/podman.sock` (the
 user in the `podman` group, docs/setup-workstation.md) and, for the relay,
 the Forgejo of `infra/compose.dev.yml` with `FORGE_KIND=forgejo`. The portal
 listens on :3100 (`pnpm --filter @quiz/codespace dev`, with

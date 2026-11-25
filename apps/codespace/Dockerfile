@@ -11,8 +11,8 @@
 #
 # The image holds no secret: the launch secret and the exam cookie secret are
 # in the instance's /etc/quiz-codespace/<instance>/env, read by the quadlet.
-# The STUDENT image (images/c-dev) is not built here: it is built on the VM
-# (apps/codespace/images/build.sh), like the runner's language images.
+# The sessions' image (images/quiz-base) is not built here: it has its own
+# workflow, .github/workflows/quiz-base.yml, and is pulled by digest (ADR-146).
 FROM node:24-slim AS build
 # better-sqlite3 is a native module: its install downloads the prebuilt
 # binary for this Node and this glibc, and falls back to node-gyp when there

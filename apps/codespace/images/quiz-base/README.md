@@ -1,10 +1,21 @@
-# images/c-dev — hardened student image (task P1)
+# images/quiz-base — the workspace image
 
-The working environment of a student: complete C and C++ toolchains, a `gdb` that is really
-usable (ASLR can be disabled), code-server without network, without an extension
-gallery and unable to write anywhere outside the work volume.
+`quiz-base` is the image of the online workspace (ADR-146): code-server and
+the platform's **contract** (no port proxy, no extension gallery, the
+status-bar extension, the Safe Exam Browser workarounds, the entrypoint,
+user 1000, a read-only root that nothing outside the work volume can write,
+no notebook support), and the C and C++ toolchain of today's labs: `gcc`,
+`g++`, a `gdb` that is really usable (ASLR can be disabled), `make`, `git`,
+`clangd`, `python3`, `pytest`, the man pages and Baygon 0.7.
 
-Framework: [docs/history/milestone-0.md](../../docs/history/milestone-0.md) § P1,
+The repository's CI publishes it, public, as
+`ghcr.io/heig-tin-info/quiz-base:<VERSION>` (§ Releasing); the portal runs a
+release by digest, pinned in [deploy/quiz-base.ref](../../deploy/quiz-base.ref).
+A course image derives from it (`FROM ghcr.io/heig-tin-info/quiz-base:<version>`)
+and keeps the contract; the platform builds no image on the engine VM.
+
+Framework: [ADR-146](../../../../docs/adr/ADR-146-images-publiques-de-l-espace-de-travail.md),
+[docs/history/milestone-0.md](../../docs/history/milestone-0.md) § P1,
 [docs/history/analyse.md](../../docs/history/analyse.md) § 3.2, 3.4, 3.5 and 4.3,
 invariants 1 and 3 of [CLAUDE.md](../../CLAUDE.md).
 
@@ -12,7 +23,10 @@ invariants 1 and 3 of [CLAUDE.md](../../CLAUDE.md).
 
 | File | Role |
 | --- | --- |
-| `Containerfile` | image `codespace/c-dev` |
+| `Containerfile` | the image |
+| `VERSION` | the release this tree is, `x.y.z` (§ Releasing) |
+| `CONTRACT` | the version of the contract `contract/check` holds images to |
+| `contract/check` | the contract check (§ The contract), built into the image with its manifest written in |
 | `entrypoint.sh` | copies the machine settings into the tmpfs `user-data-dir`, trusts the return URL's origin, then `code-server` |
 | `settings.json` | machine settings, installed as `/etc/code-server/settings.json` |
 | `clangd.yaml` | clangd's default flags per language, installed as `/etc/clangd/config.yaml` and `~/.config/clangd/config.yaml` (§ C++) |
@@ -21,8 +35,12 @@ invariants 1 and 3 of [CLAUDE.md](../../CLAUDE.md).
 | `extension/` | source of `heig.codespace-statusbar`, packaged into a `.vsix` at build time |
 | `baygon/baygon.in`, `baygon/requirements.txt` | Baygon's one requirement, and everything it installs, pinned by hash (§ Baygon) |
 | `run-hardened.sh` | `podman run` with the mandatory hardening |
-| `test.sh` | acceptance test of the image |
-| `test-debug-io.js` | `test.sh` § 12: a debug session through webfreak.debug's real adapter, with the program's terminal |
+| `test.sh`, `test-hardening.sh`, `test-toolchain.sh`, `test-lib.sh` | the acceptance tests (§ Testing) and what they share |
+| `test-derived.sh` | the contract check against derived images (§ Testing; CI only) |
+| `test-debug-io.js` | `test-toolchain.sh` § 4: a debug session through webfreak.debug's real adapter, with the program's terminal |
+| `../build.sh` | the build, with the release labels from `VERSION` and `CONTRACT` |
+| `../ci-test.sh` | the CI's engine set-up, cold build and four tests, for both jobs of `.github/workflows/quiz-base.yml` |
+| `../release-check.sh`, `../publish.sh` | the candidate's guard and its publication, by the same workflow |
 | `../../infra/seccomp/codespace.json` | seccomp profile of the project: the runner's plus `ptrace` (M6-05) |
 | `../../infra/apparmor/codespace` | AppArmor profile of the project (what makes gdb work again) |
 
@@ -58,22 +76,28 @@ VSX (code-server's default gallery) worked for both.
 From `apps/codespace`, as in [CLAUDE.md](../../CLAUDE.md):
 
 ```bash
-podman build -t codespace/c-dev:4.137.0 images/c-dev
+images/build.sh                       # localhost/quiz-base:dev
 
-CTR_NAME=cdev-p1 VOL_DIR=/srv/codespace/volumes/demo images/c-dev/run-hardened.sh
-images/c-dev/test.sh
+CTR_NAME=qb-demo VOL_DIR=/srv/codespace/volumes/demo images/quiz-base/run-hardened.sh
+images/quiz-base/test.sh && images/quiz-base/test-hardening.sh && images/quiz-base/test-toolchain.sh
 
 # on a host without AppArmor (the WSL2 workstation):
-APPARMOR= images/c-dev/run-hardened.sh
-APPARMOR= images/c-dev/test.sh
+APPARMOR= images/quiz-base/run-hardened.sh
+APPARMOR= images/quiz-base/test.sh
+
+# iterating on uncommitted changes (test.sh § 2 is strict otherwise):
+QUIZ_BASE_ALLOW_UNKNOWN_REVISION=1 images/quiz-base/test.sh
 ```
 
-`podman` here must be the rootful remote one: either through the
-`alias podman='podman --remote'` of [docs/setup-workstation.md](../../docs/setup-workstation.md),
-or spelled out as `podman --remote --url unix:///run/podman/podman.sock build …`.
-Without `--remote` the binary silently falls back to local rootless mode and builds
-into another store. Add `-t codespace/c-dev:latest` to get the floating tag as
-well, which is what classroom's `deploy/push.sh` does.
+`build.sh` drives the rootful socket with `podman --remote --url
+unix:///run/podman/podman.sock`; without `--remote` the binary silently
+falls back to local rootless mode and builds into another store. It passes
+`VERSION`, `CONTRACT` and the commit as `--label`s (step 8 says why), the
+labels `io.quiz.base.version`, `io.quiz.base.contract` and the
+`org.opencontainers.image.*` ones (the revision `<sha>-dirty` when
+`quiz-base/` differs from the commit). Its default tag, like the tests' and
+`run-hardened.sh`'s, is `localhost/quiz-base:dev`: only the CI's
+`publish.sh` names the image `ghcr.io/heig-tin-info/quiz-base`.
 
 `run-hardened.sh` accepts `CTR_NAME`, `VOL_DIR`, `IMAGE`, `NETWORK`,
 `SECCOMP`, `APPARMOR`, `PODMAN_URL`, `EXTRA_ARGS`. It writes the container
@@ -83,28 +107,93 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
 
 ## Modifying the image
 
-- **Change clangd's default flags**: edit `clangd.yaml` (one fragment per language) and the two `clangd --check` assertions of `test.sh` § 13.
-- **Add an apt package**: add it to the `apt-get install` list of the `Containerfile` (step 1), add its binary to the presence assertion of `test.sh` § 7 (`test -x /usr/bin/…`), and add a row to the pinned-versions table above.
+Every change of what the image is made of (anything here but this README,
+the tests and `run-hardened.sh`) comes with a new `VERSION`: the pull
+request's `quiz-base` check refuses it otherwise (§ Releasing).
+
+- **Change clangd's default flags**: edit `clangd.yaml` (one fragment per language) and the two `clangd --check` assertions of `test-toolchain.sh` § 5.
+- **Add an apt package**: add it to the `apt-get install` list of the `Containerfile` (step 1), add its binary to the presence assertion of `test-toolchain.sh` § 2 (`test -x /usr/bin/…`), and add a row to the pinned-versions table above. A package a single course needs belongs in that course's image, not here.
 - **Add an extension**: one `ARG` for its identifier, one `--install-extension` in the same `RUN`, one `grep -qi "^<id>@"` against `/etc/code-server/extensions.lock` so that the build fails if it is missing, its id in `extensions.allowed` of `settings.json`, the exact expected list asserted in `test.sh` § 3 (three ids, sorted), and a row in the pinned-versions table.
-- **Bump Baygon**: the version in `baygon/baygon.in`, then the `uv pip compile` command in the header of `baygon/requirements.txt` (keep the header), the version asserted by `test.sh` § 11, and the row above. A dependency that ships no wheel for CPython 3.13 on x86_64 fails the build (`--only-binary=:all:`): no compiler is ever brought in for it.
-- **Bump code-server**: `ARG CS_VERSION` in the `Containerfile`, then the tag `codespace/c-dev:4.137.0` wherever it is hard-coded — `.env.example` (`CODESPACE_IMAGE`, `CODESPACE_DEFAULT_IMAGE`), `src/auth/config.ts` (the defaults of those same two), `images/c-dev/run-hardened.sh`, `images/c-dev/test.sh`, classroom's `deploy/push.sh`, classroom's `deploy/bootstrap.sh`, `seed/assignments.yaml`, `CLAUDE.md`, classroom's `docs/deploy.md`, `docs/history/integration-classroom.md`, `src/git/README.md`, this README, and the tests that state it (`src/engine/index.test.ts`, `src/sessions/sessions.test.ts`, `src/sessions/containerEnv.test.ts`, `src/sessions/workspace.test.ts`, `src/proxy/proxy.test.ts`, `src/web/pages.test.ts`, `src/git/channel.integration.test.ts`). Then re-check copy and paste in the editor, the terminal and the find widget under SEB 3.10.3's `Clipboard.js` (transcribed and injected after load, Windows user agent): `seb-workbench.js` relies on VS Code's EditContext editor, xterm's paste handler and `navigator.clipboard` (§ Safe Exam Browser in the workbench).
-- **Deploy**: [deploy/RUNBOOK.md](../../deploy/RUNBOOK.md) §7.
-- **Run `images/c-dev/test.sh`**: prerequisites are rootful Podman on `unix:///run/podman/podman.sock`, the image built, `python3` on the host (it fabricates the fake `.vsix`); no sudo. Its fifteen sections prove, in order:
-  - § 0 the container starts under `run-hardened.sh` and answers `/healthz` (prints `MESURE_DEMARRAGE_SECONDES`);
-  - § 1 `gdb` runs a program and produces a backtrace, with no "Operation not permitted", and breaks in `main`, steps over a line and into a call;
-  - § 2 `personality(ADDR_NO_RANDOMIZE)` passes the project seccomp profile, and the control container on the default profile still varies;
+- **Bump Baygon**: the version in `baygon/baygon.in`, then the `uv pip compile` command in the header of `baygon/requirements.txt` (keep the header), the version asserted by `test-toolchain.sh` § 3, and the row above. A dependency that ships no wheel for CPython 3.13 on x86_64 fails the build (`--only-binary=:all:`): no compiler is ever brought in for it.
+- **Bump code-server**: `ARG CS_VERSION` in the `Containerfile` and the rows above; the release's version says it (a minor or a major `VERSION`, at least). Then re-check copy and paste in the editor, the terminal and the find widget under SEB 3.10.3's `Clipboard.js` (transcribed and injected after load, Windows user agent): `seb-workbench.js` relies on VS Code's EditContext editor, xterm's paste handler and `navigator.clipboard` (§ Safe Exam Browser in the workbench).
+- **Change the contract** (a file the manifest names, a check of `contract/check`): bump `CONTRACT` too, and say in the release's pull request what a course image must change.
+- **Deploy**: § Releasing, then [deploy/RUNBOOK.md](../../deploy/RUNBOOK.md) §7.
+
+## The contract
+
+What the portal relies on in any image it runs, quiz-base or a course
+image derived from it (ADR-146 §5), is what
+[contract/check](contract/check) checks, from inside a running container,
+as uid 1000, once code-server answers; its comments say what each check
+holds and why. In short: code-server's flags and gallery, the files the
+contract owns byte for byte (the manifest), the machine settings' keys
+that protect the platform (every other key, more allowed extensions
+included, is the course image's), what may and may not be written, and
+what code-server serves; with `--base`, no notebook support (ADR-146 §9
+lets a course image bring it back).
+
+The manifest is computed at build time, after every step that writes those
+files (`Containerfile` step 7), and written **into** the check, the image's
+only copy, `/usr/local/lib/quiz-base/check`. The portal runs the check of
+a **released base** in a candidate's container, piped over
+`podman exec -i … sh -s`, never the candidate's own copy:
+
+```bash
+podman exec -i <container> sh -s -- [--base] < check    # one line per check; the first failure exits 1
+```
+
+It catches accidents, not the image's author, who can rewrite any file of
+the base; what security needs is the portal's own at run time (the
+session's flags, the user, the network). Images derived from the base keep
+its `User`, `Entrypoint` and `Cmd` (`test.sh` § 1 holds the base to them).
+
+## Testing
+
+Three tests, each starting its own containers through `run-hardened.sh`
+and removing them; prerequisites (rootful Podman on
+`unix:///run/podman/podman.sock`, the image built or pulled, `python3` on
+the host, the `codespace` AppArmor profile or `APPARMOR=`) in `test-lib.sh`.
+Each takes the image as its argument; a release passes all three, in CI
+(`.github/workflows/quiz-base.yml`) and again on the engine VM before the
+portal switches to it (`deploy/base-image.sh`). A fourth, `test-derived.sh`,
+builds derived images, so it runs in CI and on a workstation only.
+
+- **`test.sh`, the contract**:
+  - § 1 the image's `User` (1000:1000), `Entrypoint` and empty `Cmd`, and its release labels;
+  - § 2 the image's check is `contract/check` of the commit the image was built from (its revision label), its manifest that commit's hashes (an older release is held to its own sources; strict: a revision the checkout lacks, or a `-dirty` local build, fails unless `QUIZ_BASE_ALLOW_UNKNOWN_REVISION=1`, which only a workstation sets: it skips the former with a note and holds the latter to the working tree), and `check --base` passes against the image;
   - § 3 no extension can be installed, and the server knows exactly the three baked-in ones;
-  - § 4 the root filesystem is read-only, `CapEff` is zero, `NoNewPrivs` is 1, the seccomp filter is loaded and the AppArmor label is the `codespace` profile (skipped with a note on a host without AppArmor);
-  - § 5 uid 1000 inside, host UID outside 0–65535, and two containers side by side get different host UIDs;
-  - § 6 a fork bomb is capped by `--pids-limit 256`, the host and the neighbouring container are intact;
-  - § 7 code-server: machine settings copied, `extensions.allowed`, the settings found in the embedded package, the font-prompt chain, the colour-scheme settings and their two bundled themes, the return URL's origin trusted (and nothing trusted without one), the port proxy refused (`/proxy/<port>/` and `/absproxy/<port>/` answer 403/404 with a listener on the port), `/vscode-remote-resource` still sent with CSP `sandbox`, no notebook support (`ipynb` and `notebook-renderers` absent, no extension contributing a notebook type), the workbench page loading `seb-workbench.js` under `script-src 'self'` and the file served as JavaScript, neutralised gallery, no uncaught exception, toolchain binaries (`pytest` included) and man pages present;
-  - § 8 `/etc/resolv.conf` comes from the image, with no nameserver, and resolution fails in under two seconds;
-  - § 9 the container carries the seven portal variables and nothing else, the git identity works without a configuration file, and the VS Code server inherits the environment.
-  - § 10 the seccomp profile is the runner's plus `ptrace`: `unshare -r true` fails, and raw `unshare(CLONE_NEWUSER)` and `mount(2)` answer `ENOSYS`;
-  - § 11 Baygon 0.7.0 is on `PATH`, passes a trivial test file and reports a failing one without network, `/opt/baygon` is read-only, holds no `pip` (nor has `/usr/bin/python3` one) and its byte-code was compiled at build time, and the image sets no `PYTHON*` variable;
-  - § 12 a program debugged through webfreak.debug's real adapter, launched with the configuration the status-bar extension makes, prints its prompt in its own terminal, reads the `7` typed there, stops on a breakpoint, and none of its I/O reaches the debug console;
-  - § 13 C++: `g++` has the major version of `gcc`; a C++20 program on `<vector>`, `<ranges>` and `<format>` compiles with `-std=c++20 -Wall -Wextra -pedantic` and runs; gdb breaks in it and prints a `std::vector` through libstdc++'s auto-loaded pretty-printers; § 12's debug session, on a C++ program, keeps its I/O in the Program terminal; `clangd --check` parses the `.cpp` with `-std=c++20` and no error, and a `.c` still with `-std=c17`;
-  - § 14 pytest: `/usr/bin/python3 -m pytest --version` succeeds and pytest's byte-code was compiled at build time; a miniature lab's `make test` (`pytest -vv --junitxml=report.xml`) runs a compiled C program through `subprocess` and checks that `tmp_path` is under `/tmp`, 2 passed; `python3 -m pytest -q --junitxml=report.xml` writes a two-test report in `/work`, and its `conftest.py`, which imports `_pytest.junitxml.xml_key`, finds the key the junitxml plugin stored and leaves a marker; both under `-W error`, and `.pytest_cache` and the rewritten test's byte-code land in `/work`.
+  - § 4 code-server: the base's own machine settings in force (the protected keys are the check's), the settings found in the embedded package, the font-prompt chain, the colour-scheme settings and their two bundled themes, the return URL's origin trusted (and nothing trusted without one), the neutralised gallery in its log, no uncaught exception;
+  - § 5 name resolution fails in under two seconds;
+  - § 6 the container carries the seven portal variables and nothing else (no `PYTHON*` either), the git identity works without a configuration file, and the VS Code server inherits the environment.
+- **`test-hardening.sh`, the session's hardening seen from inside**:
+  - § 0 the container starts under `run-hardened.sh` and answers `/healthz` (prints `MESURE_DEMARRAGE_SECONDES`);
+  - § 1 `personality(ADDR_NO_RANDOMIZE)` passes the project seccomp profile, and the control container on the default profile still varies;
+  - § 2 `/usr/bin` and `/opt/baygon` are read-only (the rest of the root is the check's), `CapEff` is zero, `NoNewPrivs` is 1, the seccomp filter is loaded and the AppArmor label is the `codespace` profile (skipped with a note on a host without AppArmor);
+  - § 3 the host UID is outside 0–65535, and two containers side by side get different host UIDs;
+  - § 4 a fork bomb is capped by `--pids-limit 256`, the host and the neighbouring container are intact;
+  - § 5 the seccomp profile is the runner's plus `ptrace`: `unshare -r true` fails, and raw `unshare(CLONE_NEWUSER)` and `mount(2)` answer `ENOSYS`.
+- **`test-derived.sh`, the check on derived images**: one that allows one more extension (and a language setting) passes; one that turns automatic tasks on, allows `"*"` or disallows the status-bar extension fails, naming the key.
+- **`test-toolchain.sh`, what a C or C++ lab uses** (a course image may change all of it):
+  - § 1 `gdb` runs a program and produces a backtrace, with no "Operation not permitted", and breaks in `main`, steps over a line and into a call;
+  - § 2 the toolchain's binaries (`pytest` included), clangd's configuration at both paths, the man pages;
+  - § 3 Baygon 0.7.0 is on `PATH`, passes a trivial test file and reports a failing one without network, holds no `pip` (nor has `/usr/bin/python3` one) and its byte-code was compiled at build time;
+  - § 4 a program debugged through webfreak.debug's real adapter, launched with the configuration the status-bar extension makes, prints its prompt in its own terminal, reads the `7` typed there, stops on a breakpoint, and none of its I/O reaches the debug console;
+  - § 5 C++: `g++` has the major version of `gcc`; a C++20 program on `<vector>`, `<ranges>` and `<format>` compiles with `-std=c++20 -Wall -Wextra -pedantic` and runs; gdb breaks in it and prints a `std::vector` through libstdc++'s auto-loaded pretty-printers; § 4's debug session, on a C++ program, keeps its I/O in the Program terminal; `clangd --check` parses the `.cpp` with `-std=c++20` and no error, and a `.c` still with `-std=c17`;
+  - § 6 pytest: `/usr/bin/python3 -m pytest --version` succeeds and pytest's byte-code was compiled at build time; a miniature lab's `make test` (`pytest -vv --junitxml=report.xml`) runs a compiled C program through `subprocess` and checks that `tmp_path` is under `/tmp`, 2 passed; `python3 -m pytest -q --junitxml=report.xml` writes a two-test report in `/work`, and its `conftest.py`, which imports `_pytest.junitxml.xml_key`, finds the key the junitxml plugin stored and leaves a marker; both under `-W error`, and `.pytest_cache` and the rewritten test's byte-code land in `/work`.
+
+## Releasing
+
+A pull request that changes the image bumps `VERSION` (semantic: a patch
+for a fix, a minor for an addition, a major when a course image must
+change, with `CONTRACT`); its `quiz-base` check builds cold, runs the four
+tests and refuses an image change without a new `VERSION`
+(`release-check.sh`). On merge, `.github/workflows/quiz-base.yml` builds and
+tests again and pushes the tested image as `:<VERSION>`, a **candidate**,
+never overwriting a tag. A candidate becomes a **release** only once the
+approved production deploy has pinned it, tested it on the engine VM and
+switched to it; only then does `latest` move and may course images derive
+from it (ADR-146, amendment of 2026-11-25). The procedure, the first
+release's included: [deploy/RUNBOOK.md](../../deploy/RUNBOOK.md) §7.
 
 ## Measurements (2026-09-17, WSL2, 24 cores, Podman 5.7 rootful, crun, overlay)
 
@@ -114,7 +203,7 @@ value drops the flag entirely, for a host without AppArmor (see § AppArmor).
 | Build with layer cache | 4.0 s |
 | Image size | **1.50 GB** (1,499,111,868 bytes); **1.55 GB** (1,547,182,164) with Baygon, 2026-11-15 (§ Baygon); **1.61 GB** (1,607,441,416) with g++, 2026-11-15 (§ C++); 1,610,959,391 with pytest, 2026-11-16 (§ pytest) |
 | `podman run` (command returns) | 0.18 s |
-| `podman run` → `/healthz` 200 | **0.61 – 0.76 s** warm, **1.0 s** on the first start after a build (cold page cache). Measurement printed by `test.sh`: `MESURE_DEMARRAGE_SECONDES` |
+| `podman run` → `/healthz` 200 | **0.61 – 0.76 s** warm, **1.0 s** on the first start after a build (cold page cache). Measurement printed by `test-hardening.sh`: `MESURE_DEMARRAGE_SECONDES` |
 | `podman run` → `GET /` (workbench HTML served) | 0.95 – 1.01 s |
 
 Reading for the "pre-warmed pool" decision of
@@ -159,9 +248,13 @@ place on the portal's shared origin (audit L24).
 `ipynb` is the only bundled extension contributing a notebook type; without
 it the notebook editor fails on an `.ipynb` and offers the text editor. Deleting at build time, rather than
 `--disable-extension` in the entrypoint, leaves nothing to load or re-enable
-and is redone by every rebuild; `test.sh` § 7 asserts it. The rule set and
+and is redone by every rebuild; the contract check asserts it (`check --base`, § The contract). The rule set and
 its planned full fix are
 [ADR-047's amendment of 2026-10-11](../../../../docs/adr/ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
+The rule binds quiz-base only: a course image derived from it may bring
+notebook support back, a risk the product owner accepted for that course's
+sessions ([ADR-146 §9](../../../../docs/adr/ADR-146-images-publiques-de-l-espace-de-travail.md)),
+which is why the check is `--base` only.
 
 ## Machine settings
 
@@ -190,7 +283,7 @@ a repository's `runOn: folderOpen` task never starts by itself. It is set
 for every session, not only a staff member's review session: no template
 relies on an automatic task, and a student starts a task by hand as before.
 A mitigation, not a guarantee (ADR-129 §9). It takes effect with the next
-image build; `test.sh` § 7 checks the name in the bundled package (listed
+image build; `test.sh` § 4 checks the name in the bundled package (listed
 under [TODO(verify)](#todoverify)).
 
 ### The two settings added after the first real trial (2026-09-18)
@@ -199,7 +292,7 @@ Feedback 1 and 2 of [docs/history/leads.md](../../docs/history/leads.md), "Feedb
 real trial". Both names were **looked up in the embedded package**, not
 recalled from memory: literal `grep` in
 `/usr/lib/code-server/lib/vscode/out/vs/workbench/workbench.web.main.internal.js`
-of the built image. `test.sh` § 7 replays both searches, and over the
+of the built image. `test.sh` § 4 replays both searches, and over the
 complete declaration, so that a change of version breaks the test
 rather than the behaviour.
 
@@ -334,7 +427,7 @@ anything. No setting governs it, and none is needed.
 It is already the upstream default (`default:!1`), verified; setting it explicitly
 closes the first path (`_refreshLigaturesAddon`) even if that default were to change.
 
-`test.sh` § 7 replays the five searches: the two declarations with their
+`test.sh` § 4 replays the five searches: the two declarations with their
 upstream default, the unconditional import of the sticky scroll, the call in
 the addon, and the complete list of the files of the package that mention
 `queryLocalFonts` — any new family of files makes the test fail
@@ -348,7 +441,7 @@ makes it follow the browser's `prefers-color-scheme`, as Quiz's default
 "system" choice does, between `workbench.preferredDarkColorTheme` and
 `workbench.preferredLightColorTheme`. Those two are written out as the
 upstream defaults ("Dark 2026", "Light 2026") so that a version which renames
-them fails `test.sh` § 7 instead of silently falling back. A theme the student
+them fails `test.sh` § 4 instead of silently falling back. A theme the student
 picks dies with the container: the `user-data-dir` is a tmpfs.
 
 ## Status bar extension `heig.codespace-statusbar`
@@ -415,7 +508,7 @@ VS Code's link protection asked before opening the "Close" URL.
 `entrypoint.sh` passes the origin of `CODESPACE_RETURN_URL` (set by the portal from
 `PLATFORM_URL` or `PUBLIC_URL`) to code-server's `--link-protection-trusted-domains`, which
 adds it to the product's trusted domains; no new container variable.
-`test.sh` § 7 finds it in the served workbench page.
+`test.sh` § 4 finds it in the served workbench page.
 
 ### What it reads
 
@@ -433,7 +526,7 @@ portal may set at `podman run` time (`src/sessions/manager.ts`, then
 
 **No secret goes in there** (invariant 1). A unit test
 (`src/sessions/containerEnv.test.ts`) asserts that the portal never sets a
-key outside `CONTAINER_ENV_KEYS`, and `test.sh` § 9 compares the environment of a
+key outside `CONTAINER_ENV_KEYS`, and `test.sh` § 6 compares the environment of a
 container started by the portal with that of a bare container: exactly seven
 lines of difference, all of them in `CODESPACE_` or `GIT_` (container A is a
 session outside SEB; a SEB session swaps `CODESPACE_RETURN_URL` for
@@ -461,7 +554,7 @@ not secrets: the student already reads both of them in classroom.
 ### Why the variables are enough, and what is written on top
 
 Git honours `GIT_AUTHOR_*` / `GIT_COMMITTER_*` **without any configuration
-file**: `test.sh` § 9 makes a real `git commit` inside the container and
+file**: `test.sh` § 6 makes a real `git commit` inside the container and
 checks that `%an|%ae|%cn|%ce` carries the four values, with a
 `git config --local --get user.name` that stayed empty.
 
@@ -494,7 +587,7 @@ set by the student is **never** overwritten.
 The code-server extension host is a Node process **of the server**, not of the
 browser: the extension declares `"extensionKind": ["workspace"]` in order to run there,
 and reads `process.env` there. The inheritance happens in two steps, both
-verified by `test.sh` § 9:
+verified by `test.sh` § 6:
 
 1. `code-server` (pid 1, which carries the `-e` of the `podman run`) spawns the
    VS Code server (`out/node/entry`); the test reads
@@ -586,7 +679,7 @@ installation compiles the rest.
 
 A side effect: students now have `python3` in the terminal (the standard
 library, and pytest since 2026-11-16; no `pip`). Baygon 0.7.0 exits 0 even when a test fails; its
-summary (`1 failed, 0 passed`) is what tells, which `test.sh` § 11 asserts.
+summary (`1 failed, 0 passed`) is what tells, which `test-toolchain.sh` § 3 asserts.
 
 ## pytest (2026-11-16)
 
@@ -612,7 +705,7 @@ out `python3-pygments`. Still no `pip`.
 At run time pytest writes `.pytest_cache`, the assertion-rewritten byte-code
 of the test files (`tests/__pycache__`) and the `--junitxml` report beside
 the project, in `/work`; its `tmp_path` fixtures go under `/tmp`, a tmpfs.
-`test.sh` § 14 runs it under `-W error`, so a cache it could not write (a
+`test-toolchain.sh` § 6 runs it under `-W error`, so a cache it could not write (a
 `PytestCacheWarning`) would fail, checks that the cache and the byte-code
 are in `/work`, and has a test of its own on `tmp_path`.
 
@@ -670,7 +763,7 @@ needs no change, as long as its `type` is `gdb`.
 
 Verified:
 
-- `test.sh` § 12, at every image test: the real adapter of webfreak.debug
+- `test-toolchain.sh` § 4, at every image test: the real adapter of webfreak.debug
   (`out/src/gdb.js`) over the Debug Adapter Protocol, the terminal spawned
   by node-pty (the module code-server's pty host uses) with the extension's
   own command line, the configuration made by `debugIo.js`: prompt in the
@@ -706,7 +799,7 @@ Known limits:
 
 The same for a C lab and a C++ lab: the image's debugging is not
 language-specific (the program's terminal applies to every `gdb` launch,
-`test.sh` § 12 and § 13 run it on a C and on a C++ program).
+`test-toolchain.sh` § 4 and § 5 run it on a C and on a C++ program).
 
 webfreak.debug is the only debugger in the image. A `launch.json` written
 for Microsoft's C/C++ extension (`"type": "cppdbg"`, and a `tasks.json` of
@@ -770,7 +863,7 @@ and a C++ lab's `make` failed with `g++: No such file or directory`.
 - **gdb.** `libstdc++6`, already in the image, ships the standard library's
   pretty-printers in `/usr/share/gdb/auto-load/`; gdb's Python loads them
   from the read-only root with no setting: `print v` on a `std::vector<int>`
-  shows `std::vector of length 3, capacity 3 = {2, 4, 6}` (`test.sh` § 13).
+  shows `std::vector of length 3, capacity 3 = {2, 4, 6}` (`test-toolchain.sh` § 5).
   Debugging needs nothing else: § Debugging's `launch.json` works as it is.
 - **clangd.** `clangd.yaml`, one source file installed at the paths clangd
   reads (`/etc/clangd/config.yaml`, copied to `~/.config/clangd/` at build
@@ -814,11 +907,11 @@ the image does to load it.
 - **`?v=`.** The static route caches for a year under a URL that only
   changes with code-server's version, so the tag carries the file's hash
   (the route reads the path only).
-- **Checked** by `test.sh` § 7 (the tag, the CSP, the file served as
+- **Checked** by the contract check and `test.sh` (the tag, the CSP, the file served as
   JavaScript); the script by `src/seb/sebWorkbench.test.ts`.
-- **Rebuild.** A student only gets a change once the image is rebuilt on the
-  engine VM ([deploy/RUNBOOK.md](../../deploy/RUNBOOK.md) §7); a running
-  session keeps its image until it restarts.
+- **Release.** A student only gets a change once it is released and the
+  release pinned (§ Releasing, [deploy/RUNBOOK.md](../../deploy/RUNBOOK.md)
+  §7); a running session keeps its image until it restarts.
 
 Limits:
 
@@ -856,7 +949,7 @@ Measured on the pinned version (Podman 5.7.0):
 | default bridge, without `--dns` | rewritten by Podman with the host resolver | resolves |
 
 In other words `--dns=none` **does not overwrite** the file of the image, and
-neither does `--network none`. `test.sh` § 8 makes two assertions out of it: absence of
+neither does `--network none`. The contract check and `test.sh` § 5 make two assertions out of it: absence of
 `nameserver` in the file seen at run time, and failure of
 `getent hosts example.invalid` in less than two seconds (measured: 0.16 s end
 to end, including the `podman exec` call).
@@ -866,7 +959,7 @@ to end, including the `podman exec` call).
 The profile is `apps/runner/infra/seccomp/runner.json` plus one rule
 allowing `ptrace` (gdb), since M6-05. `src/seccomp.test.ts` fails on any
 other difference. What the runner's profile denies, and why, is listed in
-`apps/runner/README.md` ("The seccomp profile, tightened"); `test.sh` § 10
+`apps/runner/README.md` ("The seccomp profile, tightened"); `test-hardening.sh` § 5
 proves it on the image. To change the profile, change the runner's and copy
 it here with the `ptrace` rule.
 
@@ -875,10 +968,10 @@ The deploy installs it as the instance's `/etc/quiz-codespace/<i>/seccomp.json`
 it creates it, so an existing session container keeps the old filter until
 it is created again.
 
-Regression covered by `test.sh` § 2: a control container started with the
+Regression covered by `test-hardening.sh` § 1: a control container started with the
 **default** profile gives three different addresses for `main` over three
 runs under gdb; with the project profile the address is stable at
-`0x555555555139`. If the control stopped varying, `test.sh` would fail rather
+`0x555555555139`. If the control stopped varying, `test-hardening.sh` would fail rather
 than validate an empty assertion.
 
 ## AppArmor profile: `infra/apparmor/codespace`
@@ -976,13 +1069,13 @@ default. `APPARMOR=` (empty) drops the flag — that is what the WSL2 developmen
 workstation, which has no AppArmor, needs — and `APPARMOR=unconfined` gives the
 witness run of the table above. The engine does the same from
 `CODESPACE_APPARMOR_PROFILE`; empty there too means no flag, because `podman
-run` refuses a profile name the kernel has not loaded. `test.sh` § 4 asserts
+run` refuses a profile name the kernel has not loaded. `test-hardening.sh` § 2 asserts
 that the container's label under `/proc/self/attr/apparmor/current` is
 `codespace`, and skips with a note when the host has no AppArmor.
 
 ## Deviations accepted from the letter of milestone-0 § P1
 
-None of them weakens the hardening; all of them are checked by `test.sh`.
+None of them weakens the hardening; all of them are checked by the acceptance tests.
 
 1. **`--dns=none` is not set when `--network none` is.** Podman 5.7 refuses the
    combination: `Error: conflicting options: dns and the network mode: none`.
@@ -1050,7 +1143,7 @@ listed here.
 - `TODO(verify)` **clangd 19.1.7 + extension 0.6.0** — does the language server
   start without `compile_commands.json` and without network? `clangd --check`
   does, on a `.c` and a `.cpp`, with the image's per-language flags
-  (`test.sh` § 13, 2026-11-15); the server started by the extension is what
+  (`test-toolchain.sh` § 5, 2026-11-15); the server started by the extension is what
   remains unobserved. The default
   configuration is placed at both paths that clangd actually reads
   (`/home/student/.config/clangd/config.yaml` in the image, and
@@ -1070,7 +1163,7 @@ listed here.
 - `TODO(verify)` **VS Code 1.137.0** — `task.allowAutomaticTasks: off`
   (ADR-129 §10): that the name exists in the embedded package, and that a
   repository's `runOn: folderOpen` task does not start on opening. `test.sh`
-  § 7 checks the first at the next image build; the second requires a
+  § 4 checks the first at the next image build; the second requires a
   browser.
 - `TODO(verify)` **VS Code 1.137.0** — `workbench.secondarySideBar.defaultVisibility:
   hidden`: the key, the enumeration and the upstream default are collected from the
@@ -1086,7 +1179,7 @@ listed here.
   observed. To be checked on a Windows machine, which is the platform of the exam
   room.
 - `TODO(verify)` **code-server 4.137.0** — the extension host could not be
-  started without a browser. `test.sh` § 9 measures the inheritance up to the **server**
+  started without a browser. `test.sh` § 6 measures the inheritance up to the **server**
   of VS Code, which is the process that forks the extension host, and collects from
   the package the fact that this fork starts from `{...process.env}`. The final link is observed
   by opening the editor: the countdown displayed **is** the proof, and
@@ -1108,12 +1201,12 @@ listed here.
   the student loses the reminder of the running command at the top of the terminal.
 - `TODO(verify)` **code-server 4.137.0** — the git identity as seen **by the VS Code
   git extension**: reading the package says that `process.env` is passed
-  as it is to the extension's `git commit`, and `test.sh` § 9 measures the commit on
+  as it is to the extension's `git commit`, and `test.sh` § 6 measures the commit on
   the command line. The "Commit" button of the interface, on the other hand, requires a
   browser; to be observed at the next real session.
 
 - `TODO(verify)` **VS Code 1.137.0** — `window.autoDetectColorScheme`: both
-  theme ids are checked in the bundled theme-defaults by `test.sh` § 7; the editor opening dark under a dark system, and
+  theme ids are checked in the bundled theme-defaults by `test.sh` § 4; the editor opening dark under a dark system, and
   switching live, requires a browser. Likewise the Close button opening the
   platform without the link-protection prompt: the trusted origin is in the
   served page, the absence of the dialog is to be observed.
@@ -1122,7 +1215,7 @@ listed here.
 
 - The network: `run-hardened.sh` starts with `--network none`. The closed
   `codespace` network, the nftables rules and `--add-host portal.internal` are
-  task P2. `test.sh` therefore measures no network property.
+  task P2. The acceptance tests therefore measure no network property.
 - `CAP_SYS_PTRACE` stays dropped (docs/history/analyse.md § 3.5): `gdb ./prog`
   works, `gdb -p <pid>` on a process from another terminal will not
   work. That is the decision, not a defect.

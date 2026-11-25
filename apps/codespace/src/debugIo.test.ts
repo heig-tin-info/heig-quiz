@@ -5,10 +5,10 @@ import { describe, expect, it } from "vitest";
 /**
  * The student image's debugged-program terminal (#1103): the part of the
  * status-bar extension that needs no `vscode`. The rest, with gdb and the
- * real debug adapter, is images/c-dev/test.sh § 12.
+ * real debug adapter, is images/quiz-base/test-toolchain.sh § 4.
  */
 type Config = Record<string, unknown>;
-const debugIo = createRequire(import.meta.url)("../images/c-dev/extension/debugIo.js") as {
+const debugIo = createRequire(import.meta.url)("../images/quiz-base/extension/debugIo.js") as {
   programTerminalConfig: (config: Config, tty: string) => Config;
   sharedPending: <T>(create: () => Promise<T>) => () => Promise<T>;
 };

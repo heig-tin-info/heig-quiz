@@ -29,7 +29,7 @@
 #   CTR_NAME   container name              (default cdev-p1)
 #   NETWORK    podman network              (default none, P1)
 #   VOL_DIR    host work directory         (default /tmp/codespace-vol/<CTR_NAME>)
-#   IMAGE      image to run                (default codespace/c-dev:4.137.0)
+#   IMAGE      image to run                (default localhost/quiz-base:dev, build.sh's tag)
 #   APPARMOR   apparmor profile name       (default codespace; empty = no flag)
 #   EXTRA_ARGS extra podman options (string, split by the shell)
 #
@@ -37,7 +37,7 @@
 set -euo pipefail
 
 CTR_NAME="${CTR_NAME:-cdev-p1}"
-IMAGE="${IMAGE:-codespace/c-dev:4.137.0}"
+IMAGE="${IMAGE:-localhost/quiz-base:dev}"
 VOL_DIR="${VOL_DIR:-/tmp/codespace-vol/${CTR_NAME}}"
 NETWORK="${NETWORK:-none}"
 APPARMOR="${APPARMOR-codespace}"

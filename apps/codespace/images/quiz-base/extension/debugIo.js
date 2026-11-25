@@ -14,7 +14,7 @@
  * `autorun`, which the extension sends before the program starts: the program
  * reads and writes a real terminal the student sees and types into.
  *
- * Required by `extension.js` and by `images/c-dev/test.sh` § 11, which drives
+ * Required by `extension.js` and by `images/quiz-base/test-toolchain.sh` § 4, which drives
  * the real debug adapter with what `programTerminalConfig` returns.
  */
 "use strict";

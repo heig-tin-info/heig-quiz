@@ -1,7 +1,10 @@
-# heig-codespace student image: C and C++, gdb, code-server.
-# Construite par : podman --remote --url unix:///run/podman/podman.sock \
-#                    build -t codespace/c-dev images/c-dev
-# Run by images/c-dev/run-hardened.sh (hardening is mandatory, CLAUDE.md invariant 3).
+# quiz-base, the platform's workspace image (ADR-146): code-server and the
+# platform's contract, C and C++, gdb, Baygon. Published public as
+# ghcr.io/heig-tin-info/quiz-base by .github/workflows/quiz-base.yml, the only
+# place it is built for release; a course image derives from it (`FROM`).
+# Built by hand for development: apps/codespace/images/build.sh, which passes
+# the release labels from VERSION and CONTRACT (step 8).
+# Run by images/quiz-base/run-hardened.sh (hardening is mandatory, CLAUDE.md invariant 3).
 
 # --- Stage 1: building the .vsix of the status-bar extension ----------------
 # Packaging only: the extension is plain JavaScript, with no dependency and no
@@ -206,8 +209,46 @@ RUN mkdir -p /home/student/.config/clangd && \
     chmod 0644 /etc/clangd/config.yaml /home/student/.config/clangd/config.yaml && \
     chown -R 1000:1000 /home/student/.config
 
+# 7. The contract (ADR-146 §5, README § The contract): the check the portal
+#    runs in a container of every image derived from this one, from its own
+#    copy of the released base. The manifest names the files the contract
+#    owns, hashed here, after every step that writes them, and is written
+#    into the check itself, the image's only copy: the check the portal runs
+#    carries the base's hashes, never a candidate's. The machine settings are not in it: the
+#    check holds them to the keys that protect the platform, and a course
+#    image may add to them. /etc/resolv.conf is hashed from the build
+#    context's copy: during a RUN, buildah mounts its own over it (5b).
+COPY contract/check /usr/local/lib/quiz-base/check.in
+COPY resolv.conf /usr/local/lib/quiz-base/resolv.conf.in
+RUN d=/usr/local/lib/quiz-base && \
+    wb=/usr/lib/code-server/lib/vscode/out/vs/code/browser/workbench && \
+    sb=/opt/code-server/extensions/${EXT_STATUSBAR}-${EXT_STATUSBAR_VERSION} && \
+    { sha256sum /usr/local/bin/entrypoint.sh \
+          "$wb/seb-workbench.js" "$wb/workbench.html" \
+          "$sb/extension.js" "$sb/debugIo.js" "$sb/update.js" && \
+      printf '%s  /etc/resolv.conf\n' "$(sha256sum < "$d/resolv.conf.in" | cut -c1-64)"; \
+    } > "$d/manifest.in" && \
+    test "$(wc -l < "$d/manifest.in")" = 7 && \
+    sed -e '/^@MANIFEST@$/{r '"$d/manifest.in" -e 'd}' "$d/check.in" > "$d/check" && \
+    grep -qF "$(sed -n 1p "$d/manifest.in")" "$d/check" && \
+    ! grep -q '^@MANIFEST@$' "$d/check" && \
+    rm -f "$d/check.in" "$d/resolv.conf.in" "$d/manifest.in" && \
+    chmod 0755 "$d/check"
+
 USER 1000:1000
 WORKDIR /work
 EXPOSE 8080
 ENV PAGER=less
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+
+# 8. What the release is. Labels change the configuration, never a layer: a
+#    derived image inherits them and may override them, so the portal reads
+#    the base's version from the image's first layers, never from these
+#    (ADR-146 §5). The fixed ones are here; build.sh adds, with `--label`,
+#    io.quiz.base.version and .contract (VERSION, CONTRACT) and the
+#    org.opencontainers.image.version and .revision (the commit): a LABEL
+#    made of build arguments is taken from buildah's cache with its old
+#    values.
+LABEL org.opencontainers.image.title="quiz-base" \
+      org.opencontainers.image.description="The Quiz platform's online workspace image: code-server and its contract, C and C++, gdb, Baygon" \
+      org.opencontainers.image.source="https://github.com/heig-tin-info/heig-quiz"

@@ -2,7 +2,7 @@
 #
 # Loaded by classroom's deploy/bootstrap.sh and by classroom's deploy/push.sh into /etc/apparmor.d/codespace,
 # then selected at `podman run` time with `--security-opt apparmor=codespace`
-# (images/c-dev/run-hardened.sh and src/engine/index.ts, CLAUDE.md invariant 3).
+# (images/quiz-base/run-hardened.sh and src/engine/index.ts, CLAUDE.md invariant 3).
 #
 # ---------------------------------------------------------------------------
 # Source
@@ -57,7 +57,7 @@
 #
 # `--cap-add=SYS_PTRACE` does not help: the capability check is passed long
 # before the LSM check, and it is the LSM that refuses. Measured on the VM with
-# throwaway containers from images/c-dev/run-hardened.sh: default → denied,
+# throwaway containers from images/quiz-base/run-hardened.sh: default → denied,
 # `--cap-add=SYS_PTRACE` → still denied, `--security-opt apparmor=unconfined` →
 # gdb works. Running unconfined is not an option: it would drop every deny rule
 # below (mounts, /proc and /sys writes) at the same time.

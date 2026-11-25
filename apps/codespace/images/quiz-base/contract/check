@@ -1,0 +1,221 @@
+#!/bin/sh
+# The quiz-base contract check (ADR-146 §5; CONTRACT says which version of
+# the contract this is). Run INSIDE a running container of an image, as the
+# image's user, once code-server answers /healthz:
+#
+#   podman exec -i <container> sh -s -- [--base] < check
+#
+# The copy that runs is always the RELEASED BASE's own: this template, built
+# into the base as /usr/local/lib/quiz-base/check with the base's manifest
+# filled in (Containerfile, step 7). The portal pipes that copy into a
+# candidate's container; it never runs a copy the candidate ships. test.sh
+# pipes the image's own copy, after checking it is this template.
+#
+# It reads no argument but --base, no file of the caller and nothing from
+# the environment. One line per check on stdout; the first failure prints
+# a FAIL line and exits 1. It guards against accidents, not against the
+# image's author (ADR-146 §5): what security needs is enforced by the
+# portal at run time.
+#
+# --base adds what binds quiz-base itself and not an image derived from it
+# (ADR-146 §9): no notebook support.
+#
+# POSIX sh and the base's coreutils, curl and code-server's node: an image
+# derived from the base keeps them.
+set -u
+
+base=''
+case "${1:-}" in
+	'') ;;
+	--base) base=1 ;;
+	*)
+		echo "usage: check [--base]" >&2
+		exit 2
+		;;
+esac
+
+n=0
+ok() {
+	n=$((n + 1))
+	printf 'ok   %s\n' "$1"
+}
+fail() {
+	printf 'FAIL %s\n' "$1"
+	exit 1
+}
+
+URL=http://127.0.0.1:8080
+EXTS=/opt/code-server/extensions
+VSCODE=/usr/lib/code-server/lib/vscode
+WORKBENCH=$VSCODE/out/vs/code/browser/workbench
+NODE=/usr/lib/code-server/lib/node
+PROBE_PORT=8099
+
+listener=''
+tmp=''
+cleanup() {
+	[ -z "$listener" ] || kill "$listener" 2>/dev/null
+	[ -z "$tmp" ] || rm -rf "$tmp"
+}
+trap cleanup EXIT
+trap 'exit 1' HUP INT TERM
+
+# The files the contract owns and their hashes, written here at build time
+# (Containerfile, step 7): the base's, whatever the image under check holds.
+manifest() {
+	cat <<'MANIFEST'
+@MANIFEST@
+MANIFEST
+}
+
+manifest | grep -q '^[0-9a-f]\{64\}  /' || fail "this copy has no manifest: run the base's /usr/local/lib/quiz-base/check, not the template"
+tmp=$(mktemp -d /tmp/quiz-base-check.XXXXXX) || fail "mktemp -d under /tmp"
+
+# --- the user ----------------------------------------------------------------
+[ "$(id -u)" = 1000 ] || fail "runs as uid $(id -u), not 1000"
+ok "runs as uid 1000"
+
+# --- code-server's command line and environment (pid 1) ---------------------
+cmd=" $(tr '\0' ' ' < /proc/1/cmdline) "
+case "$cmd" in
+	*code-server*) ;;
+	*) fail "pid 1 is not code-server: $cmd" ;;
+esac
+for flag in "--auth none" --disable-proxy --disable-file-downloads --disable-file-uploads \
+	"--extensions-dir $EXTS" "--user-data-dir /run/code-server"; do
+	case "$cmd" in
+		*" $flag "*) ;;
+		*) fail "code-server (pid 1) runs without $flag" ;;
+	esac
+done
+ok "code-server (pid 1): --auth none, --disable-proxy, no file download nor upload, the read-only extensions directory"
+
+tr '\0' '\n' < /proc/1/environ | grep -qxF 'EXTENSIONS_GALLERY={"serviceUrl":"","itemUrl":"","resourceUrlTemplate":""}' \
+	|| fail "code-server (pid 1) runs without the neutralised EXTENSIONS_GALLERY"
+ok "extension gallery neutralised (EXTENSIONS_GALLERY)"
+
+# --- the contract's files ----------------------------------------------------
+out=$(manifest | sha256sum -c --quiet - 2>&1) || fail "a file of the contract differs from the base's: $(printf '%s' "$out" | tr '\n' ' ')"
+ok "the contract's files are the base's ($(manifest | wc -l) files)"
+
+statusbar=$(manifest | sed -n "s|^[0-9a-f]*  $EXTS/heig\.codespace-statusbar-\([0-9.]*\)/extension\.js\$|\1|p")
+[ -n "$statusbar" ] || fail "the manifest names no status-bar extension"
+grep -qix "heig.codespace-statusbar@$statusbar" /etc/code-server/extensions.lock \
+	|| fail "extensions.lock does not list heig.codespace-statusbar@$statusbar"
+ok "extensions.lock lists heig.codespace-statusbar@$statusbar"
+
+# --- what may and may not be written -----------------------------------------
+for d in / /etc /usr/lib/code-server "$EXTS" "$EXTS/heig.codespace-statusbar-$statusbar"; do
+	f="${d%/}/.quiz-base-check.$$"
+	if touch "$f" 2>/dev/null; then
+		rm -f "$f"
+		fail "$d is writable"
+	fi
+done
+ok "/, /etc, code-server and the extensions directory are read-only"
+f=$(mktemp /work/.quiz-base-check.XXXXXX 2>/dev/null) || fail "/work is not writable"
+rm -f "$f"
+ok "/work is writable"
+
+grep -q nameserver /etc/resolv.conf && fail "/etc/resolv.conf names a nameserver"
+ok "/etc/resolv.conf names no nameserver"
+
+for f in User Machine; do
+	cmp -s /etc/code-server/settings.json "/run/code-server/$f/settings.json" \
+		|| fail "the machine settings were not copied into /run/code-server/$f"
+done
+ok "machine settings copied into the tmpfs user-data-dir (User and Machine)"
+
+# The settings that protect the platform; every other key (more allowed
+# extensions, a language's settings, themes) is the image's. Strict JSON:
+# the file code-server runs with, parsed by its own node.
+# shellcheck disable=SC2016  # JavaScript template literals, not the shell's
+out=$("$NODE" -e '
+const s = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
+const want = {
+  "task.allowAutomaticTasks": "off",
+  "chat.disableAIFeatures": true,
+  "telemetry.telemetryLevel": "off",
+  "update.mode": "none",
+  "extensions.autoUpdate": false,
+};
+for (const [k, v] of Object.entries(want)) {
+  if (s[k] !== v) { console.log(`${k} is ${JSON.stringify(s[k])}, not ${JSON.stringify(v)}`); process.exit(1); }
+}
+const a = s["extensions.allowed"];
+if (a === null || typeof a !== "object" || Array.isArray(a)) { console.log("extensions.allowed is not an object"); process.exit(1); }
+if (a["*"] !== false) { console.log(`extensions.allowed["*"] is ${JSON.stringify(a["*"])}, not false`); process.exit(1); }
+for (const [k, v] of Object.entries(a)) {
+  if (k.includes("*") && v !== false) { console.log(`extensions.allowed allows the wildcard ${k}`); process.exit(1); }
+}
+if (a["heig.codespace-statusbar"] !== true) { console.log("extensions.allowed does not allow heig.codespace-statusbar"); process.exit(1); }
+' /run/code-server/Machine/settings.json 2>&1) || fail "the machine settings do not protect the platform: $out"
+ok "machine settings: no automatic task, no AI, no telemetry, no update, extensions closed but to the allowed ones"
+
+# --- what code-server serves -------------------------------------------------
+health=$(curl -sS -m 3 "$URL/healthz" 2>&1)
+case "$health" in
+	*'"status"'*) ;;
+	*) fail "/healthz did not answer: $health" ;;
+esac
+ok "/healthz answers"
+
+v=$(sha256sum "$WORKBENCH/seb-workbench.js" | cut -c1-12)
+grep -qF "seb-workbench.js?v=$v\"" "$WORKBENCH/workbench.html" \
+	|| fail "workbench.html does not load seb-workbench.js?v=$v"
+page=$(curl -sS -m 5 -L -D - "$URL/" 2>&1 | tr -d '\r')
+case "$page" in
+	*"seb-workbench.js?v=$v"*) ;;
+	*) fail "the served workbench page does not load seb-workbench.js?v=$v" ;;
+esac
+case "$page" in
+	*"Content-Security-Policy: "*"script-src 'self' "*) ;;
+	*) fail "the workbench page's CSP has no script-src 'self'" ;;
+esac
+src=$(printf '%s\n' "$page" | grep -o "src=\"[^\"]*seb-workbench\.js?v=$v\"" | head -n 1 | sed 's/^src="//; s/"$//; s|^\./||; s|^/||')
+served=$(curl -sS -m 5 -o /dev/null -w '%{http_code} %{content_type}' "$URL/$src" 2>&1)
+case "$served" in
+	"200 text/javascript"*) ;;
+	*) fail "seb-workbench.js is not served as JavaScript: $served" ;;
+esac
+ok "the workbench page loads seb-workbench.js?v=$v under script-src 'self', served as JavaScript"
+
+# The port proxy is off: a program listening in the container is never
+# served on the portal's origin. The listener makes the answer the flag's,
+# not a refused connection's.
+"$NODE" -e "require('http').createServer((q, r) => r.end('L24')).listen($PROBE_PORT, '127.0.0.1')" >/dev/null 2>&1 &
+listener=$!
+i=0
+until [ "$(curl -sS -m 1 "http://127.0.0.1:$PROBE_PORT/" 2>/dev/null)" = L24 ]; do
+	i=$((i + 1))
+	[ "$i" -lt 20 ] || fail "the probe listener on port $PROBE_PORT did not start"
+	sleep 0.25
+done
+for path in "/proxy/$PROBE_PORT/" "/absproxy/$PROBE_PORT/"; do
+	code=$(curl -sS -m 3 -o /dev/null -w '%{http_code}' "$URL$path" 2>&1)
+	case "$code" in
+		403 | 404) ;;
+		*) fail "code-server's port proxy answered $path with $code" ;;
+	esac
+done
+ok "port proxy refused: /proxy/<port>/ and /absproxy/<port>/"
+
+printf '<script>1</script>' > "$tmp/r.html"
+headers=$(curl -sS -m 3 -D - -o /dev/null "$URL/vscode-remote-resource?path=$tmp/r.html" 2>&1 | tr -d '\r')
+case "$headers" in
+	*"Content-Security-Policy: default-src 'none'; sandbox"*) ;;
+	*) fail "/vscode-remote-resource is served without CSP sandbox" ;;
+esac
+ok "/vscode-remote-resource served with CSP sandbox"
+
+# --- the base only (ADR-146 §9) ------------------------------------------------
+if [ -n "$base" ]; then
+	for e in ipynb notebook-renderers; do
+		[ ! -e "$VSCODE/extensions/$e" ] || fail "the bundled extension $e is present"
+	done
+	nb=$(grep -l '"notebooks"' "$VSCODE"/extensions/*/package.json "$EXTS"/*/package.json 2>/dev/null)
+	[ -z "$nb" ] || fail "an extension contributes a notebook type: $(printf '%s' "$nb" | tr '\n' ' ')"
+	ok "no notebook support (base only)"
+fi
+
+printf '%d checks passed\n' "$n"

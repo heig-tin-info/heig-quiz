@@ -1,6 +1,6 @@
 /// <reference lib="dom" />
 /**
- * images/c-dev/seb-workbench.js, the script the student image adds to
+ * images/quiz-base/seb-workbench.js, the script the student image adds to
  * code-server's workbench page (#1149, #1151). The image has no test runner
  * of its own, so its test lives here. Each test gets a fresh jsdom window.
  * SEB's `Clipboard.js` is simulated as SEB Windows 3.10.3 ships it (document
@@ -21,7 +21,7 @@ const { JSDOM } = createRequire(import.meta.url)("jsdom") as {
   JSDOM: new (html: string, options: { url: string }) => { window: DomWindow };
 };
 
-const source = readFileSync(new URL("../../images/c-dev/seb-workbench.js", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../images/quiz-base/seb-workbench.js", import.meta.url), "utf8");
 
 const WINDOWS_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0";
 const SEB_UA = `${WINDOWS_UA} SEB/3.10.3`;

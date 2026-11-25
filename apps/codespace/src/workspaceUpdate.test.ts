@@ -15,13 +15,13 @@ import { ensureStagingRepo, refSnapshot } from "./git/staging.js";
  * `sync/main`, the portal's staging repository fetching it onto
  * `refs/quiz/update/main`, and the student's work tree — a clone of the
  * staging repository, as the portal's channel serves it — where the
- * status-bar extension's pure module (`images/c-dev/extension/update.js`)
+ * status-bar extension's pure module (`images/quiz-base/extension/update.js`)
  * runs git as the student. The VS Code glue around it (`extension.js`) and
- * the image are checked by hand on the engine VM (`images/c-dev/README.md`).
+ * the image are checked by hand on the engine VM (`images/quiz-base/README.md`).
  */
 type Run = (args: string[]) => Promise<{ code: number; stdout: string; stderr: string }>;
 type Update = { branch: string; sha: string; message: { text: string; at: string } | null };
-const ext = createRequire(import.meta.url)("../images/c-dev/extension/update.js") as {
+const ext = createRequire(import.meta.url)("../images/quiz-base/extension/update.js") as {
   MERGE_MESSAGE: string;
   applyUpdate: (run: Run, update: Update) => Promise<{ outcome: string; files?: string[]; detail?: string }>;
   gitRunner: (cwd: string, env?: NodeJS.ProcessEnv) => Run;
