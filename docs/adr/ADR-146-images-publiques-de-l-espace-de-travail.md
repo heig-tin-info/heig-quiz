@@ -94,7 +94,7 @@ know what the students run, only that the image keeps the contract.
    reaches the other sessions open in the same browser — a group member's,
    or those of a staff member in a review session (ADR-129). One origin
    per session (open question 70) stays the fix, tracked with the
-   Jupyter-in-the-workspace issue.
+   Jupyter-in-the-workspace issue (#1217).
 
 **Baygon leaves `quiz-base`.** It becomes the first image derived outside
 the platform (a repository of its own: `FROM quiz-base`, Baygon at the
