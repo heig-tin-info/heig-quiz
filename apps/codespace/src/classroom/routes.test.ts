@@ -26,6 +26,7 @@ import { EXAM_COOKIE, createSebVerifier, verifyExamCookie } from "../seb/index.j
 import type { SessionManager, StartOptions, StartResult } from "../sessions/manager.js";
 import { createSittingSockets } from "../sessions/sittings.js";
 import { findAssignment } from "../sessions/store.js";
+import { ImageNotAdmittedError } from "../images/admission.js";
 
 import { JTI_RETENTION_AFTER_EXP_MS, classroomRoutes, consumeJti } from "./routes.js";
 
@@ -139,6 +140,8 @@ interface Harness {
 
 /** Runs inside the fake `start`, before its row is written: what lands while the real one awaits. */
 let duringStart: (() => void) | null = null;
+/** What the fake `start` throws instead of opening (a refusal of the real manager). */
+let startFails: Error | null = null;
 
 function fakeManager(db: Db, starts: Harness["starts"], closes: string[] = [], refreshes: string[] = []): SessionManager {
   return {
@@ -158,6 +161,7 @@ function fakeManager(db: Db, starts: Harness["starts"], closes: string[] = [], r
       opts: StartOptions = {},
     ): Promise<StartResult> {
       starts.push({ login: user.login, assignmentId: assignment.id, opts });
+      if (startFails) throw startFails;
       duringStart?.();
       const id = `sess-${user.login}-${assignment.id}`;
       const at = new Date();
@@ -221,6 +225,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   duringStart = null;
+  startFails = null;
   await h.app.close();
   h.handle.close();
 });
@@ -360,12 +365,19 @@ describe("PUT /api/assignments/:id", () => {
     // comes from the token.
     expect(row?.targetRepo).toBeNull();
     expect(row?.targetRepoPattern).toBeNull();
+    // ADR-146: no image named, the default resolved at each start, never frozen here.
+    expect(row?.imageRef).toBeNull();
     expect(row?.image).toBe(h.config.CODESPACE_DEFAULT_IMAGE);
   });
 
-  it("`image` from the body wins over the default image", async () => {
-    await put(syncBody({ image: "codespace/python:1" }));
-    expect(findAssignment(h.db, "a-lab")?.image).toBe("codespace/python:1");
+  it("stores a course image by digest, canonical, admitted or not; refuses a tag", async () => {
+    const digest = `sha256:${"c".repeat(64)}`;
+    expect((await put(syncBody({ image: `ghcr.io/heig/lab-go:2@${digest}` }))).statusCode).toBe(200);
+    expect(findAssignment(h.db, "a-lab")?.imageRef).toBe(`ghcr.io/heig/lab-go@${digest}`);
+    expect((await put(syncBody({ image: "codespace/python:1" }))).statusCode).toBe(400);
+    // Back to the default.
+    await put(syncBody({ image: null }));
+    expect(findAssignment(h.db, "a-lab")?.imageRef).toBeNull();
   });
 
   it("is idempotent: two identical PUTs, one row and the same answer", async () => {
@@ -520,6 +532,15 @@ describe("GET /launch", () => {
     await syncedAssignment();
     const token = await launchToken({ aud: "heig-codespace-api" });
     expect((await h.app.inject({ url: `/launch?token=${token}` })).statusCode).toBe(403);
+  });
+
+  it("409 with its own page when the project's image is not admitted (ADR-146 §5): no cookie", async () => {
+    await syncedAssignment();
+    startFails = new ImageNotAdmittedError(`ghcr.io/heig/lab@sha256:${"d".repeat(64)}`);
+    const reply = await h.app.inject({ url: `/launch?token=${await launchToken()}`, headers: FR });
+    expect(reply.statusCode).toBe(409);
+    expect(reply.body).toContain("Espace de travail pas prêt");
+    expect(reply.headers["set-cookie"]).toBeUndefined();
   });
 
   it("single use: the same token does not serve twice", async () => {

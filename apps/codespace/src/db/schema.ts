@@ -15,7 +15,7 @@
  * heig-classroom stores `timestamptz`. SQLite has no timestamp type and a
  * text date would sort badly across time zones.
  */
-import { CODESPACE_SESSION_STATES, type CodespaceWorkspaceUpdate } from "@quiz/contracts";
+import { ADMISSION_STATES, CODESPACE_SESSION_STATES, IMAGE_REFUSALS, IMAGE_SOURCES, type CodespaceWorkspaceUpdate } from "@quiz/contracts";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 /**
@@ -132,8 +132,19 @@ export const assignments = sqliteTable("assignments", {
   mode: text("mode", { enum: ["lab", "exam"] })
     .notNull()
     .default("lab"),
-  /** Student image to launch, e.g. `codespace/c-dev:4.137.0`. */
+  /**
+   * Legacy: the image the sync froze into the row before ADR-146 (the
+   * default at that time when the platform sent none). Still written, for a
+   * rollback to an older portal; never read. `imageRef` is what runs.
+   */
   image: text("image").notNull(),
+  /**
+   * The course image the platform's sync names, pinned by digest (ADR-146
+   * §4); null = the portal's default, resolved at each container start. A
+   * reference the portal has not admitted is stored and refused at session
+   * start (`sessions/manager.ts`).
+   */
+  imageRef: text("image_ref"),
   /** `http.uploadpack` of the staging repository; true by default (analyse.md 3.2). */
   uploadPack: integer("upload_pack", { mode: "boolean" }).notNull().default(true),
   /** The teacher's template repository: URL or path of a local repository. */
@@ -271,6 +282,13 @@ export const sessions = sqliteTable(
      * session since already rotated the cookie away from the station.
      */
     openedBySitting: text("opened_by_sitting"),
+    /**
+     * The image the session's container was last started with (ADR-146
+     * §6): a Refresh changes what the next start runs, never a running
+     * container, so the image in use is the session's, not the
+     * assignment's. Null before its first start.
+     */
+    image: text("image"),
   },
   (t) => [
     index("sessions_pair_idx").on(t.student, t.assignmentId, t.state),
@@ -325,3 +343,44 @@ export const closedSittings = sqliteTable(
 );
 
 export type ClosedSittingRow = typeof closedSittings.$inferSelect;
+
+/**
+ * The images the portal admitted, or is admitting (ADR-146 §5), one row per
+ * REFERENCE: one digest may be admitted under several (`--pull=never` runs
+ * a digest only under a name the store holds it by), and a row is never
+ * rewritten by a request under another reference. A session runs a course
+ * image only once its row is `ready` (`images/admission.ts`); the default
+ * is admitted at startup (`source` `default`, its earlier defaults'
+ * rows removed), a course's through `POST /api/images/admissions`. A row
+ * left `downloading` or `checking` by a restart becomes `refused`
+ * `interrupted`. Removed only by the administrator's un-admission
+ * (`DELETE /api/images?reference=`, ADR-146 §8), which never touches the
+ * store.
+ *
+ * The default before the first `quiz-base` release is a local tag: its
+ * `digest` is then the local image id.
+ */
+export const admittedImages = sqliteTable(
+  "admitted_images",
+  {
+    /** `registry/repository@digest`, canonical; the local tag of a default not pinned yet. */
+    reference: text("reference").primaryKey(),
+    digest: text("digest").notNull(),
+    state: text("state", { enum: ADMISSION_STATES }).notNull(),
+    reason: text("reason", { enum: IMAGE_REFUSALS }),
+    /** A quoted diagnostic (byte counts, field names, a last output line), never prose; at most `IMAGE_DETAIL_MAX`. */
+    detail: text("detail"),
+    /** The released `quiz-base` its first layers are (its version label), once read. */
+    baseVersion: text("base_version"),
+    compressedBytes: integer("compressed_bytes"),
+    diskBytes: integer("disk_bytes"),
+    source: text("source", { enum: IMAGE_SOURCES }).notNull(),
+    requestedAt: integer("requested_at", { mode: "timestamp_ms" }).notNull(),
+    admittedAt: integer("admitted_at", { mode: "timestamp_ms" }),
+    lastUsedAt: integer("last_used_at", { mode: "timestamp_ms" }),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [index("admitted_images_digest_idx").on(t.digest)],
+);
+
+export type AdmittedImageRow = typeof admittedImages.$inferSelect;

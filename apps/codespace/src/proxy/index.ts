@@ -28,6 +28,7 @@ import fp from "fastify-plugin";
 
 import type { Db } from "../db/client.js";
 import type { SessionRow } from "../db/schema.js";
+import { ImageNotAdmittedError } from "../images/admission.js";
 import { checkExamRequest, replyOutsideSeb } from "../seb/index.js";
 import type { SessionManager } from "../sessions/manager.js";
 import { isSittingClosed, type SittingSockets } from "../sessions/sittings.js";
@@ -53,7 +54,7 @@ export interface ProxyOptions {
   maxHeldMs: number;
 }
 
-/** code-server's port inside the student container (`images/c-dev`). */
+/** code-server's port inside the student container (`images/quiz-base`). */
 export const CODE_SERVER_PORT = 8080;
 
 /**
@@ -273,6 +274,11 @@ async function proxyPluginImpl(app: FastifyInstance, opts: ProxyOptions): Promis
       try {
         session = await manager.ensureRunning(sessionId);
       } catch (err) {
+        // A Refresh to an image not admitted since (ADR-146 §6): its own page, no container.
+        if (err instanceof ImageNotAdmittedError) {
+          request.log.warn({ sessionId, image: err.reference }, "session restart refused: the image is not admitted");
+          return deny(reply, 409, "imageRefusedTitle", "imageRefusedDetail");
+        }
         request.log.error({ sessionId, err }, "session restart impossible");
         return deny(
           reply,

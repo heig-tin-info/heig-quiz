@@ -87,6 +87,8 @@ let user: UserRow;
 
 function makeManager(graceMs = 60_000, extra: Partial<ManagerDeps> = {}) {
   return createSessionManager({
+    defaultImage: "codespace/c-dev:4.137.0",
+    images: { runnable: async () => true, markUsed: () => undefined },
     ...extra,
     db,
     engine,
@@ -415,7 +417,7 @@ describe("reconciliation at portal start-up", () => {
   });
 
   it("removes an orphan session container", async () => {
-    await engine.run({ sessionId: "ghost", name: "cs-ghost", workDir: "/tmp/x" });
+    await engine.run({ sessionId: "ghost", name: "cs-ghost", workDir: "/tmp/x", image: "codespace/c-dev:4.137.0" });
     const manager = makeManager();
     const result = await manager.reconcile();
     expect(result.orphans).toBe(1);

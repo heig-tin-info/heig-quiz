@@ -25,6 +25,7 @@ import { assignments, users, type AssignmentRow, type UserRow } from "../db/sche
 import type { ContainerInfo, Engine, RunRequest } from "../engine/index.js";
 import { ForgeOriginError, ForgeRefusedError, ForgeUnconfiguredError, git, gitBare, refSnapshot, type ForgeOwner } from "../git/index.js";
 import { FIXTURE_ENV, makeSourceRepo } from "../git/fixtures.js";
+import { ImageNotAdmittedError } from "../images/admission.js";
 import { causeText } from "../web/i18n.js";
 
 import {
@@ -45,6 +46,8 @@ import { findAnySession } from "./store.js";
 class FakeEngine implements Engine {
   readonly containers = new Map<string, ContainerInfo>();
   readonly execs: Array<{ name: string; argv: string[] }> = [];
+  /** The image of each `run`, in order (undefined: the engine's own). */
+  readonly images: Array<string | undefined> = [];
   runs = 0;
   private next = 10;
 
@@ -56,6 +59,7 @@ class FakeEngine implements Engine {
   }
   async run(req: RunRequest): Promise<ContainerInfo> {
     this.runs += 1;
+    this.images.push(req.image);
     const info: ContainerInfo = {
       id: `ctr-${this.runs}`,
       name: req.name,
@@ -115,8 +119,13 @@ let root: string;
 let engine: FakeEngine;
 let user: UserRow;
 
+/** Every image runnable: what the tests of this file that are not about images need. */
+const ANY_IMAGE = { runnable: async () => true, markUsed: () => undefined };
+
 function makeManager(extra: Partial<ManagerDeps> = {}) {
   return createSessionManager({
+    defaultImage: "codespace/c-dev:4.137.0",
+    images: ANY_IMAGE,
     ...extra,
     db,
     engine,
@@ -442,6 +451,78 @@ describe("the student's git identity in work/.git/config", () => {
     expect(script).toContain("git config --local --get user.name >/dev/null 2>&1 ||");
     expect(script).toContain(`user.name 'Jean-Luc D'\\''Arc'`);
     expect(shellQuote("a'b")).toBe(`'a'\\''b'`);
+  });
+});
+
+describe("the image a session runs (ADR-146)", () => {
+  const DEFAULT = `ghcr.io/heig-tin-info/quiz-base@sha256:${"b".repeat(64)}`;
+  const COURSE = `ghcr.io/heig/lab-go@sha256:${"c".repeat(64)}`;
+
+  /** The admitted set as the manager asks it: the default, or a reference in `set`; `held` false = the store lost them all. */
+  function admitted(set: Set<string>, held = { value: true }) {
+    const used: string[] = [];
+    const asked: string[] = [];
+    const images = {
+      runnable: async (ref: string) => {
+        asked.push(ref);
+        return held.value && (ref === DEFAULT || set.has(ref));
+      },
+      markUsed: (ref: string) => void used.push(ref),
+    };
+    return { used, asked, images };
+  }
+
+  it("no imageRef: the default as it is at the start, recorded on the session", async () => {
+    const assignment = await insertAssignment();
+    const { asked, images } = admitted(new Set());
+    const { session } = await makeManager({ defaultImage: DEFAULT, images }).start(user, assignment);
+    expect(engine.images).toEqual([DEFAULT]);
+    // Asked once for the start path, then handed down.
+    expect(asked).toEqual([DEFAULT]);
+    expect(findAnySession(db, "student", "tp")?.image).toBe(DEFAULT);
+    expect(session.state).toBe("running");
+  });
+
+  it("an admitted course image runs, and its use is recorded", async () => {
+    const assignment = await insertAssignment({ imageRef: COURSE });
+    const { used, images } = admitted(new Set([COURSE]));
+    await makeManager({ defaultImage: DEFAULT, images }).start(user, assignment);
+    expect(engine.images).toEqual([COURSE]);
+    expect(used).toEqual([COURSE]);
+    expect(findAnySession(db, "student", "tp")?.image).toBe(COURSE);
+  });
+
+  it("an image not admitted: refused before anything, no container, no session row", async () => {
+    const assignment = await insertAssignment({ imageRef: COURSE });
+    const { images } = admitted(new Set());
+    const err = await makeManager({ defaultImage: DEFAULT, images }).start(user, assignment).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ImageNotAdmittedError);
+    expect((err as ImageNotAdmittedError).reference).toBe(COURSE);
+    expect(engine.runs).toBe(0);
+    expect(findAnySession(db, "student", "tp")).toBeUndefined();
+    // The default the store no longer holds: the same page, rather than a failed `--pull=never` start.
+    const gone = admitted(new Set(), { value: false });
+    const plain = await insertAssignment({ id: "tp2" });
+    await expect(makeManager({ defaultImage: DEFAULT, images: gone.images }).start(user, plain)).rejects.toBeInstanceOf(ImageNotAdmittedError);
+    expect(engine.runs).toBe(0);
+  });
+
+  it("a running container keeps its image; its restart needs the new one admitted", async () => {
+    const assignment = await insertAssignment({ imageRef: COURSE });
+    const set = new Set([COURSE]);
+    const { images } = admitted(set);
+    const manager = makeManager({ defaultImage: DEFAULT, images });
+    const { session } = await manager.start(user, assignment);
+    set.clear();
+    // Resumed while alive: no restart, nothing refused.
+    const resumed = await manager.start(user, assignment);
+    expect(resumed.launched).toBe(false);
+    // The container died: the restart is refused, the session untouched.
+    engine.kill(engine.containerName(session.id));
+    await expect(manager.ensureRunning(session.id)).rejects.toBeInstanceOf(ImageNotAdmittedError);
+    await expect(manager.start(user, assignment)).rejects.toBeInstanceOf(ImageNotAdmittedError);
+    expect(engine.runs).toBe(1);
+    expect(findAnySession(db, "student", "tp")?.state).toBe("running");
   });
 });
 

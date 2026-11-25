@@ -7,6 +7,7 @@
  * The secret (`CODESPACE_LAUNCH_SECRET`) signs and verifies; it is never in
  * a payload, a log or the database (ADR-010).
  */
+import { OCI_DIGEST, formatOciReference, parseOciReference } from "@quiz/core/oci";
 import { z } from "zod";
 
 import {
@@ -92,6 +93,30 @@ const IsoDate = z
 
 const ConfigKey = z.string().regex(/^[0-9a-f]{64}$/);
 
+/** A canonical reference parsed by `@quiz/core/oci` (which also caps its length); `pinned` requires a digest. */
+const ociReference = (pinned: boolean, message: string) =>
+  z.string().transform((value, ctx) => {
+    const ref = parseOciReference(value);
+    if (ref && (!pinned || ref.digest)) return formatOciReference(ref);
+    ctx.addIssue({ code: "custom", message });
+    return z.NEVER;
+  });
+
+/**
+ * A workspace image reference (ADR-146 §1): `ghcr.io/…` or `docker.io/…`,
+ * a Docker Hub short name normalized (`debian` → `docker.io/library/debian`),
+ * by tag or by digest. The output is the canonical spelling:
+ * `registry/repository@sha256:…`, or `registry/repository:tag` (`latest`
+ * when none was given).
+ */
+export const ImageReference = ociReference(false, "a ghcr.io or docker.io image reference expected");
+
+/** A reference pinned by digest (ADR-146 §1): what a session runs, canonical, `registry/repository@sha256:<64 hex>`. */
+export const DigestReference = ociReference(true, "a ghcr.io or docker.io image reference pinned by a sha256 digest expected");
+
+/** A manifest digest: `sha256:` and 64 lowercase hex. */
+export const ImageDigest = z.string().regex(OCI_DIGEST);
+
 /** A student's target repository. */
 export const CodespaceRepoRef = z.object({
   /** `<owner>/<name>` on the forge. */
@@ -123,8 +148,13 @@ export const CodespaceAssignmentSync = z.object({
   classroomId: z.string().min(1),
   classroomName: z.string(),
   mode: WorkMode.exclude(["free"]),
-  /** Image from the portal catalog; null = default image. */
-  image: z.string().min(1).nullable(),
+  /**
+   * The course image the project runs, pinned by digest (ADR-146 §4, §6);
+   * null = the portal's default (the current `quiz-base`), resolved at each
+   * container start, never frozen at the sync. The portal stores a reference
+   * it has not admitted and refuses it at session start, not here.
+   */
+  image: DigestReference.nullable(),
   /** Template repository: what the workspace is seeded from in exam mode. */
   sourceRepo: CodespaceRepoRef,
   /**
@@ -278,7 +308,7 @@ export const ServiceTokenClaims = z
     iat: z.number(),
     exp: z.number(),
     jti: z.string().min(1).max(200),
-    method: z.enum(["GET", "PUT", "POST"]),
+    method: z.enum(["GET", "PUT", "POST", "DELETE"]),
     path: z.string().startsWith("/"),
     bodyHash: z.string().min(1).optional(),
   })
@@ -473,6 +503,173 @@ export const CodespaceCollectionResult = z.discriminatedUnion("outcome", [
 export type CodespaceCollectionResult = z.infer<typeof CodespaceCollectionResult>;
 
 export { COLLECTION_FAILURE_REASONS, COLLECTION_OUTCOMES };
+
+// ---------------------------------------------------------- the workspace images (ADR-146)
+
+/**
+ * Quiz → portal, every one with a service token bound to its request
+ * (ADR-078's amendment of 2026-10-11): ask for an image's admission (202),
+ * follow it, read the current `quiz-base`, list the engine's image store and
+ * un-admit a reference. An admission is addressed by its REFERENCE (one
+ * digest may be admitted under several), carried in the query string as
+ * `?reference=<canonical digest reference>`, URL-encoded: the bound path is
+ * exactly what these helpers return.
+ */
+export const IMAGE_ADMISSIONS_PATH = "/api/images/admissions";
+export const IMAGE_BASE_PATH = "/api/images/base";
+export const IMAGES_PATH = "/api/images";
+const byReference = (path: string, reference: string): string => `${path}?reference=${encodeURIComponent(reference)}`;
+/** `GET`: one admission. */
+export const imageAdmissionPath = (reference: string): string => byReference(IMAGE_ADMISSIONS_PATH, reference);
+/** `DELETE`: un-admit one reference (204). */
+export const imagePath = (reference: string): string => byReference(IMAGES_PATH, reference);
+/** The query of both. */
+export const CodespaceImageQuery = z.strictObject({ reference: DigestReference });
+export type CodespaceImageQuery = z.infer<typeof CodespaceImageQuery>;
+
+/**
+ * An admission's life (ADR-146 §5): the registry read and the pull
+ * (`downloading`), the admission container and the contract check
+ * (`checking`), then `ready` — the portal runs it — or `refused`.
+ */
+export const ADMISSION_STATES = ["downloading", "checking", "ready", "refused"] as const;
+export type AdmissionState = (typeof ADMISSION_STATES)[number];
+
+/**
+ * Why the portal refuses an image (ADR-146 §5), what Quiz renders through
+ * its dictionaries: `not_found` and `not_public` (the registry's answer to
+ * an anonymous read), `too_large` (compressed, then on disk, over the
+ * ceiling), `not_on_base` (its first uncompressed layers are no released
+ * `quiz-base`'s), `config` (`User`, `Entrypoint` or `Cmd` not the base's, or
+ * not `linux/amd64`), `disk_full` (the free disk under the floor before a
+ * pull), `pull_failed` (the registry or the pull failed), `contract_failed`
+ * (the base's check, or code-server never healthy) and `interrupted` (the
+ * portal restarted during the admission: ask again).
+ */
+export const IMAGE_REFUSALS = [
+  "not_found",
+  "not_public",
+  "too_large",
+  "not_on_base",
+  "config",
+  "disk_full",
+  "pull_failed",
+  "contract_failed",
+  "interrupted",
+] as const;
+export type ImageRefusal = (typeof IMAGE_REFUSALS)[number];
+
+/** Who admitted an image: the portal itself at startup (its default), or a course's request. */
+export const IMAGE_SOURCES = ["default", "course"] as const;
+export type ImageSource = (typeof IMAGE_SOURCES)[number];
+
+/** A detail's length cap. */
+export const IMAGE_DETAIL_MAX = 500;
+
+/**
+ * A refusal's `detail`: a quoted diagnostic, never prose — byte counts
+ * (`5368709120>4294967296`), the names of the config fields that differ
+ * (`User,Cmd`), a platform (`linux/arm64`), the registry's, the engine's or
+ * the check's last output line. Quiz renders the `reason` and may quote the
+ * detail as it is; null when there is nothing to quote.
+ */
+const ImageDetail = z.string().max(IMAGE_DETAIL_MAX).nullable();
+
+/** `POST /api/images/admissions`: a reference by tag or digest; the portal resolves a tag (Quiz never calls a registry). */
+export const CodespaceImageAdmissionRequest = z.strictObject({ reference: ImageReference });
+export type CodespaceImageAdmissionRequest = z.infer<typeof CodespaceImageAdmissionRequest>;
+
+/**
+ * One admission, per reference: the POST's 202 and
+ * `GET /api/images/admissions?reference=`. `baseVersion` is the released
+ * `quiz-base`'s its first layers are, read from that prefix; the sizes are
+ * known once read (compressed from the manifest, on disk after the pull).
+ */
+export const CodespaceImageAdmission = z.object({
+  reference: DigestReference,
+  digest: ImageDigest,
+  state: z.enum(ADMISSION_STATES),
+  reason: z.enum(IMAGE_REFUSALS).nullable(),
+  detail: ImageDetail,
+  baseVersion: z.string().nullable(),
+  compressedBytes: z.number().int().min(0).nullable(),
+  diskBytes: z.number().int().min(0).nullable(),
+  updatedAt: IsoDate,
+});
+export type CodespaceImageAdmission = z.infer<typeof CodespaceImageAdmission>;
+
+/**
+ * The POST's refusals before any digest is known: 422 when the reference
+ * cannot be resolved — `not_found`, `not_public`, `config` (no `linux/amd64`
+ * image, a malformed manifest) — and 503 `registry_unavailable` when the
+ * registry cannot be reached (ask again later).
+ */
+export const IMAGE_ADMISSION_ERRORS = ["not_found", "not_public", "config", "registry_unavailable"] as const;
+export const CodespaceImageAdmissionError = z.object({
+  error: z.enum(IMAGE_ADMISSION_ERRORS),
+  detail: ImageDetail.optional(),
+});
+export type CodespaceImageAdmissionError = z.infer<typeof CodespaceImageAdmissionError>;
+
+/**
+ * `GET /api/images/base`: the current `quiz-base` release, the portal's
+ * default image (ADR-146 §3) — what an image is marked obsolete against
+ * (§7). A portal whose default is not pinned by digest yet (before the
+ * first release) answers 503 `base_unreleased`; a registry it cannot read,
+ * 503 `registry_unavailable`.
+ */
+export const CodespaceBaseImage = z.object({
+  reference: DigestReference,
+  digest: ImageDigest,
+  /** Its `io.quiz.base.version` label: the platform's own image, so its label is trusted. */
+  version: z.string().nullable(),
+});
+export type CodespaceBaseImage = z.infer<typeof CodespaceBaseImage>;
+
+/**
+ * Why `DELETE /api/images?reference=` refuses (409): the default
+ * (`default_image`), an admission still running (`admission_running`), a
+ * live session of THIS portal instance on it (`image_in_use`). The portal
+ * never removes an image from the store (staging and production share it,
+ * ADR-146 §8): it un-admits the reference, and the administrator frees the
+ * disk by hand.
+ */
+export const IMAGE_REMOVE_REFUSALS = ["default_image", "admission_running", "image_in_use"] as const;
+
+/** What an image of the engine's store is to this portal instance. */
+export const ENGINE_IMAGE_KINDS = ["default", "base", "admitted", "orphan"] as const;
+
+/** One admission of this instance, as the console reads it. */
+export const CodespaceEngineImageAdmission = z.object({
+  reference: z.string().min(1),
+  digest: z.string().min(1),
+  source: z.enum(IMAGE_SOURCES),
+  state: z.enum(ADMISSION_STATES),
+  lastUsedAt: IsoDate.nullable(),
+  /** This instance's live sessions whose container runs it. */
+  liveSessions: z.number().int().min(0),
+});
+export type CodespaceEngineImageAdmission = z.infer<typeof CodespaceEngineImageAdmission>;
+
+/**
+ * One workspace image of the engine's store (`GET /api/images`, ADR-146
+ * §8), joined with this instance's admissions: the default, a released
+ * base, an admitted image, or an `orphan` (derived from a released base,
+ * admitted by no row of this instance: refused, un-admitted, or the other
+ * instance's). `id` and `diskBytes` are null for an admission whose image
+ * is no longer in the store. The store is shared by staging and production:
+ * the administrator reads both lists before freeing disk by hand. Plain
+ * strings: until the first `quiz-base` release the default is a local tag.
+ */
+export const CodespaceEngineImage = z.object({
+  id: z.string().min(1).nullable(),
+  /** The store's names of the image: tags and repository digests. */
+  names: z.array(z.string()),
+  diskBytes: z.number().int().min(0).nullable(),
+  kind: z.enum(ENGINE_IMAGE_KINDS),
+  admissions: z.array(CodespaceEngineImageAdmission),
+});
+export type CodespaceEngineImage = z.infer<typeof CodespaceEngineImage>;
 
 /**
  * A repository's last collection, for its staff (ADR-130 §7): the outcome

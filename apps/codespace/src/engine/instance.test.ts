@@ -17,7 +17,6 @@ function engineFor(instance: string) {
     network: "codespace",
     gateway: "10.77.0.254",
     seccompProfile: "/etc/quiz-codespace/prod/seccomp.json",
-    image: "codespace/c-dev:4.137.0",
     memory: "1536m",
     cpus: "1",
     pidsLimit: 256,
@@ -28,7 +27,7 @@ describe("engine — one instance among several on the same Podman", () => {
   it("labels and names every session container with its instance", () => {
     const staging = engineFor("staging");
     const name = staging.containerName("b");
-    const args = staging.runArgs({ sessionId: "b", name, workDir: "/srv/x/volumes/s/a/work" });
+    const args = staging.runArgs({ sessionId: "b", name, workDir: "/srv/x/volumes/s/a/work", image: "codespace/c-dev:4.137.0" });
     expect(name).toBe("cs-staging-b");
     expect(args).toContain(`${INSTANCE_LABEL}=staging`);
     expect(args).toContain(`${SESSION_LABEL}=b`);

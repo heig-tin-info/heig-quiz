@@ -28,6 +28,7 @@ import type { Engine } from "../engine/index.js";
 import type { Db } from "../db/client.js";
 import type { AssignmentRepoRef, AssignmentRow, SessionRow, UserRow } from "../db/schema.js";
 import { sessions } from "../db/schema.js";
+import { ImageNotAdmittedError, type ImageAdmissions } from "../images/admission.js";
 import type { BootstrapCause } from "../web/i18n.js";
 import {
   ForgeUnconfiguredError,
@@ -84,11 +85,24 @@ export interface ManagerOptions {
    * Public origin of the platform (`PLATFORM_URL`) and of the portal
    * (`PUBLIC_URL`). They serve exactly one purpose: the return URL passed to
    * the container for the status-bar extension's "Close" button
-   * (`images/c-dev/extension`). Empty, no URL is passed on and the button does
+   * (`images/quiz-base/extension`). Empty, no URL is passed on and the button does
    * not appear.
    */
   platformUrl?: string;
   publicUrl?: string;
+  /**
+   * The platform's image (`CODESPACE_DEFAULT_IMAGE`, ADR-146 §3): what an
+   * assignment without an `imageRef` runs, resolved at each start, and the
+   * review wipe's container. The manager is its one owner: every `run`
+   * names its image.
+   */
+  defaultImage: string;
+  /**
+   * The admitted set (ADR-146 §5): an image starts only when it is the
+   * default or admitted `ready` under the reference the assignment names,
+   * and the store holds it.
+   */
+  images: Pick<ImageAdmissions, "runnable" | "markUsed">;
   log: {
     info: (o: object, m: string) => void;
     warn: (o: object, m: string) => void;
@@ -203,7 +217,7 @@ export function stagingSourceFor(
  * and this list is what a test asserts.
  *
  * The four `CODESPACE_` ones are read by `heig.codespace-statusbar`, the
- * status-bar extension baked into the image (`images/c-dev/extension`); a
+ * status-bar extension baked into the image (`images/quiz-base/extension`); a
  * session sets at most three of them, `CODESPACE_SEB` taking the place of
  * `CODESPACE_RETURN_URL` in a SEB session.
  *
@@ -470,6 +484,19 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
   }
 
   /**
+   * The image a container of `assignment` starts on, now (ADR-146 §6): its
+   * `imageRef`, else the default as it is today. One not admitted under that
+   * very reference, or no longer in the store, throws
+   * {@link ImageNotAdmittedError}, before anything is prepared. Computed once
+   * per start path, then handed down.
+   */
+  async function imageOf(assignment: AssignmentRow): Promise<string> {
+    const image = assignment.imageRef ?? opts.defaultImage;
+    if (!(await opts.images.runnable(image))) throw new ImageNotAdmittedError(image);
+    return image;
+  }
+
+  /**
    * Removes a review session's directory, `<VOLUMES_ROOT>/<login>/review-<id>/`
    * (ADR-129 §10). `fs.rm` never follows a link. What the host may not
    * unlink — the work tree, the container's after `:U` — is emptied first
@@ -488,7 +515,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     if (await removed()) return true;
     const name = engine.containerName(`wipe-${randomUUID()}`);
     try {
-      await engine.run({ sessionId: `wipe-${assignmentId}`, name, workDir: paths.workDir });
+      await engine.run({ sessionId: `wipe-${assignmentId}`, name, workDir: paths.workDir, image: opts.defaultImage });
       await engine.exec(name, [...REVIEW_WIPE_ARGV]);
     } catch (err) {
       log.warn({ student, assignment: assignmentId, err: redactSecrets(String((err as Error).message ?? err)) }, "emptying a review directory failed");
@@ -704,6 +731,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
   async function launch(
     session: SessionRow,
     assignment: AssignmentRow,
+    image: string,
   ): Promise<{ session: SessionRow; healthyInMs: number }> {
     const paths = stagingPaths(opts.volumesRoot, session.student, assignment.id);
     const user = findUser(db, session.userId);
@@ -733,8 +761,11 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         },
         user,
       ),
-      ...(assignment.image ? { image: assignment.image } : {}),
+      image,
     });
+    // What this container runs, until its next start (ADR-146 §6): a Refresh never moves it.
+    updateSession(db, session.id, { image });
+    opts.images.markUsed(image);
     if (!info.ip) {
       await engine.rm(name);
       updateSession(db, session.id, { state: "failed" });
@@ -828,6 +859,8 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
           cookieToken: touched.cookieToken,
         };
       }
+      // An image not admitted refuses the start before anything changes (ADR-146 §5).
+      const image = await imageOf(assignment);
       // Rotated here, before the relaunch, and not after it: if the relaunch
       // fails the session falls back to `stopped` with the old token already
       // retired, which is the safe side of the choice — nobody was handed the
@@ -841,7 +874,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
       });
       try {
         await seedStaging(revived, assignment);
-        const { session, healthyInMs } = await launch(revived, assignment);
+        const { session, healthyInMs } = await launch(revived, assignment, image);
         void refreshUpdate(session, assignment);
         log.info({ sessionId: session.id, student: user.login }, "session resumed on its volume");
         return { session, launched: true, healthyInMs, cookieToken: revived.cookieToken };
@@ -854,6 +887,8 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
       }
     }
 
+    // No session row for an image not admitted: nothing was opened (ADR-146 §5).
+    const image = await imageOf(assignment);
     const id = randomUUID();
     const cookieToken = newCookieToken();
     const now = new Date();
@@ -880,7 +915,7 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
     if (!created) throw new Error("session creation returned no row");
     try {
       await seedStaging(created, assignment);
-      const { session, healthyInMs } = await launch(created, assignment);
+      const { session, healthyInMs } = await launch(created, assignment, image);
       void refreshUpdate(session, assignment);
       log.info({ sessionId: session.id, student: user.login }, "session created");
       return { session, launched: true, healthyInMs, cookieToken };
@@ -947,8 +982,9 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
       // Dead container, live session: relaunch on the same volume.
       log.warn({ sessionId }, "container missing for a live session, relaunching");
       const assignment = assignmentOf(session);
+      const image = await imageOf(assignment);
       await seedStaging(session, assignment);
-      const { session: relaunched } = await launch(session, assignment);
+      const { session: relaunched } = await launch(session, assignment, image);
       return relaunched;
     },
 

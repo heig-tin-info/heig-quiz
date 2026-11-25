@@ -18,9 +18,12 @@
 import cookie from "@fastify/cookie";
 import Fastify, { type FastifyInstance } from "fastify";
 
-import { loadConfig, type AppConfig } from "./auth/config.js";
+import { createOciClient } from "@quiz/core/oci";
+
+import { imageConfigWarnings, loadConfig, type AppConfig } from "./auth/config.js";
 import { classroomRoutes } from "./classroom/routes.js";
 import { openDb, type Db, type DbHandle } from "./db/client.js";
+import { createImageEngine } from "./engine/admission.js";
 import { createEngine, type Engine } from "./engine/index.js";
 import { createWorkspaceReader, type WorkspaceReader } from "./engine/reader.js";
 import { collectWorkspace, sweepCollectionDirs } from "./git/collect.js";
@@ -37,6 +40,7 @@ import {
   type QuizForgeOptions,
   type RelayWorker,
 } from "./git/index.js";
+import { createImageAdmissions, type ImageAdmissions } from "./images/admission.js";
 import { proxyPlugin } from "./proxy/index.js";
 import { portalLogger, type LogStream } from "./logging.js";
 import { createSebVerifier } from "./seb/index.js";
@@ -54,6 +58,7 @@ export interface Portal {
   db: Db;
   engine: Engine;
   manager: SessionManager;
+  images: ImageAdmissions;
   store: PushEventStore;
   relay: RelayWorker | null;
   config: AppConfig;
@@ -104,6 +109,8 @@ export interface BuildOptions {
   engine?: Engine;
   /** The collection's confined reader (tests); otherwise one on the same Podman socket. */
   reader?: WorkspaceReader;
+  /** The admitted images (tests); otherwise the registry and the same Podman socket. */
+  images?: ImageAdmissions;
   /** Bind the Git server to the gateway. True by default. */
   withGitServer?: boolean;
   /** Reconcile and start the timers. True by default. */
@@ -142,7 +149,6 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
       gateway: config.CODESPACE_GATEWAY,
       seccompProfile: config.seccompProfile,
       apparmorProfile: config.CODESPACE_APPARMOR_PROFILE,
-      image: config.CODESPACE_IMAGE,
       memory: config.CODESPACE_MEMORY,
       cpus: config.CODESPACE_CPUS,
       pidsLimit: config.CODESPACE_PIDS_LIMIT,
@@ -151,7 +157,8 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
     });
 
   // The collection's confined reader (ADR-130, correction of 2026-11-16): the
-  // sessions' hardening, image and slice, its own name and labels.
+  // sessions' hardening and slice, the platform's image (never a course's,
+  // ADR-146 §3), its own name and labels.
   const reader =
     options.reader ??
     createWorkspaceReader({
@@ -159,9 +166,33 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
       instance: config.CODESPACE_INSTANCE,
       seccompProfile: config.seccompProfile,
       apparmorProfile: config.CODESPACE_APPARMOR_PROFILE,
-      image: config.CODESPACE_IMAGE,
+      image: config.CODESPACE_DEFAULT_IMAGE,
       cgroupParent: config.CODESPACE_CGROUP_PARENT,
     });
+
+  // The admitted images (ADR-146 §5): the registry read anonymously, the
+  // admission container under a session's hardening and limits.
+  const images =
+    options.images ??
+    createImageAdmissions({
+      db,
+      registry: createOciClient(),
+      engine: createImageEngine({
+        podmanUrl: config.PODMAN_URL,
+        instance: config.CODESPACE_INSTANCE,
+        seccompProfile: config.seccompProfile,
+        apparmorProfile: config.CODESPACE_APPARMOR_PROFILE,
+        cgroupParent: config.CODESPACE_CGROUP_PARENT,
+        limits: { pidsLimit: config.CODESPACE_PIDS_LIMIT, memory: config.CODESPACE_MEMORY, cpus: config.CODESPACE_CPUS },
+      }),
+      defaultImage: config.CODESPACE_DEFAULT_IMAGE,
+      baseReleases: config.baseReleases,
+      maxBytes: config.CODESPACE_IMAGE_MAX_BYTES,
+      minFreeBytes: config.CODESPACE_IMAGE_MIN_FREE_BYTES,
+      healthTimeoutMs: config.SESSION_HEALTH_TIMEOUT_MS,
+      log: app.log,
+    });
+  for (const warning of imageConfigWarnings(config)) app.log.warn({}, warning);
 
   const forge = createForge(config, app.log);
   const store = createPushEventStore(db);
@@ -177,10 +208,12 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
     gitRemoteHost: "portal.internal",
     gitRemotePort: config.CODESPACE_GIT_PORT,
     // Return origins of the status-bar extension's "Close" button
-    // (images/c-dev/extension): the platform for a session that came from a
+    // (images/quiz-base/extension): the platform for a session that came from a
     // launch token, the portal otherwise.
     platformUrl: config.PLATFORM_URL,
     publicUrl: config.PUBLIC_URL,
+    defaultImage: config.CODESPACE_DEFAULT_IMAGE,
+    images,
     log: app.log,
     ...(forge
       ? {
@@ -238,6 +271,7 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
       manager,
       verifier,
       sittingSockets,
+      images,
       ...(forge
         ? {
             repoUrl: (repo) => forge.pushUrl(repo),
@@ -287,6 +321,8 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
   }
 
   if (options.withTimers !== false) {
+    // Interrupted admissions refused, their containers swept, the default admitted as it is.
+    await images.startup();
     await manager.reconcile();
     // After the reconciliation, which settles which sessions are live: a
     // review directory or row without one goes (ADR-129 §10).
@@ -304,6 +340,7 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
     db,
     engine,
     manager,
+    images,
     store,
     relay,
     config,

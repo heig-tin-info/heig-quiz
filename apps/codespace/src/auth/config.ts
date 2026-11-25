@@ -13,9 +13,13 @@ import { existsSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { DigestReference } from "@quiz/contracts";
 import { z } from "zod";
 
 import { INSTANCE_PATTERN, SLICE_PATTERN } from "../engine/index.js";
+
+/** The platform's image before the first `quiz-base` release: the tag the engine VM built. */
+export const LEGACY_DEFAULT_IMAGE = "codespace/c-dev:4.137.0";
 
 /**
  * Repository root: the first ancestor of this module that carries the
@@ -90,7 +94,14 @@ const EnvSchema = z.object({
    * cannot find.
    */
   CODESPACE_APPARMOR_PROFILE: z.string().default("codespace"),
-  CODESPACE_IMAGE: z.string().default("codespace/c-dev:4.137.0"),
+  /**
+   * The former name of the platform's own image (ADR-146 §3: the default,
+   * the collection's reader and the review sessions run one image, so the
+   * two variables move together). Read as an alias of
+   * `CODESPACE_DEFAULT_IMAGE` when that one is unset; ignored, with a
+   * warning at startup, when both are set and differ.
+   */
+  CODESPACE_IMAGE: z.string().trim().min(1).optional(),
   CODESPACE_MEMORY: z.string().default("1536m"),
   CODESPACE_CPUS: z.string().default("1"),
   CODESPACE_PIDS_LIMIT: z.coerce.number().int().min(16).default(256),
@@ -170,11 +181,38 @@ const EnvSchema = z.object({
    */
   PLATFORM_URL: z.string().default("http://localhost:3000"),
   /**
-   * Image given to a synchronized assignment whose `image` is `null`. Distinct
-   * from `CODESPACE_IMAGE`, which is the **engine**'s fallback when a session
-   * designates none.
+   * The platform's own image (ADR-146 §3): what an assignment whose `image`
+   * is null runs — resolved at each container start, never frozen at the
+   * sync —, the collection's confined reader and the staff's review
+   * sessions. The current `quiz-base` release pinned by digest
+   * (`ghcr.io/…@sha256:…`), which a deploy pulled first; until the first
+   * release, the local tag the engine VM built (`codespace/c-dev:4.137.0`).
+   * Either form is admitted at startup without a check: it is the
+   * platform's, not a course's.
    */
-  CODESPACE_DEFAULT_IMAGE: z.string().default("codespace/c-dev:4.137.0"),
+  CODESPACE_DEFAULT_IMAGE: z.string().trim().min(1).optional(),
+  /**
+   * The released `quiz-base` set (ADR-146 §3), comma-separated digest
+   * references: an admitted image's first uncompressed layers must be one
+   * of these (or the default's, implicitly included when pinned by digest).
+   * Changed by a deploy.
+   */
+  CODESPACE_BASE_RELEASES: z
+    .string()
+    .default("")
+    .transform((v, ctx) => {
+      const out: string[] = [];
+      for (const item of v.split(",").map((s) => s.trim()).filter((s) => s !== "")) {
+        const parsed = DigestReference.safeParse(item);
+        if (parsed.success) out.push(parsed.data);
+        else ctx.addIssue({ code: "custom", message: `not a digest reference: ${item}` });
+      }
+      return out;
+    }),
+  /** The ceiling of an image, compressed and then on disk (ADR-146 §5, Open: 4 GiB). */
+  CODESPACE_IMAGE_MAX_BYTES: z.coerce.number().int().min(1).default(4 * 1024 ** 3),
+  /** The free disk of the image store under which no pull starts (ADR-146 §5, Open: 20 GiB). */
+  CODESPACE_IMAGE_MIN_FREE_BYTES: z.coerce.number().int().min(0).default(20 * 1024 ** 3),
 
   // --- SEB (seb/) ----------------------------------------------------------
   // The `.seb` and its URL filter are the platform's (D21, M6-07): Quiz's
@@ -243,9 +281,17 @@ const EnvSchema = z.object({
 
 export type ForgeKind = "quiz" | "forgejo" | "github" | "none";
 
-export type AppConfig = Omit<z.infer<typeof EnvSchema>, "FORGE_KIND"> & {
+export type AppConfig = Omit<z.infer<typeof EnvSchema>, "FORGE_KIND" | "CODESPACE_DEFAULT_IMAGE"> & {
   /** Resolved at load time: the explicit value, else `quiz` with the platform configured, else `none`. */
   FORGE_KIND: ForgeKind;
+  /** Resolved at load time: `CODESPACE_DEFAULT_IMAGE`, else its alias `CODESPACE_IMAGE`, else {@link LEGACY_DEFAULT_IMAGE}. */
+  CODESPACE_DEFAULT_IMAGE: string;
+  /**
+   * The released `quiz-base` digests an image may derive from: the default
+   * when it is pinned by digest, then `CODESPACE_BASE_RELEASES`, without
+   * duplicates (ADR-146 §3).
+   */
+  baseReleases: string[];
   /**
    * `PLATFORM_URL` (or its alias) when it was set, else undefined: the link
    * back from a refusal page. The schema's localhost default never counts.
@@ -266,6 +312,24 @@ export type AppConfig = Omit<z.infer<typeof EnvSchema>, "FORGE_KIND"> & {
 export function defaultForgeKind(env: NodeJS.ProcessEnv, secret: string): ForgeKind {
   const platform = (env["PLATFORM_URL"] ?? "").trim();
   return platform !== "" && secret !== "" ? "quiz" : "none";
+}
+
+/**
+ * What the startup log says about the images (ADR-146 §3): a default not
+ * pinned by digest (the state before the first `quiz-base` release, which
+ * admits no course image: there is no released base to derive from), and a
+ * `CODESPACE_IMAGE` that disagrees with the default it is an alias of.
+ */
+export function imageConfigWarnings(config: Pick<AppConfig, "CODESPACE_DEFAULT_IMAGE" | "CODESPACE_IMAGE" | "baseReleases">): string[] {
+  const warnings: string[] = [];
+  if (!DigestReference.safeParse(config.CODESPACE_DEFAULT_IMAGE).success) {
+    warnings.push(`CODESPACE_DEFAULT_IMAGE (${config.CODESPACE_DEFAULT_IMAGE}) is not pinned by digest: the platform's image is a local tag until the first quiz-base release`);
+  }
+  if (config.CODESPACE_IMAGE !== undefined && config.CODESPACE_IMAGE !== config.CODESPACE_DEFAULT_IMAGE) {
+    warnings.push(`CODESPACE_IMAGE (${config.CODESPACE_IMAGE}) differs from CODESPACE_DEFAULT_IMAGE and is ignored: both name the platform's one image`);
+  }
+  if (config.baseReleases.length === 0) warnings.push("no released quiz-base (CODESPACE_BASE_RELEASES): every course image is refused not_on_base");
+  return warnings;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -344,9 +408,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (FORGE_KIND === "quiz" && data.CODESPACE_LAUNCH_SECRET === "") {
     throw new Error("Invalid configuration: FORGE_KIND=quiz requires CODESPACE_LAUNCH_SECRET (it signs the token requests)");
   }
+  // ADR-146 §3: one image for the default, the reader and the reviews. A
+  // tag-only default is not refused in production yet: it is what every
+  // portal runs until the first `quiz-base` release is pinned (the deploy
+  // switches both variables to a digest then); `buildPortal` logs it.
+  const defaultImage = data.CODESPACE_DEFAULT_IMAGE ?? data.CODESPACE_IMAGE ?? LEGACY_DEFAULT_IMAGE;
+  const pinnedDefault = DigestReference.safeParse(defaultImage);
+  const CODESPACE_DEFAULT_IMAGE = pinnedDefault.success ? pinnedDefault.data : defaultImage;
+  const baseReleases = [...new Set([...(pinnedDefault.success ? [pinnedDefault.data] : []), ...data.CODESPACE_BASE_RELEASES])];
   return {
     ...data,
     FORGE_KIND,
+    CODESPACE_DEFAULT_IMAGE,
+    baseReleases,
     platformReturnUrl: (aliased["PLATFORM_URL"] ?? "").trim() !== "" ? data.PLATFORM_URL : undefined,
     volumesRoot: fromRepoRoot(data.VOLUMES_ROOT),
     seccompProfile: fromRepoRoot(data.SECCOMP_PROFILE),

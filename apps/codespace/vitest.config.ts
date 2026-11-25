@@ -11,6 +11,7 @@ const integration = [
   "src/engine/index.test.ts",
   "src/engine/reader.integration.test.ts",
   "src/git/channel.integration.test.ts",
+  "src/images/admission.integration.test.ts",
   "src/git/relay.test.ts",
   "src/sessions/sessions.test.ts",
 ];

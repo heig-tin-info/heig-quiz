@@ -1,7 +1,8 @@
 /**
  * HTTP boundary with the platform (`@quiz/contracts`, `codespace.ts`; ADR-047).
  *
- * Six routes, and nothing else knows them:
+ * Six routes, the image routes beside them (`images/routes.ts`, ADR-146,
+ * service token), and nothing else knows them:
  *
  *   PUT  /api/assignments/:id            the platform pushes an assignment (service token)
  *   GET  /api/assignments/:id/sessions   the platform's teacher view (service token)
@@ -89,6 +90,8 @@ import {
   outsideSebPage,
   type SebVerifier,
 } from "../seb/index.js";
+import { ImageNotAdmittedError, type ImageAdmissions } from "../images/admission.js";
+import { registerImageRoutes } from "../images/routes.js";
 import { serializer } from "../serializer.js";
 import { WorkspaceBootstrapError, type SessionManager } from "../sessions/manager.js";
 import { closeSitting, isSittingClosed, type SittingSockets } from "../sessions/sittings.js";
@@ -144,6 +147,8 @@ export interface ClassroomRoutesOptions {
    * the forge and the volumes. Absent without a forge: the route answers 503.
    */
   collect?: (order: CollectionOrder) => Promise<CodespaceCollectionResult>;
+  /** The admitted images (ADR-146): absent, the `/api/images*` routes are not registered and answer 404. */
+  images?: ImageAdmissions;
 }
 
 // --- helpers ----------------------------------------------------------------
@@ -296,6 +301,9 @@ async function classroomRoutesImpl(
       parseJson(request, (body as Buffer).toString("utf8"), done);
     });
 
+    // The workspace images (ADR-146), behind the same service token.
+    if (opts.images) registerImageRoutes(api, { images: opts.images, serviceToken });
+
     // --- PUT /api/assignments/:id --------------------------------------------
     api.put<{ Params: { assignmentId: string } }>(
       "/api/assignments/:assignmentId",
@@ -336,7 +344,12 @@ async function classroomRoutesImpl(
           id: body.id,
           title: body.name,
           mode,
+          // Legacy, never read: what an older portal would run after a rollback.
           image: body.image ?? config.CODESPACE_DEFAULT_IMAGE,
+          // ADR-146: null runs the default as it is at each start, never
+          // frozen here; a reference not admitted is stored, and refused at
+          // session start, never at the sync (its deadline still applies).
+          imageRef: body.image,
           uploadPack: true,
           // Invariant 6: the clone URL of the teacher's template, and nothing
           // else, bootstraps an exam staging repository.
@@ -595,6 +608,8 @@ async function classroomRoutesImpl(
         title: repo.fullName,
         mode: "lab",
         image: config.CODESPACE_DEFAULT_IMAGE,
+        // The staff's review runs the platform's image, never a course's (ADR-146 §3).
+        imageRef: null,
         uploadPack: true,
         templateRepo: null,
         targetRepo: null,
@@ -721,6 +736,12 @@ async function classroomRoutesImpl(
         openedBySitting: claims.kiosk?.sitting ?? null,
       });
     } catch (err) {
+      // The project names an image the portal has not admitted (ADR-146 §5):
+      // no container was started.
+      if (err instanceof ImageNotAdmittedError) {
+        request.log.warn({ launch: { jti: claims.jti, assignmentId: assignment.id, login: user.login, image: err.reference } }, "launch refused: the image is not admitted");
+        return html(reply, 409, errorPage(lang, t(lang, "imageRefusedTitle"), t(lang, "imageRefusedDetail")));
+      }
       // The student's repository could not be fetched: **no container was
       // started** and the session does not open. Opening the editor on an empty
       // directory, as on 2026-09-17, lets the student work beside their

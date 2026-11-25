@@ -72,6 +72,8 @@ fi
 podman_remote run -d \
   --name "$CTR_NAME" \
   --label codespace.role=student \
+  --pull=never \
+  --user 1000:1000 \
   --userns=auto \
   --cap-drop=ALL \
   --security-opt no-new-privileges \

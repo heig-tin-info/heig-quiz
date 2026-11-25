@@ -126,8 +126,9 @@ The test reads that `.env` itself (vitest does not load it).
 ### Image of the test container
 
 `codespace/c-dev:4.137.0`, the P1 student image, since V1: it carries git and
-it is the one sessions actually launch. (`CODESPACE_IMAGE` allows pointing at
-another one.) An image without git would not do: the `codespace` network is
+it is the one sessions actually launch. (`CODESPACE_DEFAULT_IMAGE` allows
+pointing at another one, which must be on the engine already: every container
+starts `--pull=never`, ADR-146.) An image without git would not do: the `codespace` network is
 `--internal`, so an `apk add git` on the fly is impossible there.
 
 ## Running the tests
