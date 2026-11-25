@@ -22,6 +22,7 @@ amendment is in the [historical record](history/ADR-047-espace-de-travail-en-lig
 - 2026-10-11, audit L24: one origin for every session ([amendment](#amendment-2026-10-11-one-origin-for-every-session-audit-l24)).
 - 2026-11-14, [ADR-129](ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md): the staff's review session — a staff member opens a project repository in the workspace, read-only, whatever its mode; it breaks the L24 premise ([amendment](#amendment-2026-11-14-the-staffs-review-session-adr-129)).
 - 2026-11-24, [ADR-145](ADR-145-depots-seb-ouverts-aux-etudiants.md): §2 amended — once the lab test is over, the course owner may open an `online_seb` project's repositories to their students with `pull`, and close them again.
+- 2026-11-25, [ADR-146](ADR-146-images-publiques-de-l-espace-de-travail.md) (proposed): a session runs the default `quiz-base` or an image of its course's list; L24 rule 4 binds `quiz-base`, and a course's image may bring notebook support back, the residual risk accepted by the owner.
 - 2026-10-29, #958: under `commit`, an `online` project's start route opens while the repository is writable ([ADR-078's amendment](ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-29-958-under-commit-the-workspace-follows-the-repositorys-writability)).
 - Extended 2026-10-05 by ADR-075 (proposed): the `workspace` question type opens the workspace in a supervised evaluation, without a git channel; the project rules are unchanged.
 
