@@ -1,6 +1,6 @@
 # heig.codespace-statusbar
 
-Extension baked into the `codespace/c-dev` student image of the heig-codespace
+Extension baked into `quiz-base`, the workspace image of the heig-codespace
 project. It adds, at the right of the status bar, the time left until the
 assignment deadline and a « Fermer » button that takes the student back to the
 portal. Since 0.4.0, in a Safe Exam Browser session (`CODESPACE_SEB=1`, and
@@ -26,4 +26,4 @@ program's own terminal, "Program" (`debugIo.js`): without it the program's
 stdin and stdout stay on gdb's pipes, where the student can neither see what
 it prints nor type what it reads.
 
-Full documentation: `images/c-dev/README.md` of the heig-classroom repository.
+Full documentation: `apps/codespace/images/quiz-base/README.md` of the heig-quiz repository.

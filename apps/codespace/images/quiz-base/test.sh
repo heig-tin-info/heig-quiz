@@ -1,59 +1,23 @@
 #!/usr/bin/env bash
-# Acceptance test for task P1 (docs/history/milestone-0.md).
-# Runs the image through run-hardened.sh and executes every P1 assertion.
-# Exits non-zero on the first one that fails, with a clear message.
+# The contract's acceptance test (ADR-146 §2, README § Testing): what the
+# portal relies on in the image, the contract check (contract/check --base)
+# run against it as the portal runs it against a derived image, and what
+# only the host can see (the image's configuration, code-server's log, the
+# container's environment). The hardening and the toolchain have their own
+# tests, test-hardening.sh and test-toolchain.sh; a release passes all three.
+# Exits non-zero on the first failure, with a clear message.
 #
-#   ./images/c-dev/test.sh [<image>]    # or IMAGE=; codespace/c-dev:4.137.0 by default
+#   ./images/quiz-base/test.sh [<image>]    # or IMAGE=; quiz-base:<VERSION> by default
 #
-# Prerequisites: rootful Podman reachable on unix:///run/podman/podman.sock,
-# the image built, python3 on the host (to build the fake
-# .vsix), and the `codespace` AppArmor profile loaded
-# (`sudo apparmor_parser -r /etc/apparmor.d/codespace`, see
-# infra/apparmor/codespace). No sudo otherwise.
-#
-# On a host WITHOUT AppArmor — the WSL2 development workstation — run
-# `APPARMOR= ./images/c-dev/test.sh`: `podman run` refuses a profile name the
-# kernel does not know, and § 4 then skips the label check with a note.
-set -uo pipefail
+# Prerequisites and APPARMOR=: test-lib.sh.
+SUITE=contract
+# shellcheck source=test-lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/test-lib.sh"
+CTR_B="qb-${SUITE}-b"
 
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "${HERE}/../.." && pwd)"
-IMAGE="${1:-${IMAGE:-codespace/c-dev:4.137.0}}"
-PODMAN_URL="${PODMAN_URL:-unix:///run/podman/podman.sock}"
-SECCOMP_DEFAULT="${SECCOMP_DEFAULT:-/usr/share/containers/seccomp.json}"
-
-# The status-bar extension's version, as the Containerfile's EXT_STATUSBAR_VERSION.
-STATUSBAR_VERSION=0.4.2
-STATUSBAR_DIR="/opt/code-server/extensions/heig.codespace-statusbar-${STATUSBAR_VERSION}"
-
-CTR_A=cdev-p1-a
-CTR_B=cdev-p1-b
-CTR_BOMB=cdev-p1-bomb
-VOL_BASE="$(mktemp -d /tmp/codespace-p1-XXXXXX)"
-
-podman_remote() { podman --remote --url "$PODMAN_URL" "$@"; }
-# Runs a bash command inside container A, as the student user.
-cexec() { podman_remote exec "$CTR_A" bash -lc "$1"; }
-
-NTEST=0
-ok()   { NTEST=$((NTEST+1)); printf '  ok   %s\n' "$1"; }
-fail() { printf '\nFAIL: %s\n' "$1" >&2; [ $# -gt 1 ] && printf '  --- context ---\n%s\n' "$2" >&2; cleanup; exit 1; }
-head2() { printf '\n== %s\n' "$1"; }
-
-cleanup() {
-  podman_remote rm -f "$CTR_A" "$CTR_B" "$CTR_BOMB" >/dev/null 2>&1
-  rm -rf "$VOL_BASE" 2>/dev/null
-}
-trap 'cleanup' EXIT
-
-# --------------------------------------------------------------------------
-# Preparation: a *valid* .vsix dropped into the work directory before start-up.
-# Valid, so that the installation failure is attributable to the read-only root
-# and not to a corrupt archive. It is written before the `podman run` because
-# the `:U` mount rechowns the directory onto the container's UID and then makes
-# it unwritable from the host.
-# --------------------------------------------------------------------------
-mkdir -p "${VOL_BASE}/a/work" "${VOL_BASE}/b/work" "${VOL_BASE}/bomb/work"
+# A *valid* .vsix dropped into the work directory before start-up. Valid, so
+# that the installation failure is attributable to the read-only root and not
+# to a corrupt archive.
 python3 - "${VOL_BASE}/a/work/fake-extension.vsix" <<'PY' >/dev/null || { echo "python3 required" >&2; exit 1; }
 import zipfile, json, sys
 pkg = {"name": "fake", "displayName": "Fake", "publisher": "attacker",
@@ -76,255 +40,90 @@ with zipfile.ZipFile(sys.argv[1], 'w') as z:
 print("ok")
 PY
 
-cat > "${VOL_BASE}/a/work/hello.c" <<'EOF'
-#include <stdio.h>
-static int square(int x) { return x * x; }
-int main(void) {
-  int a = 3;
-  int b = square(a);
-  printf("&main=%p\n", (void *)main);
-  return b - 9;
-}
-EOF
-
-# § 10: the raw syscalls, so that the answer is the seccomp filter's (ENOSYS)
-# and not a refusal by util-linux or AppArmor before the call.
-cat > "${VOL_BASE}/a/work/nsprobe.c" <<'EOF'
-#define _GNU_SOURCE
-#include <errno.h>
-#include <sched.h>
-#include <stdio.h>
-#include <sys/mount.h>
-int main(void) {
-  int u = unshare(CLONE_NEWUSER) == 0 ? 0 : errno;
-  int m = mount("none", "/tmp", "tmpfs", 0, NULL) == 0 ? 0 : errno;
-  printf("unshare=%d mount=%d ENOSYS=%d\n", u, m, ENOSYS);
-  return 0;
-}
-EOF
-
-# § 11: two Baygon test files, one passing and one failing, on /bin/cat.
-cat > "${VOL_BASE}/a/work/baygon-ok.yaml" <<'EOF'
-version: 1
-executable: /bin/cat
-tests:
-  - name: Echoes its input
-    stdin: "hello\n"
-    stdout:
-      - equals: "hello\n"
-    exit: 0
-EOF
-sed 's/equals: "hello/equals: "bye/' "${VOL_BASE}/a/work/baygon-ok.yaml" > "${VOL_BASE}/a/work/baygon-ko.yaml"
-
-# § 12: the student's program of #1103, and the debug session's driver. The
-# breakpoint of test-debug-io.js is line 7.
-cat > "${VOL_BASE}/a/work/io.c" <<'EOF'
-#include <stdio.h>
-int main(void) {
-  int a = 0;
-  printf("enter a=\n");
-  if (scanf("%d", &a) != 1) return 2;
-  int b = a * 2;
-  printf("a*2=%d\n", b);
-  return 0;
-}
-EOF
-cp "${HERE}/test-debug-io.js" "${VOL_BASE}/a/work/test-debug-io.js"
-
-# § 13: a C++20 program on the standard library (<vector>, <ranges>, <format>,
-# all in GCC 14's libstdc++), and a C file for clangd's per-language flags.
-# The breakpoint of § 13 is line 9, once `evens` is built.
-cat > "${VOL_BASE}/a/work/cpp20.cpp" <<'EOF'
-#include <format>
-#include <iostream>
-#include <ranges>
-#include <vector>
-int main() {
-  std::vector<int> v{1, 2, 3, 4, 5, 6};
-  auto even = v | std::views::filter([](int x) { return x % 2 == 0; });
-  std::vector<int> evens(even.begin(), even.end());
-  std::cout << std::format("evens={} first={}\n", evens.size(), evens.front());
-  return 0;
-}
-EOF
-# The C++ counterpart of io.c, for test-debug-io.js: same lines, same I/O,
-# the breakpoint on line 7.
-cat > "${VOL_BASE}/a/work/iocpp.cpp" <<'EOF'
-#include <iostream>
-int main() {
-  int a = 0;
-  std::cout << "enter a=" << std::endl;
-  if (!(std::cin >> a)) return 2;
-  int b = a * 2;
-  std::cout << "a*2=" << b << std::endl;
-  return 0;
-}
-EOF
-cat > "${VOL_BASE}/a/work/clangd-c.c" <<'EOF'
-#include <stdio.h>
-int main(void) { printf("%ld\n", __STDC_VERSION__); return 0; }
-EOF
-
-# § 14: a pytest lab in miniature, as the C labs ship it: a Makefile whose
-# `test` runs `pytest -vv --junitxml=report.xml`, a test that runs the
-# compiled program through subprocess, and a conftest.py that imports
-# `_pytest.junitxml.xml_key` (the labs' points script reads the report through
-# it), checks the junitxml plugin really stored its key and leaves a marker;
-# a second test checks that tmp_path is under /tmp (a tmpfs).
-mkdir -p "${VOL_BASE}/a/work/pylab/tests"
-cat > "${VOL_BASE}/a/work/pylab/add.c" <<'EOF'
-#include <stdio.h>
-int main(void) {
-  int a, b;
-  if (scanf("%d %d", &a, &b) != 2) return 2;
-  printf("%d\n", a + b);
-  return 0;
-}
-EOF
-printf 'add: add.c\n\tgcc -Wall -o add add.c\ntest: add\n\tpytest -vv --junitxml=report.xml\n' \
-  > "${VOL_BASE}/a/work/pylab/Makefile"
-cat > "${VOL_BASE}/a/work/pylab/tests/conftest.py" <<'EOF'
-from _pytest.junitxml import xml_key
-
-
-def pytest_sessionstart(session):
-    assert session.config.stash.get(xml_key, None) is not None
-    (session.config.rootpath / "xml_key.ok").write_text("ok\n")
-EOF
-cat > "${VOL_BASE}/a/work/pylab/tests/test_x.py" <<'EOF'
-import pathlib
-import subprocess
-
-EXE = pathlib.Path(__file__).resolve().parent.parent / "add"
-
-
-def test_adds():
-    out = subprocess.run([str(EXE)], input="2 3\n", capture_output=True, text=True, check=True)
-    assert out.stdout == "5\n"
-
-
-def test_tmp_path(tmp_path):
-    assert str(tmp_path).startswith("/tmp/")
-    (tmp_path / "f").write_text("x")
-EOF
-
-echo "P1: hardened student image, working gdb"
-echo "image   : ${IMAGE}"
-echo "seccomp : ${REPO_ROOT}/infra/seccomp/codespace.json"
+# Container A carries the portal's variables, container B does not: § 6
+# compares the two environments.
+start "$CTR_A" a "$PORTAL_ENV"
+start "$CTR_B" b
+wait_healthz "$CTR_A"
+wait_healthz "$CTR_B"
 
 # --------------------------------------------------------------------------
-head2 "0. start under run-hardened.sh, and time to /healthz"
+head2 "1. the image's configuration"
 # --------------------------------------------------------------------------
-# The seven variables the portal sets on `podman run` for a session outside
-# SEB (sessions/manager.ts, CONTAINER_ENV_KEYS): three CODESPACE_ for the
-# status-bar extension, four GIT_ for the student's identity; a SEB session
-# swaps CODESPACE_RETURN_URL for CODESPACE_SEB, seven still. Container A
-# carries them, container B does not:
-# section 9 compares the two environments and requires exactly seven lines of
-# difference. No secret goes in there, invariant 1.
-ENV_DEADLINE=2026-10-01T12:00:00.000Z
-ENV_RETURN_URL=https://classroom.chevallier.io/
-# No spaces: run-hardened.sh splits EXTRA_ARGS with the shell. The portal
-# itself passes the value as is to execFile (no shell), so a title with spaces
-# suits it; it is this script that is constrained.
-ENV_ASSIGNMENT_NAME=TP3-pointeurs
-# The student's git identity (users.display_name, users.email). Same no-space
-# constraint: it comes from EXTRA_ARGS, not from the portal.
-ENV_GIT_NAME=Alex-Dupuis
-ENV_GIT_EMAIL=alex.dupuis@heig-vd.ch
-PORTAL_ENV="-e CODESPACE_DEADLINE=${ENV_DEADLINE} -e CODESPACE_RETURN_URL=${ENV_RETURN_URL} -e CODESPACE_ASSIGNMENT_NAME=${ENV_ASSIGNMENT_NAME}"
-PORTAL_ENV="${PORTAL_ENV} -e GIT_AUTHOR_NAME=${ENV_GIT_NAME} -e GIT_AUTHOR_EMAIL=${ENV_GIT_EMAIL}"
-PORTAL_ENV="${PORTAL_ENV} -e GIT_COMMITTER_NAME=${ENV_GIT_NAME} -e GIT_COMMITTER_EMAIL=${ENV_GIT_EMAIL}"
+# The portal's admission compares a derived image's User, Entrypoint and Cmd
+# with the base's (ADR-146 §5): these are the base's.
+CONF=$(podman_remote image inspect --format '{{.Config.User}}|{{json .Config.Entrypoint}}|{{json .Config.Cmd}}' "$IMAGE" 2>&1)
+[ "$CONF" = '1000:1000|["/usr/local/bin/entrypoint.sh"]|null' ] \
+  || fail "User, Entrypoint or Cmd is not the contract's (1000:1000, entrypoint.sh, no Cmd)" "$CONF"
+ok "User 1000:1000, Entrypoint /usr/local/bin/entrypoint.sh, no Cmd"
 
-T0=$(date +%s.%N)
-CTR_NAME="$CTR_A" VOL_DIR="${VOL_BASE}/a" IMAGE="$IMAGE" EXTRA_ARGS="$PORTAL_ENV" \
-  "${HERE}/run-hardened.sh" >/dev/null \
-  || fail "run-hardened.sh did not start container A"
-
-HEALTH=""
-for _ in $(seq 1 300); do
-  HEALTH=$(podman_remote exec "$CTR_A" curl -sS -m 2 -w ' HTTP=%{http_code}' http://localhost:8080/healthz 2>/dev/null)
-  case "$HEALTH" in *"HTTP=200"*) break ;; esac
-  HEALTH=""
-  sleep 0.1
-done
-T1=$(date +%s.%N)
-BOOT=$(python3 -c "print(round(${T1}-${T0}, 2))")
-[ -n "$HEALTH" ] || fail "/healthz did not answer 200 within 30 s" "$(podman_remote logs "$CTR_A" 2>&1 | tail -30)"
-ok "podman run -> /healthz 200 in ${BOOT} s: ${HEALTH}"
-echo "MESURE_DEMARRAGE_SECONDES=${BOOT}"
+LABELS=$(podman_remote image inspect --format '{{index .Labels "io.quiz.base.version"}}|{{index .Labels "io.quiz.base.contract"}}|{{index .Labels "org.opencontainers.image.version"}}' "$IMAGE" 2>&1)
+[[ "$LABELS" =~ ^([0-9]+\.[0-9]+\.[0-9]+)\|[0-9]+\|([0-9.]+)$ ]] && [ "${BASH_REMATCH[1]}" = "${BASH_REMATCH[2]}" ] \
+  || fail "the release labels are malformed (version|contract|version)" "$LABELS"
+ok "labels: io.quiz.base.version, io.quiz.base.contract ($LABELS)"
 
 # --------------------------------------------------------------------------
-head2 "1. gdb: ptrace allowed, no Operation not permitted"
+head2 "2. the contract check, as the portal runs it"
 # --------------------------------------------------------------------------
-cexec 'cd /work && gcc -g -O0 -o a.out hello.c' >/dev/null 2>&1 || fail "gcc -g -O0 hello.c failed" "$(cexec 'cd /work && gcc -g -O0 -o a.out hello.c' 2>&1)"
-# gdb exits 1 on "No stack." (the program is already finished when bt runs):
-# it is the literal command from milestone-0, and we judge only its output.
-OUT=$(cexec 'cd /work && gdb -batch -ex run -ex bt ./a.out' 2>&1)
-case "$OUT" in
-  *"Operation not permitted"*) fail "gdb ran into Operation not permitted" "$OUT" ;;
-esac
-case "$OUT" in
-  *"&main=0x"*) : ;;
-  *) fail "the program did not print the address of main under gdb" "$OUT" ;;
-esac
-ok "gcc -g -O0 hello.c then gdb -batch -ex run -ex bt: no Operation not permitted"
-
-OUT=$(cexec 'cd /work && gdb -batch -ex "break main" -ex run -ex next -ex step -ex bt ./a.out' 2>&1) \
-  || fail "gdb with a breakpoint failed" "$OUT"
-case "$OUT" in
-  *"Breakpoint 1, main ()"*"#0  square (x=3)"*"#1 "*"in main ()"*) : ;;
-  *) fail "gdb did not break in main, then next and step into square" "$OUT" ;;
-esac
-ok "gdb breaks in main, steps over a line and into square (x=3), bt shows main below it"
-
-# --------------------------------------------------------------------------
-head2 "2. ASLR can be disabled: personality(ADDR_NO_RANDOMIZE) passes the seccomp profile"
-# --------------------------------------------------------------------------
-OUT=$(cexec 'gdb -batch -ex "show disable-randomization"' 2>&1)
-case "$OUT" in
-  *"is on."*) ok "gdb -batch -ex 'show disable-randomization' answers on" ;;
-  *) fail "disable-randomization is not on" "$OUT" ;;
-esac
-
-A1=$(cexec 'cd /work && gdb -batch -ex run ./a.out 2>/dev/null | sed -n "s/^&main=//p"')
-A2=$(cexec 'cd /work && gdb -batch -ex run ./a.out 2>/dev/null | sed -n "s/^&main=//p"')
-[ -n "$A1" ] || fail "first run under gdb: address of main not read"
-[ "$A1" = "$A2" ] || fail "the address of main changes between two runs under gdb ($A1 vs $A2): ADDR_NO_RANDOMIZE refused by the seccomp profile"
-ok "two runs under gdb give the same address of main ($A1)"
-
-# Control: with the default containers-common profile, the address must vary.
-# That is what proves the one entry added to the profile is what acts. The
-# control only swaps the seccomp profile: it keeps the AppArmor profile of the
-# real run (under containers-default gdb cannot ptrace at all, and an empty gdb
-# output would masquerade as a "stable address").
-if [ -r "$SECCOMP_DEFAULT" ]; then
-  ctrl_aa=()
-  if [ -n "${APPARMOR-codespace}" ]; then ctrl_aa=(--security-opt "apparmor=${APPARMOR-codespace}"); fi
-  CTRL_OUT=$(podman_remote run --rm --userns=auto --cap-drop=ALL \
-      --security-opt no-new-privileges --security-opt "seccomp=${SECCOMP_DEFAULT}" "${ctrl_aa[@]}" \
-      --read-only --tmpfs /tmp --tmpfs '/run:rw,nosuid,nodev,mode=1777' \
-      --pids-limit 256 --memory 1536m --cpus 1 --network none \
-      --entrypoint sh "$IMAGE" -c '
-        cd /tmp
-        cat > h.c <<"EOF"
-#include <stdio.h>
-int main(void) { printf("&main=%p\n", (void *)main); return 0; }
-EOF
-        gcc -g -O0 -o h h.c || exit 1
-        for i in 1 2 3; do gdb -batch -ex run ./h 2>/dev/null | sed -n "s/^&main=//p"; done' 2>/dev/null)
-  CTRL_RUNS=$(printf '%s\n' "$CTRL_OUT" | grep -c .)
-  CTRL=$(printf '%s\n' "$CTRL_OUT" | grep . | sort -u | wc -l)
-  if [ "$CTRL_RUNS" -lt 3 ]; then
-    fail "invalid control: gdb printed $CTRL_RUNS address(es) out of 3 under the default profile (ptrace refused?), test 2 proves nothing"
-  elif [ "$CTRL" -gt 1 ]; then
-    ok "control: with the default profile the address varies ($CTRL values out of 3) — the personality(0x40000) addition is indeed the cause"
-  else
-    fail "invalid control: the default profile already gives a stable address, test 2 proves nothing"
-  fi
+# The image's own copy, the one the portal pipes into a derived image's
+# container once the image is a release. It must be the contract/check of
+# the commit the image was built from (its org.opencontainers.image.revision
+# label), its manifest the hashes of that commit's files: an older release
+# is held to its own sources, not to this checkout's. Strict: a revision
+# this checkout does not hold fails (the engine VM's checkout fetches main,
+# which holds every candidate's), and so does a local build from a modified
+# tree (`<sha>-dirty`). Only on a workstation, QUIZ_BASE_ALLOW_UNKNOWN_REVISION=1
+# holds a -dirty build to the working tree and skips an unknown revision with
+# a note; base-image.sh and the CI never set it.
+podman_remote exec "$CTR_A" cat /usr/local/lib/quiz-base/check > "${VOL_BASE}/check" 2>&1 \
+  || fail "the image has no /usr/local/lib/quiz-base/check"
+REV=$(podman_remote image inspect --format '{{index .Labels "org.opencontainers.image.revision"}}' "$IMAGE" 2>&1)
+ALLOW="${QUIZ_BASE_ALLOW_UNKNOWN_REVISION:-}"
+if [[ "$REV" =~ ^[0-9a-f]{40}$ ]] && git -C "$HERE" cat-file -e "${REV}^{commit}" 2>/dev/null; then
+  SOURCES=rev
+elif [ "$ALLOW" != 1 ]; then
+  fail "the image's revision '$REV' is not a commit of this checkout (QUIZ_BASE_ALLOW_UNKNOWN_REVISION=1 on a workstation only)"
+elif [[ "$REV" =~ ^[0-9a-f]{40}-dirty$ ]]; then
+  SOURCES=tree
 else
-  echo "  note default profile not found ($SECCOMP_DEFAULT), control not run"
+  SOURCES=none
 fi
+# source_of <path under quiz-base/>: that file as the image was built from it.
+source_of() {
+  case "$SOURCES" in
+    rev) git -C "$HERE" show "${REV}:./$1" ;;
+    tree) cat "${HERE}/$1" ;;
+  esac
+}
+not_manifest() { sed "/^[[:space:]]*cat <<'MANIFEST'\$/,/^MANIFEST\$/d"; }
+if [ "$SOURCES" = none ]; then
+  printf '  skip  the check and its manifest against their sources: the revision %s is not in this checkout (QUIZ_BASE_ALLOW_UNKNOWN_REVISION=1)\n' "$REV"
+else
+  diff <(source_of contract/check | not_manifest) <(not_manifest < "${VOL_BASE}/check") >/dev/null \
+    || fail "the image's check is not contract/check at ${REV}" \
+            "$(diff <(source_of contract/check | not_manifest) <(not_manifest < "${VOL_BASE}/check") | head -20)"
+  N=0
+  while read -r hash path; do
+    case "$path" in
+      /usr/local/bin/entrypoint.sh) f=entrypoint.sh ;;
+      */workbench/seb-workbench.js) f=seb-workbench.js ;;
+      */workbench/workbench.html) continue ;;  # code-server's, edited at build time: the check holds its ?v=
+      /opt/code-server/extensions/heig.codespace-statusbar-*/*.js) f="extension/${path##*/}" ;;
+      /etc/resolv.conf) f=resolv.conf ;;
+      *) fail "the manifest names a file the contract does not own: $path" ;;
+    esac
+    [ "$(source_of "$f" | sha256sum | cut -c1-64)" = "$hash" ] \
+      || fail "the manifest's hash of $path is not that of $f at ${REV}"
+    N=$((N + 1))
+  done < <(sed -n "/^[[:space:]]*cat <<'MANIFEST'\$/,/^MANIFEST\$/p" "${VOL_BASE}/check" | sed '1d;$d')
+  [ "$N" = 6 ] || fail "the manifest holds $N of the six files copied verbatim"
+  ok "the image's check is contract/check at ${REV}, its manifest the hashes of that commit's $N files"
+fi
+
+OUT=$(podman_remote exec -i "$CTR_A" sh -s -- --base < "${VOL_BASE}/check" 2>&1) \
+  || fail "the contract check failed" "$OUT"
+printf '%s\n' "$OUT" | sed 's/^/       /'
+ok "contract check --base: $(printf '%s\n' "$OUT" | tail -n 1)"
 
 # --------------------------------------------------------------------------
 head2 "3. no extension can be installed"
@@ -365,8 +164,9 @@ case "$LIST" in
 esac
 ok "the server knows only the three preinstalled extensions: $LIST"
 
-# The status-bar extension is baked into the image like the other two: it shows
-# up in `--list-extensions` and in the extensions manifest.
+# The status-bar extension is baked into the image like the other two.
+STATUSBAR_DIR=$(statusbar_dir)
+STATUSBAR_VERSION=${STATUSBAR_DIR##*-}
 VERS=$(cexec 'XDG_CONFIG_HOME=/tmp/cfg code-server --extensions-dir /opt/code-server/extensions --user-data-dir /tmp/ud --list-extensions --show-versions' 2>/dev/null | tr -d '\r')
 case "$VERS" in
   *"heig.codespace-statusbar@${STATUSBAR_VERSION}"*) : ;;
@@ -374,223 +174,27 @@ case "$VERS" in
 esac
 ok "heig.codespace-statusbar@${STATUSBAR_VERSION} installed and listed by code-server"
 
-cexec 'grep -qF "heig.codespace-statusbar" /etc/code-server/extensions.lock' >/dev/null 2>&1 \
-  || fail "heig.codespace-statusbar missing from /etc/code-server/extensions.lock"
-cexec "test -f ${STATUSBAR_DIR}/extension.js && test -f ${STATUSBAR_DIR}/update.js" >/dev/null 2>&1 \
-  || fail "the status-bar extension code is not in the extensions directory"
-if cexec "touch ${STATUSBAR_DIR}/extension.js" >/dev/null 2>&1; then
-  fail "the status-bar extension can be modified at run time"
-fi
-ok "status-bar extension recorded in extensions.lock and read-only"
-
 # --------------------------------------------------------------------------
-head2 "4. read-only root, no capability"
+head2 "4. code-server: settings, fonts, themes, trusted domains, log"
 # --------------------------------------------------------------------------
-if cexec 'touch /usr/bin/x' >/dev/null 2>&1; then fail "touch /usr/bin/x succeeded"; fi
-ok "touch /usr/bin/x fails"
-for p in /etc/passwd /opt/code-server/extensions/x /usr/lib/code-server/x /opt/baygon/x /opt/baygon/lib/python3.13/site-packages/baygon/__init__.py; do
-  if cexec "touch $p" >/dev/null 2>&1; then fail "touch $p succeeded"; fi
+# The base's own settings; the keys that protect the platform are the
+# contract check's (§ 2).
+for k in '"files.autoSave": "afterDelay"' '"files.autoSaveDelay": 1000' \
+         '"workbench.secondarySideBar.defaultVisibility": "hidden"' \
+         '"keyboard.dispatch": "keyCode"' \
+         '"terminal.integrated.stickyScroll.enabled": false' \
+         '"terminal.integrated.fontLigatures.enabled": false' \
+         '"window.autoDetectColorScheme": true' \
+         '"workbench.preferredDarkColorTheme": "Dark 2026"' \
+         '"workbench.preferredLightColorTheme": "Light 2026"' \
+         '"llvm-vs-code-extensions.vscode-clangd": true' '"webfreak.debug": true'; do
+  cexec "grep -qF '$k' /run/code-server/Machine/settings.json" >/dev/null 2>&1 || fail "setting missing from the machine settings: $k"
 done
-ok "/etc, /opt/code-server/extensions, /usr/lib/code-server and /opt/baygon are read-only"
+ok "the base's machine settings in force (autosave, layout, keyboard, terminal, themes, its two extensions allowed)"
 
-CAP=$(cexec 'grep CapEff /proc/self/status' | awk '{print $2}')
-[ "$CAP" = "0000000000000000" ] || fail "CapEff is $CAP instead of 0000000000000000"
-ok "CapEff = 0000000000000000"
-
-NNP=$(cexec 'grep NoNewPrivs /proc/self/status' | awk '{print $2}')
-[ "$NNP" = "1" ] || fail "NoNewPrivs is $NNP instead of 1"
-ok "NoNewPrivs = 1"
-
-SEC=$(cexec 'grep Seccomp: /proc/self/status' | awk '{print $2}')
-[ "$SEC" = "2" ] || fail "Seccomp is $SEC instead of 2 (filter mode)"
-ok "Seccomp = 2 (filter loaded)"
-
-# The project AppArmor profile, not Podman's built-in containers-default-*:
-# that one denies ptrace towards the stacked label `<profile>//&crun` and § 1
-# would fail. The label is read from /proc/self/attr/apparmor/current, with the
-# pre-5.1 path as a fallback; the value is `codespace (enforce)`, possibly with
-# a `//&…` stack suffix.
-if [ -z "${APPARMOR-codespace}" ]; then
-  printf '  skip  AppArmor label (APPARMOR= : the flag was not passed)\n'
-elif ! cexec 'test -r /proc/self/attr/apparmor/current || test -r /proc/self/attr/current' >/dev/null 2>&1; then
-  printf '  skip  AppArmor label (host without AppArmor: no /proc/self/attr/…/current)\n'
-else
-  LABEL=$(cexec 'cat /proc/self/attr/apparmor/current 2>/dev/null || cat /proc/self/attr/current' | tr -d '\0\r')
-  case "$LABEL" in
-    unconfined*|"")
-      fail "the container is not confined by the codespace profile: [$LABEL]" \
-           "expected 'codespace (enforce)'; check apparmor_parser -r /etc/apparmor.d/codespace" ;;
-    codespace*) : ;;
-    *) fail "AppArmor label is [$LABEL] instead of the codespace profile" ;;
-  esac
-  ok "AppArmor label: $LABEL"
-fi
-
-# --------------------------------------------------------------------------
-head2 "5. user namespace: uid 1000 inside, host UID outside 0-65535"
-# --------------------------------------------------------------------------
-UID_IN=$(cexec 'id -u')
-[ "$UID_IN" = "1000" ] || fail "id -u is $UID_IN instead of 1000"
-ok "id -u = 1000 inside the container"
-
-HUSER_A=$(podman_remote top "$CTR_A" huser | sed -n '2p' | tr -d '[:space:]')
-case "$HUSER_A" in
-  ''|*[!0-9]*) fail "podman top huser did not return a numeric UID: [$HUSER_A]" ;;
-esac
-[ "$HUSER_A" -gt 65535 ] || fail "host UID $HUSER_A is inside the 0-65535 range: --userns=auto did not take"
-ok "host UID of container A = $HUSER_A (outside 0-65535)"
-
-CTR_NAME="$CTR_B" VOL_DIR="${VOL_BASE}/b" IMAGE="$IMAGE" "${HERE}/run-hardened.sh" >/dev/null \
-  || fail "run-hardened.sh did not start container B"
-for _ in $(seq 1 100); do
-  HUSER_B=$(podman_remote top "$CTR_B" huser 2>/dev/null | sed -n '2p' | tr -d '[:space:]')
-  [ -n "${HUSER_B:-}" ] && break
-  sleep 0.2
-done
-case "${HUSER_B:-}" in
-  ''|*[!0-9]*) fail "podman top huser (B) did not return a numeric UID: [${HUSER_B:-}]" ;;
-esac
-[ "$HUSER_B" -gt 65535 ] || fail "host UID of B ($HUSER_B) is inside the 0-65535 range"
-[ "$HUSER_A" != "$HUSER_B" ] || fail "the two containers share the same host UID ($HUSER_A)"
-ok "two containers side by side: distinct host UIDs ($HUSER_A and $HUSER_B)"
-
-# --------------------------------------------------------------------------
-head2 "6. fork bomb: contained by --pids-limit 256, host untouched"
-# --------------------------------------------------------------------------
-PIDS_MAX=$(cexec 'cat /sys/fs/cgroup/pids.max')
-[ "$PIDS_MAX" = "256" ] || fail "pids.max is $PIDS_MAX instead of 256"
-ok "cgroup pids.max = 256"
-
-HOST_PROCS_BEFORE=$(ps -e --no-headers | wc -l)
-CTR_NAME="$CTR_BOMB" VOL_DIR="${VOL_BASE}/bomb" IMAGE="$IMAGE" "${HERE}/run-hardened.sh" >/dev/null \
-  || fail "run-hardened.sh did not start the bomb container"
-BOMB_CG=$(podman_remote inspect "$CTR_BOMB" --format '{{.State.CgroupPath}}')
-[ -r "/sys/fs/cgroup${BOMB_CG}/pids.current" ] || fail "bomb cgroup unreadable: /sys/fs/cgroup${BOMB_CG}"
-
-podman_remote exec "$CTR_BOMB" bash -c ':(){ :|:& };:' >/dev/null 2>&1 &
-BOMB_PID=$!
-MAXSEEN=0
-for _ in $(seq 1 40); do
-  CUR=$(cat "/sys/fs/cgroup${BOMB_CG}/pids.current" 2>/dev/null || echo 0)
-  [ "$CUR" -gt "$MAXSEEN" ] && MAXSEEN=$CUR
-  sleep 0.25
-done
-HOST_OK_START=$(date +%s.%N)
-ps -e --no-headers >/dev/null
-HOST_PROCS_AFTER=$(ps -e --no-headers | wc -l)
-HOST_OK_ELAPSED=$(python3 -c "print(round($(date +%s.%N)-${HOST_OK_START}, 2))")
-
-kill "$BOMB_PID" >/dev/null 2>&1
-podman_remote rm -f "$CTR_BOMB" >/dev/null 2>&1
-
-[ "$MAXSEEN" -le 256 ] || fail "the bomb cgroup went past 256 processes ($MAXSEEN)"
-[ "$MAXSEEN" -ge 200 ] || fail "the bomb did not reach the limit ($MAXSEEN processes): the test proves nothing"
-ok "the bomb tops out at $MAXSEEN processes, never above 256"
-
-# The bomb's processes are host processes (rootful Podman, one kernel), so the
-# host count legitimately rises by up to pids-limit. What must hold is that it
-# never rises beyond that bound (nothing escapes the cgroup) and that the host
-# keeps answering.
-DELTA=$((HOST_PROCS_AFTER - HOST_PROCS_BEFORE))
-[ "$DELTA" -le 300 ] || fail "the host process count jumped by $DELTA during the bomb: more than the 256 the cgroup allows"
-ok "host: $HOST_PROCS_BEFORE -> $HOST_PROCS_AFTER processes (delta $DELTA, bounded by pids-limit), ps answers in ${HOST_OK_ELAPSED}s"
-
-OUT=$(podman_remote exec "$CTR_A" curl -sS -m 3 -o /dev/null -w '%{http_code}' http://localhost:8080/healthz 2>&1)
-[ "$OUT" = "200" ] || fail "container A no longer answers after the bomb (http $OUT)"
-ok "neighbour container A still answers on /healthz after the bomb"
-
-# --------------------------------------------------------------------------
-head2 "7. code-server: /healthz, machine settings, neutralised gallery"
-# --------------------------------------------------------------------------
-OUT=$(cexec 'curl -sS -m 3 http://localhost:8080/healthz')
-case "$OUT" in
-  *'"status"'*) ok "curl http://localhost:8080/healthz from the container: $OUT" ;;
-  *) fail "/healthz did not answer the expected JSON" "$OUT" ;;
-esac
-
-# The port proxy is off (--disable-proxy, audit L24): a program listening in
-# the container is never served on the portal's origin. A listener on the
-# probed port (code-server's bundled node; the image has no nc) makes the
-# answer the flag's, not a refused connection's (500).
-cexec "nohup /usr/lib/code-server/lib/node -e \"require('http').createServer((q, r) => r.end('L24')).listen(8099)\" >/dev/null 2>&1 &" >/dev/null 2>&1
-LISTENING=
-for _ in 1 2 3 4 5 6 7 8 9 10; do
-  [ "$(cexec 'curl -sS -m 1 http://localhost:8099/' 2>/dev/null)" = "L24" ] && { LISTENING=1; break; }
-  sleep 0.5
-done
-[ -n "$LISTENING" ] || fail "the probe listener on port 8099 did not start"
-for path in /proxy/8099/ /absproxy/8099/ /PROXY/8099/x; do
-  OUT=$(cexec "curl -sS -m 3 -o /dev/null -w '%{http_code}' http://localhost:8080${path}" 2>&1)
-  case "$OUT" in
-    403 | 404) : ;;
-    *) fail "code-server's port proxy answered ${path} with ${OUT} (403 or 404 expected)" ;;
-  esac
-done
-ok "port proxy disabled: /proxy/<port>/ and /absproxy/<port>/ refused"
-
-# The portal serves /vscode-remote-resource sandboxed (src/proxy/index.ts,
-# REMOTE_RESOURCE_HEADERS); code-server already does, which is what proves the
-# workbench works with that policy. A bump that drops it is noticed here.
-cexec 'printf "<script>1</script>" > /tmp/l24.html' >/dev/null 2>&1
-OUT=$(cexec "curl -sS -m 3 -D - -o /dev/null 'http://localhost:8080/vscode-remote-resource?path=/tmp/l24.html'" 2>&1 | tr -d '\r')
-case "$OUT" in
-  *"Content-Security-Policy: default-src 'none'; sandbox"*) ok "code-server serves a remote resource with CSP sandbox" ;;
-  *) fail "code-server no longer sends CSP sandbox on /vscode-remote-resource" "$OUT" ;;
-esac
-
-# No notebook support (Containerfile 2b): a notebook's HTML output would run
-# script in a webview on the portal's origin as soon as the .ipynb is opened.
-EXTS=/usr/lib/code-server/lib/vscode/extensions
-cexec "test ! -e $EXTS/ipynb && test ! -e $EXTS/notebook-renderers" >/dev/null 2>&1 \
-  || fail "a bundled notebook extension is still present (ipynb or notebook-renderers)"
-NB=$(cexec "grep -l '\"notebooks\"' $EXTS/*/package.json /opt/code-server/extensions/*/package.json 2>/dev/null")
-[ -z "$NB" ] || fail "an installed extension contributes a notebook type" "$NB"
-ok "no notebook support: ipynb and notebook-renderers absent, no extension contributes a notebook type"
-
-# Safe Exam Browser support (Containerfile 2c, #1149 #1151): the workbench page
-# loads seb-workbench.js, the static route serves it as JavaScript, and the
-# page's CSP still admits a same-origin script. A code-server bump that
-# rewrites workbench.html or the policy is noticed here.
-PAGE=$(cexec "curl -sS -m 5 -L -D - http://localhost:8080/" 2>&1 | tr -d '\r')
-SRC=$(printf '%s\n' "$PAGE" | grep -o 'src="[^"]*seb-workbench\.js?v=[0-9a-f]\{12\}"' | head -n 1 | sed 's/^src="//; s/"$//')
-[ -n "$SRC" ] || fail "the workbench page does not load seb-workbench.js" "$(printf '%s\n' "$PAGE" | head -40)"
-case "$PAGE" in
-  *"Content-Security-Policy: "*"script-src 'self' "*) : ;;
-  *) fail "the workbench page's CSP no longer has script-src 'self'" "$(printf '%s\n' "$PAGE" | grep -i '^content-security-policy')" ;;
-esac
-SRC=${SRC#./}
-OUT=$(cexec "curl -sS -m 5 -o /dev/null -w '%{http_code} %{content_type}' 'http://localhost:8080/${SRC#/}'" 2>&1)
-case "$OUT" in
-  "200 text/javascript"*) ok "workbench page loads seb-workbench.js under script-src 'self', served as JavaScript" ;;
-  *) fail "seb-workbench.js is not served as JavaScript: $OUT" "$SRC" ;;
-esac
-
-for f in /run/code-server/User/settings.json /run/code-server/Machine/settings.json; do
-  cexec "test -f $f" >/dev/null 2>&1 || fail "machine settings not copied into $f"
-  for k in '"files.autoSave": "afterDelay"' '"files.autoSaveDelay": 1000' \
-           '"extensions.autoUpdate": false' '"update.mode": "none"' \
-           '"telemetry.telemetryLevel": "off"' '"chat.disableAIFeatures": true' \
-           '"workbench.secondarySideBar.defaultVisibility": "hidden"' \
-           '"keyboard.dispatch": "keyCode"' \
-           '"terminal.integrated.stickyScroll.enabled": false' \
-           '"terminal.integrated.fontLigatures.enabled": false' \
-           '"window.autoDetectColorScheme": true' \
-           '"workbench.preferredDarkColorTheme": "Dark 2026"' \
-           '"workbench.preferredLightColorTheme": "Light 2026"'; do
-    cexec "grep -qF '$k' $f" >/dev/null 2>&1 || fail "setting missing from $f: $k"
-  done
-done
-ok "machine settings copied into the tmpfs user-data-dir (User and Machine)"
-
-cexec "grep -qF '\"extensions.allowed\"' /run/code-server/User/settings.json" >/dev/null 2>&1 \
-  || fail "extensions.allowed missing from the settings"
-cexec "grep -qF '\"heig.codespace-statusbar\": true' /run/code-server/User/settings.json" >/dev/null 2>&1 \
-  || fail "heig.codespace-statusbar missing from extensions.allowed"
-ok "extensions.allowed present and restricted to the three extensions"
-
-# The two settings added on 2026-09-18 must exist **in the bundled VS Code
-# package**, not only in our own file: a name that does not exist would be
-# silently ignored. Literal search in the workbench bundle.
+# The settings must exist **in the bundled VS Code package**, not only in our
+# own file: a name that does not exist would be silently ignored. Literal
+# search in the workbench bundle.
 WB=/usr/lib/code-server/lib/vscode/out/vs/workbench/workbench.web.main.internal.js
 cexec "grep -q 'workbench.secondarySideBar.defaultVisibility' $WB" >/dev/null 2>&1 \
   || fail "workbench.secondarySideBar.defaultVisibility unknown to the bundled VS Code package"
@@ -601,16 +205,14 @@ cexec "grep -qF '\"workbench.secondarySideBar.defaultVisibility\":{type:\"string
   || fail "hidden is not the first value of the workbench.secondarySideBar.defaultVisibility enum"
 cexec "grep -qF '\"keyboard.dispatch\":{scope:1,type:\"string\",enum:[\"code\",\"keyCode\"]' $WB" >/dev/null 2>&1 \
   || fail "keyCode is not a declared value of keyboard.dispatch"
-ok "both settings exist in the bundled VS Code 1.137.0, with the values set present in their enum"
+ok "both settings exist in the bundled VS Code, with the values set present in their enum"
 
 # ADR-129 §10: a repository's `runOn: folderOpen` task never starts by
-# itself, in a staff member's review session as in a student's. The name
-# must exist in the bundled package, and the value be in the machine settings.
+# itself, in a staff member's review session as in a student's.
+# Its value is the contract check's (§ 2).
 cexec "grep -q 'task.allowAutomaticTasks' $WB" >/dev/null 2>&1 \
   || fail "task.allowAutomaticTasks unknown to the bundled VS Code package"
-cexec "grep -qF '\"task.allowAutomaticTasks\": \"off\"' /run/code-server/Machine/settings.json" >/dev/null 2>&1 \
-  || fail "task.allowAutomaticTasks is not off in the machine settings"
-ok "automatic tasks off (task.allowAutomaticTasks), a name the bundled VS Code knows"
+ok "task.allowAutomaticTasks is a name the bundled VS Code knows"
 
 # "Use the fonts on your computer" prompt: the causal chain, traced in the
 # bundled package (see README). The terminal's sticky scroll loads the
@@ -682,31 +284,16 @@ ERRS=$(printf '%s\n' "$LOGS_A" | grep -c 'Uncaught exception')
 [ "$ERRS" = "0" ] || fail "code-server logged $ERRS uncaught exception(s)" "$(printf '%s\n' "$LOGS_A" | tail -20)"
 ok "no uncaught exception at code-server start-up"
 
-cexec 'test -x /usr/bin/clangd && test -x /usr/bin/gdb && test -x /usr/bin/gcc && test -x /usr/bin/g++ && test -x /usr/bin/make && test -x /usr/bin/git && test -x /usr/bin/python3 && test -x /usr/local/bin/baygon && test -x /usr/bin/pytest' >/dev/null 2>&1 \
-  || fail "one of the expected binaries is missing (clangd, gdb, gcc, g++, make, git, python3, baygon, pytest)"
-ok "gcc, g++, gdb, make, git, clangd, python3, baygon, pytest present"
-
-cexec 'cmp /etc/clangd/config.yaml /home/student/.config/clangd/config.yaml && cmp /etc/clangd/config.yaml /run/code-server/xdg-config/clangd/config.yaml' >/dev/null 2>&1 \
-  || fail "the clangd configuration is not at both expected paths"
-ok "clangd configuration present in ~/.config and in the server's XDG_CONFIG_HOME"
-
-cexec 'man 2 ptrace 2>/dev/null | head -1 | grep -q .' >/dev/null 2>&1 \
-  || fail "the development manual pages are not installed (man 2 ptrace)"
-ok "development manual pages available (man 2 ptrace)"
-
-
 # --------------------------------------------------------------------------
-head2 "8. resolver: no nameserver, fast failure"
+head2 "5. resolver: fast failure"
+# --------------------------------------------------------------------------
+# The contract check proves /etc/resolv.conf is the image's, with no
+# nameserver; this measures what that buys.
 RESOLV=$(cexec 'cat /etc/resolv.conf' 2>&1)
-case "$RESOLV" in
-  *nameserver*) fail "/etc/resolv.conf contains a nameserver" "$RESOLV" ;;
-esac
 case "$RESOLV" in
   *"options timeout:1 attempts:1"*) : ;;
   *) fail "the image's /etc/resolv.conf was overwritten by Podman" "$RESOLV" ;;
 esac
-ok "/etc/resolv.conf comes from the image: no nameserver, options timeout:1 attempts:1"
-
 R0=$(date +%s.%N)
 if cexec 'getent hosts example.invalid' >/dev/null 2>&1; then
   fail "getent hosts example.invalid succeeded: there is a resolver"
@@ -717,14 +304,13 @@ python3 -c "import sys; sys.exit(0 if ${RES_ELAPSED} < 2 else 1)" \
 ok "getent hosts example.invalid fails in ${RES_ELAPSED}s (< 2 s)"
 
 # --------------------------------------------------------------------------
-head2 "9. container environment: the portal's seven variables, and nothing else"
+head2 "6. container environment: the portal's seven variables, and nothing else"
 # --------------------------------------------------------------------------
 # What the portal sets on `podman run` (sessions/manager.ts,
 # CONTAINER_ENV_KEYS): the deadline, the return URL, the assignment title, then
 # the student's git identity. The `heig.codespace-statusbar` extension reads the
 # first three from `process.env`; git honours the other four without any
 # configuration file at all.
-
 for kv in "CODESPACE_DEADLINE=${ENV_DEADLINE}" \
           "CODESPACE_RETURN_URL=${ENV_RETURN_URL}" \
           "CODESPACE_ASSIGNMENT_NAME=${ENV_ASSIGNMENT_NAME}" \
@@ -749,6 +335,9 @@ EXTRA_COUNT=$(printf '%s\n' "$EXTRA" | grep -c .)
 printf '%s\n' "$EXTRA" | grep -qvE '^(CODESPACE|GIT)_' \
   && fail "a variable outside CODESPACE_*/GIT_* is set on the container" "$EXTRA"
 ok "exactly seven variables beyond the image's own, all CODESPACE_ or GIT_: $(printf '%s' "$EXTRA" | tr '\n' ' ')"
+PYENV=$(podman_remote exec "$CTR_A" env | grep -c '^PYTHON')
+[ "$PYENV" = "0" ] || fail "the image sets PYTHON* variables" "$(podman_remote exec "$CTR_A" env | grep '^PYTHON')"
+ok "no PYTHON* variable in the container's environment"
 
 # The git identity in use: a commit really made inside the container carries the
 # student's name and address, without any configuration file having been
@@ -810,180 +399,4 @@ if cexec 'test -e /tmp/codespace-statusbar.json' >/dev/null 2>&1; then
 fi
 ok "no activation witness in the image (it only appears when the editor is opened)"
 
-# --------------------------------------------------------------------------
-head2 "10. seccomp: the runner's profile plus ptrace (M6-05)"
-# --------------------------------------------------------------------------
-# infra/seccomp/codespace.json is apps/runner/infra/seccomp/runner.json plus
-# one rule allowing ptrace (src/seccomp.test.ts): no user namespace, no mount
-# (gdb breaking and stepping is § 1).
-OUT=$(cexec 'unshare -r true' 2>&1) && fail "unshare -r true succeeded inside the container" "$OUT"
-case "$OUT" in
-  *"Function not implemented"*) ok "unshare -r true fails: Function not implemented" ;;
-  *) fail "unshare -r true failed, but not on the seccomp filter (ENOSYS expected)" "$OUT" ;;
-esac
-
-OUT=$(cexec 'cd /work && gcc -o nsprobe nsprobe.c && ./nsprobe' 2>&1) \
-  || fail "the namespace probe did not build or run" "$OUT"
-case "$OUT" in
-  "unshare=38 mount=38 ENOSYS=38") ok "raw unshare(CLONE_NEWUSER) and mount(2) answer ENOSYS: $OUT" ;;
-  *) fail "unshare(2) or mount(2) did not answer ENOSYS" "$OUT" ;;
-esac
-
-# --------------------------------------------------------------------------
-head2 "11. baygon: pinned, offline, read-only (#1102)"
-# --------------------------------------------------------------------------
-# The labs' `make test` runs `baygon -v -t t.yaml`. Installed at build time
-# from baygon/requirements.txt (every package pinned by hash); the container
-# has no network, so this run proves nothing is fetched at run time.
-OUT=$(cexec 'baygon --version' 2>&1)
-case "$OUT" in
-  *"Baygon version 0.7.0"*) ok "baygon on PATH: $OUT" ;;
-  *) fail "baygon --version is not 0.7.0" "$OUT" ;;
-esac
-
-OUT=$(cexec 'cd /work && baygon -v -t baygon-ok.yaml' 2>&1) \
-  || fail "baygon failed on a passing test file" "$OUT"
-case "$OUT" in
-  *"PASSED"*"ok."*) ok "baygon -v -t on a passing test file: PASSED, offline" ;;
-  *) fail "baygon did not pass a trivial test file" "$OUT" ;;
-esac
-# Baygon 0.7.0 exits 0 even when a test fails: its summary is what is judged.
-OUT=$(cexec 'cd /work && baygon -t baygon-ko.yaml' 2>&1)
-case "$OUT" in
-  *"FAILED"*"1 failed"*) ok "baygon reports a failing test as FAILED" ;;
-  *) fail "baygon did not report a failing test" "$OUT" ;;
-esac
-
-# Nothing to install with, nothing to write: no pip in the venv nor for
-# /usr/bin/python3 (a lab's `make points` falls back on `python3 -m pip`), and its
-# byte-code compiled at build time (Python cannot write it on the read-only
-# root, and would compile every module again on every run).
-cexec 'test ! -e /opt/baygon/bin/pip && ! /opt/baygon/bin/python -m pip --version && ! /usr/bin/python3 -m pip --version' >/dev/null 2>&1 \
-  || fail "pip is present in /opt/baygon or for /usr/bin/python3"
-cexec 'ls /opt/baygon/lib/python3.13/site-packages/baygon/__pycache__/*.pyc' >/dev/null 2>&1 \
-  || fail "baygon's byte-code was not compiled at build time"
-ok "no pip in /opt/baygon nor for /usr/bin/python3, byte-code compiled at build time"
-PYENV=$(podman_remote exec "$CTR_A" env | grep -c '^PYTHON')
-[ "$PYENV" = "0" ] || fail "the image sets PYTHON* variables" "$(podman_remote exec "$CTR_A" env | grep '^PYTHON')"
-ok "no PYTHON* variable in the container's environment (the closed list of § 9 is unchanged)"
-
-# --------------------------------------------------------------------------
-head2 "12. debugging: the program reads and writes its own terminal (#1103)"
-# --------------------------------------------------------------------------
-# webfreak.debug leaves the program on gdb's pipes: its output is
-# block-buffered into gdb's stream, its stdin is gdb's command stream. The
-# status-bar extension gives every gdb launch a terminal of its own
-# (extension/debugIo.js). test-debug-io.js plays that terminal with
-# node-pty, the module of code-server's pty host, and the debug session with
-# webfreak.debug's real adapter: a breakpoint on line 7, then "7" typed.
-cexec 'cd /work && gcc -g -O0 -o io io.c' >/dev/null 2>&1 || fail "gcc io.c failed"
-DBG=$(cexec "cd /work && /usr/lib/code-server/lib/node test-debug-io.js ${STATUSBAR_DIR} /opt/code-server/extensions/webfreak.debug-*-universal io" 2>&1)
-dbg() { printf '%s' "$DBG" | python3 -c "import json, sys; d = json.load(sys.stdin); print(eval(sys.argv[1]))" "$1" 2>/dev/null; }
-[ "$(dbg 'd["error"]')" = "None" ] || fail "the debug session failed" "$DBG"
-case "$(dbg 'd["autorun"][0]')" in
-  "set inferior-tty /dev/pts/"[0-9]*) : ;;
-  *) fail "the launch configuration does not start with set inferior-tty" "$DBG" ;;
-esac
-[ "$(dbg 'd["stoppedLine"]')" = "7" ] || fail "the breakpoint on line 7 was not hit" "$DBG"
-[ "$(dbg '"terminated" in d["events"]')" = "True" ] || fail "the debug session did not end" "$DBG"
-ok "webfreak.debug: launched with set inferior-tty, stopped on line 7, then ended"
-[ "$(dbg '"enter a=" in d["screen"] and "a*2=14" in d["screen"]')" = "True" ] \
-  || fail "the program's terminal did not show the prompt and the answer to the 7 typed" "$DBG"
-ok "the terminal showed the prompt, took the 7 typed and showed a*2=14"
-[ "$(dbg '"enter a=" in d["console"] or "a*2=14" in d["console"]')" = "False" ] \
-  || fail "the program's output reached the debug console" "$DBG"
-[ "$(dbg '"controlling terminal" in d["screen"]')" = "False" ] \
-  || fail "gdb could not make the terminal the program's controlling terminal" "$DBG"
-ok "the program's I/O stays out of gdb's stream; the terminal is its controlling terminal"
-
-# --------------------------------------------------------------------------
-head2 "13. C++: g++, the standard library, gdb's pretty-printers, clangd"
-# --------------------------------------------------------------------------
-# The labs are in C and in C++: g++ is Debian's default, the same GCC as gcc.
-GCCV=$(cexec 'gcc -dumpversion' 2>&1); GXXV=$(cexec 'g++ -dumpversion' 2>&1)
-[ -n "$GCCV" ] && [ "${GCCV%%.*}" = "${GXXV%%.*}" ] || fail "g++ ($GXXV) is not the major version of gcc ($GCCV)"
-ok "g++ $GXXV, the major version of gcc $GCCV"
-OUT=$(cexec 'cd /work && g++ -std=c++20 -g -O0 -Wall -Wextra -pedantic -o cpp20 cpp20.cpp && ./cpp20' 2>&1) \
-  || fail "the C++20 program (<vector>, <ranges>, <format>) did not compile or run" "$OUT"
-[ "$OUT" = "evens=3 first=2" ] || fail "the C++20 program printed something else" "$OUT"
-ok "g++ -std=c++20: <vector>, <ranges> and <format> compile and run (evens=3 first=2)"
-# libstdc++6's printers are auto-loaded from /usr/share/gdb/auto-load, on the
-# read-only root, by gdb's Python: `print evens` shows the elements, not the
-# vector's three raw pointers.
-OUT=$(cexec 'cd /work && gdb -batch -ex "break 9" -ex run -ex "print evens" -ex "info auto-load python-scripts" ./cpp20' 2>&1) \
-  || fail "gdb on the C++ program failed" "$OUT"
-case "$OUT" in
-  *"Breakpoint 1, main ()"*"std::vector of length 3"*"{2, 4, 6}"*) : ;;
-  *) fail "gdb did not stop in main or did not pretty-print the std::vector" "$OUT" ;;
-esac
-case "$OUT" in
-  *"Yes"*"libstdc++.so."*"-gdb.py"*) : ;;
-  *) fail "libstdc++'s pretty-printers were not auto-loaded" "$OUT" ;;
-esac
-ok "gdb breaks in main and prints the std::vector through libstdc++'s auto-loaded printers"
-# The program's terminal of § 12 is not C-specific: the same debug session
-# on a C++ program (iostream), through webfreak.debug's real adapter.
-cexec 'cd /work && g++ -std=c++20 -g -O0 -o iocpp iocpp.cpp' >/dev/null 2>&1 || fail "g++ iocpp.cpp failed"
-DBG=$(cexec "cd /work && /usr/lib/code-server/lib/node test-debug-io.js ${STATUSBAR_DIR} /opt/code-server/extensions/webfreak.debug-*-universal iocpp iocpp.cpp" 2>&1)
-[ "$(dbg 'd["error"]')" = "None" ] || fail "the C++ debug session failed" "$DBG"
-[ "$(dbg 'd["stoppedLine"]')" = "7" ] || fail "the breakpoint on line 7 of the C++ program was not hit" "$DBG"
-[ "$(dbg '"enter a=" in d["screen"] and "a*2=14" in d["screen"] and "a*2=14" not in d["console"]')" = "True" ] \
-  || fail "the C++ program's I/O did not go through its terminal" "$DBG"
-ok "webfreak.debug on a C++ program: stopped on line 7, its I/O in the Program terminal only"
-# clangd with the image's configuration only (no compile_commands.json):
-# C++ gets -std=c++20 and resolves the standard library, C keeps -std=c17.
-OUT=$(cexec 'cd /work && clangd --check=/work/cpp20.cpp 2>&1')
-case "$OUT" in
-  *"invalid argument"*|*"not allowed with"*|*"file not found"*) fail "clangd reports an error on the C++ file" "$OUT" ;;
-esac
-case "$OUT" in
-  *"-std=c++20"*"All checks completed, 0 errors"*) : ;;
-  *) fail "clangd did not parse the C++ file with -std=c++20 and no error" "$OUT" ;;
-esac
-ok "clangd on a .cpp: -std=c++20, <vector>, <ranges> and <format> resolved, 0 errors"
-OUT=$(cexec 'cd /work && clangd --check=/work/clangd-c.c 2>&1')
-case "$OUT" in
-  *"-std=c++20"*) fail "clangd gave the C file the C++ flags" "$OUT" ;;
-esac
-case "$OUT" in
-  *"-std=c17"*"All checks completed, 0 errors"*) : ;;
-  *) fail "clangd did not parse the C file with -std=c17 and no error" "$OUT" ;;
-esac
-ok "clangd on a .c: still -std=c17, 0 errors"
-
-# --------------------------------------------------------------------------
-head2 "14. pytest: both forms, offline, no warning, its cache in /work"
-# --------------------------------------------------------------------------
-# The C labs whose `make test` runs `pytest`, and whose `make points` runs
-# `python3 -m pytest`, falling back on `python3 -m pip install pytest`
-# (2026-11-16). Debian's python3-pytest serves both forms for
-# /usr/bin/python3 (`pytest` on PATH: § 7; no pip: § 11).
-OUT=$(cexec '/usr/bin/python3 -m pytest --version' 2>&1) || fail "python3 -m pytest --version failed" "$OUT"
-ok "/usr/bin/python3 -m pytest: $OUT"
-cexec 'ls /usr/lib/python3/dist-packages/_pytest/__pycache__/*.cpython-313.pyc' >/dev/null 2>&1 \
-  || fail "pytest's byte-code was not compiled at build time"
-ok "pytest's byte-code compiled at build time (Python never writes on the root)"
-
-# `make test` as the labs write it, then the `python3 -m pytest` form of their
-# `make points`. -W error turns any warning into a failure, a cache that could
-# not be written (PytestCacheWarning) included.
-OUT=$(cexec 'cd /work/pylab && PYTEST_ADDOPTS="-W error" make test' 2>&1) \
-  || fail "make test (pytest -vv --junitxml) failed" "$OUT"
-case "$OUT" in
-  *"tests/test_x.py::test_adds PASSED"*"tests/test_x.py::test_tmp_path PASSED"*"2 passed"*)
-    ok "make test: pytest ran the compiled program through subprocess, tmp_path under /tmp, 2 passed" ;;
-  *) fail "make test did not report test_adds and test_tmp_path as passed" "$OUT" ;;
-esac
-OUT=$(cexec 'cd /work/pylab && rm -f report.xml xml_key.ok && /usr/bin/python3 -m pytest -q -W error --junitxml=report.xml' 2>&1) \
-  || fail "python3 -m pytest -q --junitxml failed" "$OUT"
-OUT=$(cexec "cd /work/pylab && python3 -c 'import xml.etree.ElementTree as E; s = E.parse(\"report.xml\").getroot().find(\"testsuite\"); print(s.get(\"tests\"), s.get(\"failures\"), s.get(\"errors\"))'" 2>&1)
-[ "$OUT" = "2 0 0" ] || fail "report.xml does not hold two passed tests" "$OUT"
-cexec 'test -f /work/pylab/xml_key.ok' >/dev/null 2>&1 \
-  || fail "the conftest's hook did not find the junitxml plugin's xml_key"
-ok "python3 -m pytest -q --junitxml=report.xml: report.xml in /work, 2 tests, 0 failure; the conftest found xml_key"
-cexec 'cd /work/pylab && test -d .pytest_cache && ls tests/__pycache__/test_x.cpython-313-pytest-*.pyc' >/dev/null 2>&1 \
-  || fail ".pytest_cache or the rewritten test's byte-code is missing in /work"
-ok ".pytest_cache and the assertion-rewritten byte-code land in /work"
-
-printf '\n%d assertions, all green.\n' "$NTEST"
-printf 'MESURE_DEMARRAGE_SECONDES=%s\n' "$BOOT"
+passed

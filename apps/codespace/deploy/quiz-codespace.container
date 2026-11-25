@@ -55,6 +55,12 @@ Environment=PODMAN_URL=unix:///run/podman/podman.sock
 Environment=CODESPACE_NETWORK=@NETWORK@
 Environment=CODESPACE_GATEWAY=@GATEWAY@
 Environment=CODESPACE_GIT_PORT=@GIT_PORT@
+# The quiz-base release both instances run (ADR-146 §3), chosen by the prod
+# deploy (deploy/base-image.sh): the sessions' default image and the
+# deadline collection's reader move together. These win over the env file's
+# (an older one still names both: `--env` overrides `--env-file`).
+Environment=CODESPACE_DEFAULT_IMAGE=@BASE_IMAGE@
+Environment=CODESPACE_IMAGE=@BASE_IMAGE@
 # Host paths, mounted at the SAME path: the portal hands `-v <workDir>:/work:U`
 # and `seccomp=<path>` to the Podman SERVER, which resolves them on the host.
 Environment=DATABASE_PATH=/srv/quiz-codespace/@INSTANCE@/var/codespace.sqlite

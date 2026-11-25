@@ -9,9 +9,9 @@ Accepted (2026-09-21, first production deployment). Amended 2026-09-25,
 hardening (root `CLAUDE.md` invariants 10–13) is relaxed; their dated text,
 with the reasons and the transitions, is in the [historical record](history/ADR-016-runner-sur-vm-separee.md#status).
 
-- 2026-11-25, [ADR-146](ADR-146-images-publiques-de-l-espace-de-travail.md) (accepted): the platform builds no student image; a session runs a public image pulled by digest. Supersedes M6-04's "built by hand, never pulled" and the 2026-11-18 rebuild of the student image by the prod portal deploy once delivered.
+- 2026-11-25, [ADR-146](ADR-146-images-publiques-de-l-espace-de-travail.md) (accepted): the platform builds no student image; a session runs a public image pulled by digest. Supersedes M6-04's "built by hand, never pulled" and the 2026-11-18 rebuild of the student image by the prod portal deploy. Delivered for the deploy (2026-11-25, `quiz-base`): the CI publishes the image, and the prod portal deploy pulls the release `apps/codespace/deploy/quiz-base.ref` pins, tests it on the VM and switches only on a pass (`deploy/base-image.sh`, RUNBOOK §7); `deploy/student-image.sh` is gone.
 - 2026-11-18 (owner): the engine VM's deploys reload Caddy only when its running config is not the files', at most once, bounded and checked, never a restart; `grace_period 10s` by hand ([amendment](#2026-11-18-caddy-reloaded-only-when-needed)).
-- 2026-11-18 (owner): the production portal deploy rebuilds the student image when its sources changed, tested before it is tagged; staging never builds it ([amendment](#2026-11-18-the-prod-portal-deploy-rebuilds-the-student-image)). Amends the M6-04 point "never by a deploy".
+- 2026-11-18 (owner), superseded by ADR-146 (2026-11-25): the production portal deploy rebuilds the student image when its sources changed, tested before it is tagged; staging never builds it ([amendment](#2026-11-18-the-prod-portal-deploy-rebuilds-the-student-image)). Amends the M6-04 point "never by a deploy".
 - **2026-10-11 (security audit M6, L12, L13): gVisor is the default runtime of the runner's own Podman service** (`runsc --oci-seccomp`), never a `containerArgs` flag; `RUNNER_RUNTIME=runsc` makes the runner refuse to start unless a real container runs under it (`proveRuntime`); the runner binds the loopback ([amendment](#2026-10-11-gvisor-the-containers-state-the-bind-address)).
 - 2026-10-11 (security audit H4): the staging portal deploys only once approved, through a frozen dispatcher ([amendment](#2026-10-11-the-staging-portal-deploys-only-once-approved)).
 - 2026-10-08 (M6-05 part 2): the engine VM's cgroup slices (`--cgroup-parent`), backups and host firewall ([amendment](#2026-10-08-capacity-and-backups-of-the-engine-vm)).
@@ -147,6 +147,9 @@ steps are unchanged.*
   (`apps/codespace/images/build.sh`), **never pulled**; by hand until
   2026-11-18, since then by the `prod` portal deploy when its sources
   changed ([amendment](#2026-11-18-the-prod-portal-deploy-rebuilds-the-student-image)).
+  *Superseded by [ADR-146](ADR-146-images-publiques-de-l-espace-de-travail.md)
+  (2026-11-25): the image, `quiz-base`, is published by the CI and pulled
+  by digest; no deploy builds it.*
 - **The live-session guard.** A `prod` deploy **refuses (exit 3)** while a
   session container of that instance runs, unless the request starts with
   `force` (CI: `CODESPACE_FORCE_SHA` naming the run's sha); `staging` is not
@@ -256,6 +259,12 @@ staging VM.*
   the workflow alone, without moving the key.
 
 ### 2026-11-18: the prod portal deploy rebuilds the student image
+
+*Superseded by [ADR-146](ADR-146-images-publiques-de-l-espace-de-travail.md)
+(2026-11-25): no deploy builds the image any more; the prod portal deploy
+pulls the pinned `quiz-base` release and tests it before switching, which
+keeps "only a pass takes the tag" (`apps/codespace/deploy/RUNBOOK.md` §7).
+The text below is the record.*
 
 *Owner; scope: the M6-04 point "the student image is built on the VM by
 hand, never by a deploy" (a forgotten manual step left changes under

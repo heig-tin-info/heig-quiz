@@ -1,0 +1,113 @@
+name: quiz-base
+
+# quiz-base, the online workspace's public image (ADR-146 §2): built COLD
+# from apps/codespace/images/quiz-base on a rootful Podman socket, as on the
+# engine VM, and tested by its acceptance tests under the sessions' seccomp
+# and AppArmor profiles (apps/codespace/images/ci-test.sh). A workflow of
+# its own, not a job of ci.yml: it never holds up `checks`, and nothing in
+# the deploy chain waits for it.
+#
+# - A pull request that touches the image, its profiles or this workflow
+#   builds and tests it, and refuses a change of the image without a new
+#   VERSION (release-check.sh). A weekly run catches Debian's and Open
+#   VSX's drift; a dispatch runs it by hand.
+# - A push to main builds, tests and, when VERSION names a tag not yet in
+#   the registry, publishes the tested image as the CANDIDATE
+#   ghcr.io/heig-tin-info/quiz-base:<VERSION> (publish.sh), its
+#   `<ref>@<digest>` in the run summary. It becomes a release once the
+#   approved production deploy has pinned, tested and switched to it
+#   (ADR-146, amendment of 2026-11-25); only then does ci.yml move `latest`.
+#
+# No GitHub Actions cache (audit M8: the cache of main is writable by every
+# job of main), so nothing but the checkout and the pinned bases goes in.
+
+on:
+  pull_request:
+    paths:
+      - "apps/codespace/images/**"
+      - "apps/codespace/infra/seccomp/**"
+      - "apps/codespace/infra/apparmor/**"
+      - ".github/workflows/quiz-base.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/codespace/images/**"
+      - "apps/codespace/infra/seccomp/**"
+      - "apps/codespace/infra/apparmor/**"
+      - ".github/workflows/quiz-base.yml"
+  schedule:
+    # Tuesdays 04:23 UTC, off the hour and off runner-integration's Monday.
+    - cron: "23 4 * * 2"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Pull requests, the weekly run and a dispatch: build and test, publish
+  # nothing, no write permission.
+  test:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    concurrency:
+      group: quiz-base-test-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      # HEAD^1 is the pull request's base (the merge commit's first parent).
+      - name: A change of the image comes with a new VERSION
+        if: github.event_name == 'pull_request'
+        run: apps/codespace/images/release-check.sh HEAD^1
+      - name: Build cold and test
+        run: apps/codespace/images/ci-test.sh localhost/quiz-base:ci
+
+  # A push to main: the same build and tests, then the candidate, from the
+  # bytes just tested. The only job of this workflow that may write a
+  # package. One at a time, never cancelled: two pushes never race for a
+  # version.
+  publish:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: quiz-base-publish
+      cancel-in-progress: false
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      # The previous main, to compare against (a force-push that dropped it
+      # fails here: nothing is published).
+      - name: A change of the image comes with a new VERSION
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          git fetch --quiet --depth=1 origin "$BEFORE"
+          apps/codespace/images/release-check.sh "$BEFORE"
+      - name: Build cold and test
+        run: apps/codespace/images/ci-test.sh localhost/quiz-base:ci
+      - name: Publish the candidate (nothing when its tag exists)
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ref=$(apps/codespace/images/publish.sh localhost/quiz-base:ci)
+          if [ -n "$ref" ]; then
+            {
+              echo "quiz-base candidate published: \`$ref\`"
+              echo
+              echo "Once the package is public, a pull request pins this line in apps/codespace/deploy/quiz-base.ref (apps/codespace/deploy/RUNBOOK.md §7)."
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "quiz-base $(cat apps/codespace/images/quiz-base/VERSION): its tag exists, nothing published" >> "$GITHUB_STEP_SUMMARY"
+          fi

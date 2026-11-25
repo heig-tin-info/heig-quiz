@@ -1,9 +1,10 @@
-# Shared by install.sh (every prod deploy) and bootstrap.sh (once per
-# instance): the closed table of the portal instances on the engine VM, and
-# the two installation steps. Sourced, not executed; runs as root from
-# production's checkout, /opt/quiz-runner, at an approved commit. RUNBOOK.md
-# says when. infra/engine/staging-dispatch.sh holds a frozen copy of the
-# staging row (its test checks they agree).
+# Shared by install.sh (every prod deploy), base-image.sh and bootstrap.sh
+# (once per instance): the closed table of the portal instances on the
+# engine VM, the quiz-base release they run, and the two installation
+# steps. Sourced, not executed; runs as root from production's checkout,
+# /opt/quiz-runner, at an approved commit. RUNBOOK.md says when.
+# infra/engine/staging-dispatch.sh holds a frozen copy of the staging row
+# (its test checks they agree).
 #
 # shellcheck shell=bash
 # shellcheck disable=SC2034  # the values are read by the scripts that source this file
@@ -13,6 +14,11 @@ CS_APP="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # later deploy left a checkout.
 CS_LIB=/usr/local/lib/quiz-codespace
 CS_IMAGE_REPO=ghcr.io/heig-tin-info/quiz-codespace
+CS_QUADLET_DIR=/etc/containers/systemd
+# The quiz-base release both instances run (ADR-146 §3, RUNBOOK.md §7): the
+# pin, and the repository it must name.
+CS_BASE_REPO=ghcr.io/heig-tin-info/quiz-base
+CS_BASE_PIN="$CS_APP/deploy/quiz-base.ref"
 
 # pd(), pull_retag, drop_old_sha_tags
 # shellcheck source=../../../infra/engine/lib.sh
@@ -83,43 +89,53 @@ cs_install_host() {
 	fi
 }
 
+# cs_render <template>: the template with the values of cs_instance (never
+# from a request) and the base image the caller chose, CS_BASE_IMAGE, on
+# standard output. Fails when CS_BASE_IMAGE is empty or when a placeholder
+# is left: a template naming a value this table lacks would ship it.
+cs_render() {
+	if [ -z "${CS_BASE_IMAGE:-}" ]; then
+		echo "deploy: no CS_BASE_IMAGE to render $1 with (base-image.sh, RUNBOOK.md §7)" >&2
+		return 1
+	fi
+	local out
+	out=$(sed -e "s|@INSTANCE@|$CS_INSTANCE|g" \
+		-e "s|@HOST@|$CS_HOST|g" \
+		-e "s|@PLATFORM_URL@|$CS_PLATFORM|g" \
+		-e "s|@PORT@|$CS_PORT|g" \
+		-e "s|@NETWORK@|$CS_NET|g" \
+		-e "s|@GATEWAY@|$CS_GATEWAY|g" \
+		-e "s|@GIT_PORT@|$CS_GIT_PORT|g" \
+		-e "s|@BASE_IMAGE@|$CS_BASE_IMAGE|g" \
+		"$1") || return 1
+	if grep -q '@[A-Z_][A-Z_]*@' <<<"$out"; then
+		echo "deploy: $1 (for $CS_UNIT) still holds a @PLACEHOLDER@" >&2
+		return 1
+	fi
+	printf '%s\n' "$out"
+}
+
 # One instance's pieces: its seccomp profile (a HOST path, opened by the
-# Podman server), its quadlet and its Caddy site, generated from the
-# templates with the values of cs_instance (never from a request). It
+# Podman server), its quadlet and its Caddy site, rendered by cs_render. It
 # validates Caddy's config but never reloads it: the caller's caddy_apply
-# does, once.
+# does, once. The caller sets CS_BASE_IMAGE (base-image.sh's answer, the
+# same for both instances).
 cs_install_instance() {
 	install -d -m 0700 "$CS_ETC"
 	install -m 0644 "$CS_APP/infra/seccomp/codespace.json" "$CS_ETC/seccomp.json"
-	local subst=(
-		-e "s|@INSTANCE@|$CS_INSTANCE|g"
-		-e "s|@HOST@|$CS_HOST|g"
-		-e "s|@PLATFORM_URL@|$CS_PLATFORM|g"
-		-e "s|@PORT@|$CS_PORT|g"
-		-e "s|@NETWORK@|$CS_NET|g"
-		-e "s|@GATEWAY@|$CS_GATEWAY|g"
-		-e "s|@GIT_PORT@|$CS_GIT_PORT|g"
-	)
-	install -d -m 0755 /etc/caddy/conf.d
-	local quadlet="/etc/containers/systemd/$CS_UNIT.container" site f
-	# The site is rendered aside and replaces the installed one only when it
-	# differs (caddy_site), so that the caller's one caddy_apply reloads
-	# Caddy only when needed (infra/engine/lib.sh).
-	site=$(mktemp) || return 1
-	sed "${subst[@]}" "$CS_APP/deploy/quiz-codespace.container" > "$quadlet"
-	sed "${subst[@]}" "$CS_APP/deploy/Caddyfile" > "$site"
-	# A template naming a value this table lacks would ship its placeholder.
-	for f in "$quadlet" "$site"; do
-		if grep -q '@[A-Z_][A-Z_]*@' "$f"; then
-			echo "deploy: $f (for $CS_UNIT) still holds a @PLACEHOLDER@" >&2
-			rm -f "$site"
-			return 1
-		fi
-	done
-	chmod 0644 "$quadlet"
-	local rc=0
-	caddy_site "$site" "/etc/caddy/conf.d/$CS_UNIT.caddy" || rc=$?
-	rm -f "$site"
+	install -d -m 0755 /etc/caddy/conf.d "$CS_QUADLET_DIR"
+	local quadlet site rc=0
+	# Both are rendered aside: a failed rendering installs nothing. The site
+	# replaces the installed one only when it differs (caddy_site), so that
+	# the caller's one caddy_apply reloads Caddy only when needed
+	# (infra/engine/lib.sh).
+	quadlet=$(mktemp) || return 1
+	site=$(mktemp) || { rm -f "$quadlet"; return 1; }
+	cs_render "$CS_APP/deploy/quiz-codespace.container" > "$quadlet" || rc=$?
+	[ "$rc" != 0 ] || cs_render "$CS_APP/deploy/Caddyfile" > "$site" || rc=$?
+	[ "$rc" != 0 ] || install -m 0644 "$quadlet" "$CS_QUADLET_DIR/$CS_UNIT.container" || rc=$?
+	[ "$rc" != 0 ] || caddy_site "$site" "/etc/caddy/conf.d/$CS_UNIT.caddy" || rc=$?
+	rm -f "$quadlet" "$site"
 	[ "$rc" = 0 ] || return "$rc"
 	caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 }
@@ -130,10 +146,58 @@ cs_env() {
 	sed -n "s/^$1=//p" "$CS_ETC/env" 2>/dev/null | tail -n 1
 }
 
-# The student image the instance's env names (CODESPACE_IMAGE), or the
-# default. Built on the VM, never pulled (deploy/student-image.sh).
-cs_student_image() {
+# cs_base_pin [--version]: the release deploy/quiz-base.ref pins, as
+# `<repository>@<digest>` (what runs), or with --version its `x.y.z` (what
+# its io.quiz.base.version label must say); nothing while the file pins
+# none. Fails, saying why, on a missing file, more than one release, or a
+# line that is not `ghcr.io/heig-tin-info/quiz-base:<x.y.z>@sha256:<64 hex>`.
+# The pin's one parser: the CI's quiz-base-latest job sources it too.
+cs_base_pin() {
+	local lines
+	if [ ! -f "$CS_BASE_PIN" ]; then
+		echo "deploy: $CS_BASE_PIN is missing" >&2
+		return 1
+	fi
+	lines=$(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$CS_BASE_PIN" || true)
+	[ -n "$lines" ] || return 0
+	if [[ ! "$lines" =~ ^"$CS_BASE_REPO":([0-9]+\.[0-9]+\.[0-9]+)@(sha256:[0-9a-f]{64})$ ]]; then
+		echo "deploy: $CS_BASE_PIN must hold one line $CS_BASE_REPO:<x.y.z>@sha256:<64 hex>, not: $(printf '%s' "$lines" | head -c 300)" >&2
+		return 1
+	fi
+	if [ "${1:-}" = --version ]; then
+		echo "${BASH_REMATCH[1]}"
+	else
+		echo "$CS_BASE_REPO@${BASH_REMATCH[2]}"
+	fi
+}
+
+# cs_base_installed: the base image the instance's installed quadlet names,
+# or nothing (no quadlet, or one from before ADR-146).
+cs_base_installed() {
+	[ -f "$CS_QUADLET_DIR/$CS_UNIT.container" ] || return 0
+	sed -n 's/^Environment=CODESPACE_DEFAULT_IMAGE=//p' "$CS_QUADLET_DIR/$CS_UNIT.container" | tail -n 1
+}
+
+# --- delete in the pin PR (RUNBOOK.md §7, The first release) ---------------
+# cs_base_legacy: what the instance ran before its quadlet named a base
+# image, the image built on this VM before ADR-146: its env file's
+# CODESPACE_DEFAULT_IMAGE, else its CODESPACE_IMAGE, else
+# codespace/c-dev:4.137.0.
+cs_base_legacy() {
 	local image
-	image="$(cs_env CODESPACE_IMAGE)"
+	image="$(cs_env CODESPACE_DEFAULT_IMAGE)"
+	image="${image:-$(cs_env CODESPACE_IMAGE)}"
+	# Mirrors the portal's config.ts default, which production runs when its
+	# env names no image.
 	echo "${image:-codespace/c-dev:4.137.0}"
+}
+# --- end of the block to delete ---------------------------------------------
+
+# cs_base_current: the base image the instance runs now, its quadlet's or
+# (until the pin PR) cs_base_legacy's.
+cs_base_current() {
+	local image
+	image=$(cs_base_installed)
+	[ -n "$image" ] || image=$(cs_base_legacy)
+	echo "$image"
 }

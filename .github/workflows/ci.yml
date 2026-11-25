@@ -187,10 +187,12 @@ jobs:
       - run: bash infra/engine/caddy.test.sh
       # The root timer's snapshot: one blocked volume never stops the walk.
       - run: bash apps/codespace/deploy/shadow-snapshot.test.sh
-      # The portal's deploy scripts; the student image is rebuilt only when
-      # images/c-dev changed, and tagged only once its test passed.
-      - run: shellcheck -x -P SCRIPTDIR apps/codespace/deploy/*.sh apps/codespace/images/build.sh
-      - run: bash apps/codespace/deploy/student-image.test.sh
+      # The portal's deploy scripts and quiz-base's (ADR-146): a pinned
+      # release is pulled anonymously and switched to only once its tests
+      # passed; the image's own scripts and its contract check.
+      - run: shellcheck -x -P SCRIPTDIR apps/codespace/deploy/*.sh apps/codespace/images/*.sh apps/codespace/images/quiz-base/*.sh apps/codespace/images/quiz-base/contract/check
+      - run: bash apps/codespace/deploy/base-image.test.sh
+      - run: bash apps/codespace/deploy/install.test.sh
       - env:
           BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.user.login != 'dependabot[bot]' && 'HEAD^1' || '' }}
         run: node scripts/check-changes.mjs ${BASE:+--base "$BASE"}
@@ -243,7 +245,8 @@ jobs:
             file: apps/runner/Dockerfile
           # The online workspace portal (apps/codespace, M6-04): the same
           # pinned `podman-remote` client, plus git and better-sqlite3. Its
-          # student image is built on the engine VM, never here.
+          # sessions' image, quiz-base, has a workflow of its own
+          # (quiz-base.yml, ADR-146).
           - image: quiz-codespace
             file: apps/codespace/Dockerfile
     steps:
@@ -511,6 +514,10 @@ jobs:
     concurrency:
       group: prod-codespace-deploy
       cancel-in-progress: true
+    # What the prod quadlet runs once the deploy has installed it: the
+    # `quiz-base-in-service:` line of apps/codespace/deploy/install.sh.
+    outputs:
+      quiz_base_in_service: ${{ steps.deploy.outputs.quiz_base_in_service }}
     env:
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_RUNNER_HOST: ${{ vars.DEPLOY_RUNNER_HOST }}
@@ -521,11 +528,13 @@ jobs:
         if: env.DEPLOY_SSH_KEY == '' || env.DEPLOY_RUNNER_HOST == ''
         run: echo "::notice::DEPLOY_SSH_KEY/DEPLOY_RUNNER_HOST not set — codespace deploy skipped."
       - name: Deploy the codespace portal, prod instance (forced command runs infra/engine/deploy.sh production on the code VM)
+        id: deploy
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_RUNNER_HOST != ''
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CODESPACE_FORCE_SHA: ${{ vars.CODESPACE_FORCE_SHA }}
         run: |
+          set -o pipefail
           [ -n "$CODESPACE_DIGEST" ] || { echo "::error::the image job gave no digest"; exit 1; }
           mkdir -p ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
@@ -536,7 +545,59 @@ jobs:
             force="force "
             echo "::warning::CODESPACE_FORCE_SHA names this sha: the live-session guard is overridden."
           fi
-          # Keep-alives: a rebuild of the student image (student-image.sh)
-          # prints nothing for minutes while it builds and tests.
+          # Keep-alives: a newly pinned quiz-base candidate's acceptance tests
+          # (base-image.sh) print nothing for minutes.
+          rc=0
           ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=10 \
-            -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "${force}codespace prod $GITHUB_SHA $CODESPACE_DIGEST $GHCR_TOKEN"
+            -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "${force}codespace prod $GITHUB_SHA $CODESPACE_DIGEST $GHCR_TOKEN" \
+            | tee "$RUNNER_TEMP/deploy.log" || rc=$?
+          echo "quiz_base_in_service=$(sed -n 's/^quiz-base-in-service: //p' "$RUNNER_TEMP/deploy.log" | tail -n 1)" >> "$GITHUB_OUTPUT"
+          exit "$rc"
+
+  # quiz-base's moving tag (ADR-146 §2 and its amendment of 2026-11-25):
+  # `latest`, the tag teachers derive their course images from, names the
+  # release production runs. It moves only once the approved production
+  # portal deploy has switched to the pinned candidate (the job's
+  # quiz_base_in_service output is the pin's digest); a deferred or failed
+  # switch leaves it, and says so. A job of its own: the deploy job hands
+  # its token to the engine VM, which must never hold a write permission.
+  quiz-base-latest:
+    needs: deploy-codespace-prod
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: quiz-base-latest
+      cancel-in-progress: false
+    env:
+      IN_SERVICE: ${{ needs.deploy-codespace-prod.outputs.quiz_base_in_service }}
+    steps:
+      - uses: actions/checkout@v7
+      # The pin's one parser, deploy/lib.sh's.
+      - id: pin
+        run: |
+          pin=$(bash -c '. apps/codespace/deploy/lib.sh && cs_base_pin')
+          if [ -z "$pin" ]; then
+            echo "::notice::no quiz-base release pinned: latest unchanged"
+          elif [ "$pin" != "$IN_SERVICE" ]; then
+            echo "::notice::production runs '${IN_SERVICE:-nothing reported}', not the pinned $pin: latest unchanged"
+          else
+            echo "digest=${pin#*@}" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.pin.outputs.digest != ''
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # The same manifest under `latest`, by digest: no rebuild, no layer
+      # copied.
+      - if: steps.pin.outputs.digest != ''
+        env:
+          DIGEST: ${{ steps.pin.outputs.digest }}
+        run: |
+          docker buildx imagetools create --tag ghcr.io/heig-tin-info/quiz-base:latest "ghcr.io/heig-tin-info/quiz-base@$DIGEST"
+          now=$(docker buildx imagetools inspect ghcr.io/heig-tin-info/quiz-base:latest --format '{{json .Manifest.Digest}}' | tr -d '"')
+          [ "$now" = "$DIGEST" ] || { echo "::error::latest names $now, not $DIGEST"; exit 1; }
+          echo "quiz-base: latest -> $DIGEST" >> "$GITHUB_STEP_SUMMARY"

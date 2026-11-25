@@ -30,7 +30,7 @@ The values (names, ports, platform URLs) are in `deploy/lib.sh`
 | Caddy site, access log | `/etc/caddy/conf.d/quiz-codespace-<i>.caddy`, `/var/log/caddy/quiz-codespace-<i>.log` |
 | Host-level copies (both instances) | `/usr/local/lib/quiz-codespace/`, `/etc/apparmor.d/codespace`, `/etc/systemd/system/quiz-codespace-*@.*` |
 | Session containers | `cs-<i>-<session>`, label `heig-codespace.instance=<i>` |
-| Student image (both instances) | `CODESPACE_IMAGE` (`codespace/c-dev:4.137.0`) in the rootful store, rebuilt by a prod deploy (§7) |
+| Sessions' image (both instances) | the `quiz-base` release `deploy/quiz-base.ref` pins, by digest, in the rootful store; the quadlet's `CODESPACE_DEFAULT_IMAGE` and `CODESPACE_IMAGE` name it, chosen by a prod deploy (§7). Until a release is pinned: the env file's image (`codespace/c-dev:4.137.0`), built on the VM before ADR-146 |
 
 ## The switch from heig-classroom's portal
 
@@ -151,52 +151,95 @@ ip -br addr show cs0; ip -br addr show cs1        # 10.77.0.254/24, 10.77.1.254/
 nft list table inet codespace
 ```
 
-### 7. The student image
+### 7. The sessions' image: quiz-base
 
-The production portal deploy rebuilds it when `images/c-dev/` changed,
-never staging ([ADR-016, amendment of 2026-11-18](../../../docs/adr/ADR-016-runner-sur-vm-separee.md#2026-11-18-the-prod-portal-deploy-rebuilds-the-student-image)):
-the last step of `install.sh prod`, once the portal of the same commit
-answers, is `deploy/student-image.sh`. Any file of that directory counts,
-`test.sh` and the README included; a deploy that changes none costs an
-`image inspect`. One build covers both instances (one tag, one store).
-Running sessions keep their container until it restarts; new ones start on
-the new image. A deploy forced past live sessions (`CODESPACE_FORCE_SHA`)
-builds nothing and says so: run the script once they have closed.
+The sessions run `quiz-base`, the public image the CI publishes
+(`.github/workflows/quiz-base.yml`, [ADR-146](../../../docs/adr/ADR-146-images-publiques-de-l-espace-de-travail.md));
+no deploy and nothing on this VM builds it. A `:<VERSION>` tag the CI
+pushes from `main` is a **candidate**; it becomes a **release** once this
+procedure has pinned, tested and switched to it (ADR-146, amendment of
+2026-11-25). Both instances run the release `deploy/quiz-base.ref` pins,
+by digest: the quadlet's `CODESPACE_DEFAULT_IMAGE` (the sessions' and the
+staff's review sessions') and `CODESPACE_IMAGE` (the deadline collection's
+reader) name it, together, over whatever the env file still says. One
+store, one release for both.
 
-**A red `deploy-codespace-prod` after `deploy: codespace prod at <sha>`**
-means the portal is deployed and healthy but the image was not rebuilt
-(build, acceptance test, under 3 GiB free under `/var/lib/containers`, or a
-checkout whose `images/c-dev` differs from its commit). The image in
-service is untouched and new sessions keep starting on it. The job prints
-the end of the log; the whole of it is `/var/log/quiz-codespace-student-image.log`.
-Fix on a branch; the next production deploy retries, or run the script
-(never re-run the job alone during a live exam: The live-session guard).
+**The production portal deploy chooses it**, before it restarts anything
+(`deploy/base-image.sh`, a step of `install.sh prod`):
 
-By hand, as root, from production's checkout (it takes the deploy lock):
+- the pin names the release in service: nothing to do (pulled again if it
+  left the store);
+- the pin names a new candidate: the deploy logs out of the registry,
+  checks it is readable anonymously (a credential would hide a package
+  that is not public), needs 3 GiB free under `/var/lib/containers`, pulls
+  it by digest, requires its `io.quiz.base.version` label to be the pin's
+  tag, and runs the image's three acceptance tests against that digest
+  from the checkout (`images/quiz-base/test.sh`, `test-hardening.sh`,
+  `test-toolchain.sh`, with the env file's AppArmor profile). **Only a pass
+  switches** both quadlets; running sessions keep their container until it
+  restarts, new ones start on the release;
+- the live-session guard runs again after the tests, right before anything
+  is installed: a session that started meanwhile refuses the deploy
+  (exit 3) as at its start; forced, the switch waits for the next deploy;
+- a deploy forced past live sessions (`CODESPACE_FORCE_SHA`) defers the
+  switch and says so: the next deploy does it.
+
+The deploy's last line, `quiz-base-in-service: <image>`, is what the prod
+quadlet names once installed. The CI's `quiz-base-latest` job moves
+`quiz-base:latest` to the pinned digest only when that line names it; a
+deferred or failed switch leaves `latest` where it was, with a notice.
+
+**A red `deploy-codespace-prod` after `deploy: codespace prod at <sha>, base
+image <image>`** means the portal is deployed and healthy but the pinned
+candidate was not switched to (not public, the pull, the disk, its label,
+or a test failed). The image in service is untouched and new sessions keep
+starting on it. The job prints the end of the log; the whole of it is
+`/var/log/quiz-codespace-base-image.log`. Fix on a branch (a new
+candidate, or the pin back); the next production deploy retries. By hand,
+as root, from production's checkout (it takes the deploy lock):
 
 ```bash
 cd /opt/quiz-runner
-apps/codespace/deploy/student-image.sh --check   # what a deploy would do; changes nothing
-apps/codespace/deploy/student-image.sh           # rebuild if images/c-dev changed
-apps/codespace/deploy/student-image.sh --force   # rebuild anyway (a base image's security fix)
+apps/codespace/deploy/base-image.sh        # prints the image the deploy would install
 ```
 
-The low-level commands it wraps stay usable (`images/build.sh`, then
-`images/c-dev/test.sh`); an image built that way carries no label, so the
-next production deploy rebuilds it once.
+It installs nothing: only a deploy writes the quadlets and restarts the
+portal.
 
-**A code-server bump** changes the image's tag (`images/c-dev/README.md`,
-Modifying the image): when the commit reaches production, set the new
-`CODESPACE_IMAGE` in both instances' env files, then run the script. Until
-then the script warns that the tag and the Containerfile disagree, and
-builds under the old tag.
+**The first release.** Until `deploy/quiz-base.ref` names one, the
+instances keep the image they ran before ADR-146 (the env file's
+`CODESPACE_DEFAULT_IMAGE`, else its `CODESPACE_IMAGE`, else the portal's
+own default, `codespace/c-dev:4.137.0`), built on this VM, and no deploy
+rebuilds it any more. A deploy that fails between retagging the portal
+image and restarting it tags the previous one `:prod` again. Once, after the merge that brings `quiz-base`:
+
+1. the push to `main` runs `quiz-base.yml`, which publishes the candidate
+   `ghcr.io/heig-tin-info/quiz-base:1.0.0` and writes
+   `ghcr.io/heig-tin-info/quiz-base:1.0.0@sha256:…` in its run summary; the
+   package is created private;
+2. the owner makes the package **public** (GitHub: the organization's
+   Packages, `quiz-base`, Package settings, Change visibility) and checks it
+   anonymously: `podman pull ghcr.io/heig-tin-info/quiz-base:1.0.0` on a
+   machine logged in nowhere;
+3. **only once the portal's admission is in production** (ADR-146's second
+   pull request: every container started with `--pull=never`, only
+   admitted digests run), a pull request puts the summary's line in
+   `deploy/quiz-base.ref` and deletes `cs_base_legacy`'s block from
+   `deploy/lib.sh` (marked there); its approved production deploy pulls,
+   tests and switches. The old `codespace/c-dev` image stays in the store
+   until removed by hand (`podman image rm codespace/c-dev:4.137.0`, once
+   no container uses it); so does each replaced release (ADR-146 §8: no
+   automatic deletion). The env files' `CODESPACE_DEFAULT_IMAGE` and
+   `CODESPACE_IMAGE` lines can go then.
+
+**A new release** is the same from step 1, with `VERSION` bumped in the
+pull request that changed the image (`images/quiz-base/README.md`,
+Releasing); the package stays public.
 
 The status-bar extension is part of the image: its version is in the log
 (`test.sh` § 3, `heig.codespace-statusbar@0.4.2 installed and listed by
 code-server`); the portal works with an older one, which ignores what it
-does not know. The build downloads from Debian, GitHub (code-server), Open
-VSX and PyPI (Baygon's wheels, hash-checked): the host policy
-(`infra/engine/host.nft`) filters input only. The containers have no network.
+does not know. The containers have no network.
 
 ### 8. The CI keys
 
@@ -342,7 +385,7 @@ gh variable delete CODESPACE_FORCE_SHA --repo heig-tin-info/heig-quiz
 **Never re-run `deploy-codespace-prod` alone during a live exam.** The
 live-evaluation guard is the application's, in `deploy-production`; this
 job runs after it and does not repeat it, so a re-run of this job alone
-passes only the workspace's guard (and may rebuild the student image, §7).
+passes only the workspace's guard (and may switch to a newly pinned quiz-base release, §7).
 
 ### How long a workspace stays up
 

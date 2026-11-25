@@ -57,7 +57,7 @@ const WARN_MS = 10 * 60 * 1000;
 /**
  * Witness file written at activation. It only serves to check, from the host,
  * that the extension host really received the container environment
- * (images/c-dev/test.sh, and a manual check after the editor is opened). It
+ * (images/quiz-base/test.sh, and a manual check after the editor is opened). It
  * contains no secret: only the four variables.
  */
 const WITNESS = path.join(os.tmpdir(), "codespace-statusbar.json");

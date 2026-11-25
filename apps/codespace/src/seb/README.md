@@ -172,8 +172,8 @@ heig-classroom's `apps/codespace/classroom's docs/deploy.md` § 6 (not imported;
 ## Inside SEB: clipboard and battery in the editor (#1149, #1151)
 
 What SEB does to the workspace page is handled in the student image, not
-here: `images/c-dev/seb-workbench.js` (its header says why and how; loading:
-[images/c-dev/README.md](../../images/c-dev/README.md)). Its test,
+here: `images/quiz-base/seb-workbench.js` (its header says why and how; loading:
+[images/quiz-base/README.md](../../images/quiz-base/README.md)). Its test,
 `sebWorkbench.test.ts`, lives in this directory because the image has no test
 runner of its own.
 

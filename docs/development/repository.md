@@ -122,8 +122,10 @@ the root context by the CI, `quiz-codespace:<sha>`), runs on the engine VM
 as two instances, `prod` and `staging`; `deploy/` holds the quadlet, unit
 and Caddy templates, `install.sh` (run by `infra/engine/deploy.sh`),
 `bootstrap.sh` and the [runbook](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/codespace/deploy/RUNBOOK.md).
-`images/` (the student image) is built on the VM, by the production portal
-deploy when it changed (`deploy/student-image.sh`); `infra/` holds
+`images/quiz-base/` is the sessions' image, `quiz-base` (ADR-146): built,
+tested and published public by its own workflow (`.github/workflows/quiz-base.yml`),
+never on the VM; the portal deploy pulls the release `deploy/quiz-base.ref`
+pins and tests it there before switching (`deploy/base-image.sh`); `infra/` holds
 the network scripts, nftables, AppArmor and seccomp the deploy installs.
 The application image does not contain it.
 

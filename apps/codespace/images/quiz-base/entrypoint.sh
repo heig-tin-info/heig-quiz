@@ -1,5 +1,6 @@
 #!/bin/sh
-# Entrypoint of the c-dev student image.
+# Entrypoint of quiz-base, the workspace image (a file of its contract:
+# contract/check holds every image derived from it to this copy).
 # The root is read-only; the user-data-dir lives on the /run tmpfs.
 set -eu
 
@@ -23,7 +24,9 @@ mkdir -p "$XDG_CONFIG_HOME/clangd"
 cp /etc/clangd/config.yaml "$XDG_CONFIG_HOME/clangd/config.yaml"
 
 # Extension gallery neutralised: no online installation is possible.
+# shellcheck disable=SC2089  # the JSON is the value, quotes included
 EXTENSIONS_GALLERY='{"serviceUrl":"","itemUrl":"","resourceUrlTemplate":""}'
+# shellcheck disable=SC2090
 export EXTENSIONS_GALLERY
 
 [ -d /work ] || mkdir -p /work
@@ -41,7 +44,7 @@ case "${CODESPACE_RETURN_URL:-}" in
 esac
 
 # --disable-proxy: no port proxy on the origin every session shares (portal
-# invariant 14, audit L24); verified on 4.137.0 by test.sh § 7.
+# invariant 14, audit L24); held by contract/check.
 exec code-server \
   --auth none \
   --disable-proxy \

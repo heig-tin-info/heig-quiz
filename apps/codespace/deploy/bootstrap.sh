@@ -8,7 +8,10 @@
 # Once per instance, before its first deploy (RUNBOOK.md says when). It never
 # overwrites what holds a secret: the instance's env file is written only
 # when absent. It does NOT deploy the portal (the CI does, through
-# infra/engine/deploy.sh and staging-dispatch.sh) and builds no image.
+# infra/engine/deploy.sh and staging-dispatch.sh), and it neither builds nor
+# pulls an image: the quadlet keeps the base image it names, and a new one
+# names the pinned release (or, before the first, the image the env file
+# names) until the next prod deploy chooses (base-image.sh, RUNBOOK.md §7).
 #
 #   1. checks: root, the rootful socket, the `containers` subordinate range
 #   2. persistent br_netfilter (without it the ICC rule is inoperative)
@@ -77,6 +80,11 @@ grep -q '@[A-Z_]*@' "$CS_ETC/env" && die "$CS_ETC/env still holds a @PLACEHOLDER
 ok "$CS_ETC/env is $(stat -c '%a %U:%G' "$CS_ETC/env")"
 
 step "host-level and instance files"
+# Untested here: the next prod deploy pulls, tests and rewrites the quadlet
+# (base-image.sh).
+CS_BASE_IMAGE="$(cs_base_installed)"
+CS_BASE_IMAGE="${CS_BASE_IMAGE:-$(cs_base_pin)}"
+CS_BASE_IMAGE="${CS_BASE_IMAGE:-$(cs_base_legacy)}"
 cs_install_host
 cs_install_instance
 systemctl daemon-reload
@@ -89,11 +97,10 @@ ok "$CS_NET on $CS_IFACE, gateway $CS_GATEWAY; shadow timer $(systemctl is-activ
 caddy_apply
 ok "caddy serves $CS_HOST -> 127.0.0.1:$CS_PORT"
 
-student="$(cs_student_image)"
-if pd image exists "$student"; then
-	ok "student image $student present"
+if pd image exists "$CS_BASE_IMAGE"; then
+	ok "base image $CS_BASE_IMAGE present"
 else
-	printf '  ..    student image %s missing: the first prod deploy builds it (or apps/codespace/deploy/student-image.sh)\n' "$student"
+	printf '  ..    base image %s missing: the next prod deploy pulls the pinned release (RUNBOOK.md §7)\n' "$CS_BASE_IMAGE"
 fi
 
 step "next"
