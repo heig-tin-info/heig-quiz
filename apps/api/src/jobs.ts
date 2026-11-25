@@ -175,6 +175,16 @@ export const PROJECT_REVIEW_QUEUE = "project.review";
 export const CODESPACE_SYNC_QUEUE = "codespace.sync";
 
 /**
+ * The follow-up of one course image's admission on the portal (ADR-146 §5):
+ * `{ imageId }`, sent when an owner adds or refreshes the image, then by
+ * the job itself every few seconds while the admission is in flight, up to
+ * 30 minutes after it was asked. A `standard` queue, no dedupe: a tick reads
+ * the row, and writes only while the candidate it asked about is still the
+ * row's (`modules/codespace/images.ts`).
+ */
+export const CODESPACE_IMAGE_QUEUE = "codespace.image";
+
+/**
  * One AI pass over a brainstorm (ADR-072): `{ evaluationId, lease }`, sent a
  * few seconds after the answer that claimed the poll's lease
  * (`poll_ai_runs.lease_at`). A `standard` queue, no dedupe, no retry: the

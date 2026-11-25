@@ -2,6 +2,14 @@ import { signHs256, verifyHs256 } from "@quiz/domain";
 import { describe, expect, it } from "vitest";
 
 import {
+  AdminWorkspaceImage,
+  CourseWorkspaceImage,
+  CourseWorkspaceImageCreate,
+  CourseWorkspaceImageParams,
+  CourseWorkspaceImagePatch,
+  CourseWorkspaceImages,
+  ProjectWorkspaceImageBody,
+  WORKSPACE_IMAGE_NAME_MAX,
   ADMISSION_STATES,
   CODESPACE_ISSUERS,
   CodespaceAssignmentSync,
@@ -468,5 +476,54 @@ describe("workspace images (ADR-146)", () => {
     const claims = { iss: "heig-quiz", aud: SERVICE_AUDIENCE, iat: 1, exp: 100, jti: "j", method: "DELETE", path: imagePath(digest) };
     expect(ServiceTokenClaims.safeParse(claims).success).toBe(true);
     expect(ServiceTokenClaims.safeParse({ ...claims, method: "PATCH" }).success).toBe(false);
+  });
+});
+
+describe("a course's workspace images (ADR-146 §4–§8, Quiz's routes)", () => {
+  const digest = `sha256:${"a".repeat(64)}`;
+
+  it("adds by a name and a canonical reference, renames by a name only", () => {
+    expect(CourseWorkspaceImageCreate.parse({ name: "  C lab ", reference: "ghcr.io/acme/lab" })).toEqual({
+      name: "C lab",
+      reference: "ghcr.io/acme/lab:latest",
+    });
+    for (const bad of [
+      { name: "", reference: "ghcr.io/acme/lab" },
+      { name: "x".repeat(WORKSPACE_IMAGE_NAME_MAX + 1), reference: "ghcr.io/acme/lab" },
+      { name: "two\nlines", reference: "ghcr.io/acme/lab" },
+      { name: "C", reference: "quay.io/acme/lab" },
+      { name: "C", reference: "ghcr.io/acme/lab", extra: 1 },
+    ]) {
+      expect(CourseWorkspaceImageCreate.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
+    expect(CourseWorkspaceImagePatch.safeParse({ name: "Python", reference: "ghcr.io/acme/py" }).success).toBe(false);
+    expect(ProjectWorkspaceImageBody.parse({ imageId: null })).toEqual({ imageId: null });
+    expect(ProjectWorkspaceImageBody.safeParse({ imageId: "c lab" }).success).toBe(false);
+    expect(CourseWorkspaceImageParams.safeParse({ id: crypto.randomUUID(), imageId: "x" }).success).toBe(false);
+  });
+
+  it("lists a course's images, and the administrator's view of the store", () => {
+    const image = {
+      id: crypto.randomUUID(),
+      name: "C lab",
+      reference: "ghcr.io/acme/lab:latest",
+      digestReference: `ghcr.io/acme/lab@${digest}`,
+      state: "ready",
+      reason: null,
+      detail: null,
+      baseVersion: "1.0.0",
+      diskBytes: 10,
+      obsolete: true,
+      projects: [{ id: crypto.randomUUID(), name: "Lab 1" }],
+      createdAt: "2026-11-25T08:00:00.000Z",
+      updatedAt: "2026-11-25T08:00:00.000Z",
+    };
+    expect(CourseWorkspaceImages.safeParse({ images: [image], base: { reference: "r", version: null }, canManage: true, max: 5 }).success).toBe(true);
+    expect(CourseWorkspaceImage.safeParse({ ...image, state: "gone" }).success).toBe(false);
+    const admission = { reference: image.digestReference, digest, source: "course", state: "ready", lastUsedAt: null, liveSessions: 1 };
+    const uses = [{ course: { id: crypto.randomUUID(), name: "Prog", code: "PRG" }, image: { id: image.id, name: image.name }, projects: [] }];
+    const stored = { id: "x", names: [], diskBytes: 1, kind: "admitted", admissions: [{ ...admission, uses }] };
+    expect(AdminWorkspaceImage.safeParse(stored).success).toBe(true);
+    expect(AdminWorkspaceImage.safeParse({ ...stored, admissions: [admission] }).success).toBe(false);
   });
 });

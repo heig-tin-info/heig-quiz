@@ -19,7 +19,9 @@
  *   - `GET  /app/api/projects/:id/workspace/sessions` — the project's
  *     workspaces, live from the portal;
  *   - `POST /app/api/projects/:id/repos/:rid/workspace/review` — a review
- *     session of one repository (ADR-129), described on the route.
+ *     session of one repository (ADR-129), described on the route;
+ *   - a course's workspace images and a project's choice (ADR-146),
+ *     `imageRoutes.ts`.
  *
  * The student's: `GET /app/api/projects/:id/seb`, the `.seb` of an
  * `online_seb` project (D21 point 2), and `POST
@@ -62,9 +64,10 @@ import {
 } from "../guards.js";
 import { DomainError, notFound, teacherRoute } from "../http.js";
 import * as project from "../project/service.js";
+import { registerImageRoutes } from "./imageRoutes.js";
 import { declareRelayHeads, issueGitToken } from "./relay.js";
 import {
-  grantOf,
+  hasGrant,
   projectSessions,
   projectWorkspace,
   requestCodespaceSync,
@@ -102,7 +105,7 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     "/app/api/projects/:id/workspace/mode",
     session,
     teacher({ ...onOwnedProject, body: ProjectWorkModeBody }, async ({ req, body, scope }) => {
-      const granted = (await grantOf(app.db, callerOf(req).id))?.enabled === true;
+      const granted = await hasGrant(app.db, callerOf(req).id);
       const to = workSettingOf(body);
       const caller = { owner: true, granted, kioskOffered: kioskProjectsOn(config) };
       const row = await project.setWorkMode(app.db, scope.project.id, to, caller, actorOf(req));
@@ -154,6 +157,8 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     session,
     teacher(onProject, async ({ scope }) => projectSessions(app, config, scope.project)),
   );
+
+  registerImageRoutes(app, config, { teacher, session, onProject });
 
   // ------------------------------------------------------------ the student's
 

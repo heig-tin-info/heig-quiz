@@ -10,28 +10,104 @@
  * never went online has none. Deleted with its project. Nothing here is a
  * secret: the launch token is never stored (its `jti` is in the audit log).
  */
-import { bigint, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { bigint, check, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
+import { ADMISSION_IN_FLIGHT, ADMISSION_STATES, IMAGE_REFUSALS } from "@quiz/contracts";
 import { COLLECTION_FAILURE_REASONS, COLLECTION_OUTCOMES } from "@quiz/domain";
 
 import { users } from "./auth.js";
+import { oneOf } from "./columns.js";
+import { courses } from "./org.js";
 import { projectRepos, projects } from "./project.js";
 
-export const codespaceProjects = pgTable("codespace_projects", {
-  projectId: uuid("project_id")
-    .primaryKey()
-    .references(() => projects.id, { onDelete: "cascade" }),
-  /** The last synchronization the portal accepted (`codespace.sync`). */
-  syncedAt: timestamp("synced_at", { withTimezone: true }),
-  /** The failure of the last attempt, for the staff; cleared by the next one that goes through. */
-  syncError: text("sync_error"),
-  /**
-   * The first launch token issued for the project, by the server's clock:
-   * from then on its work mode is frozen (`409 work_mode_frozen`, ADR-047
-   * §3 as amended 2026-10-07). Never cleared.
-   */
-  firstLaunchAt: timestamp("first_launch_at", { withTimezone: true }),
-});
+/**
+ * A course's workspace images (ADR-146 §4): at most five per course, a name
+ * unique in it (case ignored), the reference its owner gave (canonical, by
+ * tag or digest; never changed), and the digest in service. Written by this
+ * module only; the portal admits (§5), Quiz mirrors.
+ *
+ * `digest_reference` is what a project picking the image runs
+ * (`registry/repository@sha256:…`): null until the first admission is
+ * ready, swapped only when a Refresh's candidate is (§6). While an admission
+ * is in flight, `candidate_reference` names it and `state` is its
+ * `downloading` or `checking`; `state`, `reason` and `detail` are always the
+ * last admission's, `base_version` and `disk_bytes` the image in service's.
+ * Goes with its course (cascade); a project's choice holds it
+ * (`codespace_projects.image_id`).
+ */
+export const courseWorkspaceImages = pgTable(
+  "course_workspace_images",
+  {
+    id: uuid("id").primaryKey(),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** The owner's reference, canonical: `registry/repository:tag` or `…@sha256:…`. */
+    reference: text("reference").notNull(),
+    /** The digest in service, canonical; null until the first admission is ready. */
+    digestReference: text("digest_reference"),
+    /** The digest reference of the admission in flight (the first, or a Refresh's); null when none. */
+    candidateReference: text("candidate_reference"),
+    state: text("state", { enum: ADMISSION_STATES }).notNull(),
+    reason: text("reason", { enum: IMAGE_REFUSALS }),
+    /** The portal's raw diagnostic of a refusal, never prose. */
+    detail: text("detail"),
+    baseVersion: text("base_version"),
+    diskBytes: bigint("disk_bytes", { mode: "number" }),
+    /** When the last admission was asked, Quiz's clock: its follow-up gives up 30 minutes on. */
+    requestedAt: timestamp("requested_at", { withTimezone: true }).notNull(),
+    /** NO ACTION: an account is pseudonymized, never deleted (ADR-117). */
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    // One name per course, case ignored; it also serves the course's foreign key.
+    uniqueIndex("course_workspace_images_course_name_uq").on(t.courseId, sql`lower(${t.name})`),
+    check("course_workspace_images_state_ck", oneOf(t.state, ADMISSION_STATES)),
+    check("course_workspace_images_reason_ck", sql`${t.reason} IS NULL OR ${oneOf(t.reason, IMAGE_REFUSALS)}`),
+    // A candidate exactly while an admission is in flight.
+    check(
+      "course_workspace_images_candidate_ck",
+      sql`(${t.candidateReference} IS NOT NULL) = (${oneOf(t.state, ADMISSION_IN_FLIGHT)})`,
+    ),
+  ],
+);
+
+export const codespaceProjects = pgTable(
+  "codespace_projects",
+  {
+    projectId: uuid("project_id")
+      .primaryKey()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    /** The last synchronization the portal accepted (`codespace.sync`). */
+    syncedAt: timestamp("synced_at", { withTimezone: true }),
+    /** The failure of the last attempt, for the staff; cleared by the next one that goes through. */
+    syncError: text("sync_error"),
+    /**
+     * The first launch token issued for the project, by the server's clock:
+     * from then on its work mode is frozen (`409 work_mode_frozen`, ADR-047
+     * §3 as amended 2026-10-07). Never cleared.
+     */
+    firstLaunchAt: timestamp("first_launch_at", { withTimezone: true }),
+    /**
+     * The course image the project runs (ADR-146 §4), one of its course's;
+     * null: the default, `quiz-base`. Never frozen by a launch: a change
+     * reaches the containers started afterwards. The module refuses to
+     * remove an image in use (`409 image_in_use`), under the image row's
+     * lock that a concurrent choice's key check waits for. The key itself
+     * SETS NULL rather than restricting: a course's delete reaches both rows
+     * by two cascades, and a RESTRICT (or NO ACTION) key fails it when the
+     * image's goes first.
+     */
+    imageId: uuid("image_id").references(() => courseWorkspaceImages.id, { onDelete: "set null" }),
+  },
+  (t) => [index("codespace_projects_image_idx").on(t.imageId)],
+);
 
 /**
  * Quiz's record of launches (ADR-078 §6): per (project, user), the first and

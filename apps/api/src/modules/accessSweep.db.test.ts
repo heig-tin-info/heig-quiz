@@ -46,6 +46,7 @@ import {
   courseConditions,
   courseDocuments,
   courseStaff,
+  courseWorkspaceImages,
   enrollments,
   evaluations,
   gradebookComponents,
@@ -494,10 +495,26 @@ describe("every staff route of a project, and of the App (invariant 6, N-SEC-20)
       proposedReply: "Non.",
       proposedAt: new Date(),
     });
+    // A workspace image of the course (ADR-146): the `:imageId`.
+    const imageId = randomUUID();
+    const at = new Date();
+    await db.insert(courseWorkspaceImages).values({
+      id: imageId,
+      courseId: base.ids.courses!,
+      name: "Swept image",
+      reference: "ghcr.io/acme/swept:latest",
+      state: "downloading",
+      candidateReference: `ghcr.io/acme/swept@sha256:${"a".repeat(64)}`,
+      requestedAt: at,
+      createdBy: owner.id,
+      createdAt: at,
+      updatedAt: at,
+    });
     return {
       ids: { ...base.ids, projects: projectId },
       params: {
         ...base.params,
+        imageId,
         rid: repoId,
         "projects:cid": checkpointId,
         "contestations:cid": contestationId,
@@ -520,6 +537,11 @@ describe("every staff route of a project, and of the App (invariant 6, N-SEC-20)
   });
 
   sweepStaffRoutes(() => hub);
+
+  // The administration routes this server adds: the App's, and the online workspace's (ADR-146 §8).
+  describe("and every administration route of this server", () => {
+    sweepAdminRoutes(() => projectServer, { walks: /^\/app\/api\/admin\/workspace-images$/ });
+  });
 });
 
 /** The administration routes whose refusal is the 404 of a missing entity (`adminGuard(app, { hidden: true })`): the kiosk stations. */
@@ -536,12 +558,22 @@ const SUPER_POWERS_ADMIN = new Set(["POST /app/api/admin/users/:id/pseudonymize"
 const anyParams = (path: string) => path.replace(/:(\w+)/g, () => randomUUID());
 
 describe("every administration route (the admin's alone)", () => {
+  // The kiosk stations are on: the hidden branch is walked, not assumed.
+  sweepAdminRoutes(() => main.server, { walks: HIDDEN_ADMIN });
+});
+
+/**
+ * The administration routes of a server: run on both servers, so a route
+ * registered only with Quiz's App or the online workspace (the engine's
+ * image store, ADR-146 §8) is swept as soon as it exists. `walks`: a route
+ * the server must hold, so the sweep proves it went there.
+ */
+function sweepAdminRoutes(serverOf: () => TestServer, { walks }: { walks: RegExp }) {
   it("answers no session 401, and anyone but an admin the refusal of the role", async () => {
-    const { server } = main;
+    const server = serverOf();
     const routes = routesOf(server.app.printRoutes({ commonPrefix: false })).filter(({ path }) => path.startsWith("/app/api/admin/"));
     expect(routes.length).toBeGreaterThan(10);
-    // The kiosk stations are on: the hidden branch below is walked, not assumed.
-    expect(routes.filter(({ path }) => HIDDEN_ADMIN.test(path)).length).toBeGreaterThan(0);
+    expect(routes.filter(({ path }) => walks.test(path)).length).toBeGreaterThan(0);
     const teacher = await server.signIn("teacher");
     const student = await server.signIn("student");
     const admin = await server.signIn("admin");
@@ -572,4 +604,4 @@ describe("every administration route (the admin's alone)", () => {
       expect([401, 403], name).not.toContain((await call(server, method, url, passer)).statusCode);
     }
   });
-});
+}

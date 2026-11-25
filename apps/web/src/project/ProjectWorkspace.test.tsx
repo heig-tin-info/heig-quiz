@@ -26,6 +26,7 @@ const workspace = (over: Partial<Workspace> = {}): Workspace => ({
   syncError: null,
   review: true,
   quota: null,
+  image: null,
   ...over,
 });
 const sessions: ProjectWorkspaceSessions = {
