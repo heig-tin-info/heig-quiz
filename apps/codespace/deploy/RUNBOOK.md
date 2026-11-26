@@ -30,7 +30,7 @@ The values (names, ports, platform URLs) are in `deploy/lib.sh`
 | Caddy site, access log | `/etc/caddy/conf.d/quiz-codespace-<i>.caddy`, `/var/log/caddy/quiz-codespace-<i>.log` |
 | Host-level copies (both instances) | `/usr/local/lib/quiz-codespace/`, `/etc/apparmor.d/codespace`, `/etc/systemd/system/quiz-codespace-*@.*` |
 | Session containers | `cs-<i>-<session>`, label `heig-codespace.instance=<i>` |
-| Sessions' image (both instances) | the `quiz-base` release `deploy/quiz-base.ref` pins, by digest, in the rootful store; the quadlet's `CODESPACE_DEFAULT_IMAGE` and `CODESPACE_IMAGE` name it, chosen by a prod deploy (§7). Until a release is pinned: the env file's image (`codespace/c-dev:4.137.0`), built on the VM before ADR-146 |
+| Sessions' image (both instances) | the `quiz-base` release `deploy/quiz-base.ref` pins, by digest, in the rootful store; the quadlet's `CODESPACE_DEFAULT_IMAGE` and `CODESPACE_IMAGE` name it, chosen by a prod deploy (§7) |
 
 ## The switch from heig-classroom's portal
 
@@ -206,35 +206,22 @@ apps/codespace/deploy/base-image.sh        # prints the image the deploy would i
 It installs nothing: only a deploy writes the quadlets and restarts the
 portal.
 
-**The first release.** Until `deploy/quiz-base.ref` names one, the
-instances keep the image they ran before ADR-146 (the env file's
-`CODESPACE_DEFAULT_IMAGE`, else its `CODESPACE_IMAGE`, else the portal's
-own default, `codespace/c-dev:4.137.0`), built on this VM, and no deploy
-rebuilds it any more. A deploy that fails between retagging the portal
-image and restarting it tags the previous one `:prod` again. Once, after the merge that brings `quiz-base`:
+**The first release** (1.0.0, pinned 2026-11-26) replaced the image built
+on this VM before ADR-146, `codespace/c-dev:4.137.0`. That image stays in
+the store until removed by hand (`podman image rm codespace/c-dev:4.137.0`,
+once no container uses it); so does each replaced release (ADR-146 §8: no
+automatic deletion). The env files' `CODESPACE_DEFAULT_IMAGE` and
+`CODESPACE_IMAGE` lines are ignored (the quadlet's win) and can go. A
+deploy that fails between retagging the portal image and restarting it
+tags the previous one `:prod` again.
 
-1. the push to `main` runs `quiz-base.yml`, which publishes the candidate
-   `ghcr.io/heig-tin-info/quiz-base:1.0.0` and writes
-   `ghcr.io/heig-tin-info/quiz-base:1.0.0@sha256:…` in its run summary; the
-   package is created private;
-2. the owner makes the package **public** (GitHub: the organization's
-   Packages, `quiz-base`, Package settings, Change visibility) and checks it
-   anonymously: `podman pull ghcr.io/heig-tin-info/quiz-base:1.0.0` on a
-   machine logged in nowhere;
-3. **only once the portal's admission is in production** (ADR-146's second
-   pull request: every container started with `--pull=never`, only
-   admitted digests run), a pull request puts the summary's line in
-   `deploy/quiz-base.ref` and deletes `cs_base_legacy`'s block from
-   `deploy/lib.sh` (marked there); its approved production deploy pulls,
-   tests and switches. The old `codespace/c-dev` image stays in the store
-   until removed by hand (`podman image rm codespace/c-dev:4.137.0`, once
-   no container uses it); so does each replaced release (ADR-146 §8: no
-   automatic deletion). The env files' `CODESPACE_DEFAULT_IMAGE` and
-   `CODESPACE_IMAGE` lines can go then.
-
-**A new release** is the same from step 1, with `VERSION` bumped in the
-pull request that changed the image (`images/quiz-base/README.md`,
-Releasing); the package stays public.
+**A new release.** The pull request that changes the image bumps
+`VERSION` (`images/quiz-base/README.md`, Releasing). Its merge runs
+`quiz-base.yml`, which publishes the candidate `:<VERSION>` and writes
+`ghcr.io/heig-tin-info/quiz-base:<VERSION>@sha256:…` in its run summary; a
+pull request puts that line in `deploy/quiz-base.ref`; its approved
+production deploy pulls, tests and switches, then the CI moves `latest`.
+The package stays public.
 
 The status-bar extension is part of the image: its version is in the log
 (`test.sh` § 3, `heig.codespace-statusbar@0.4.2 installed and listed by

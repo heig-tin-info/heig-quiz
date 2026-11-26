@@ -178,26 +178,3 @@ cs_base_installed() {
 	sed -n 's/^Environment=CODESPACE_DEFAULT_IMAGE=//p' "$CS_QUADLET_DIR/$CS_UNIT.container" | tail -n 1
 }
 
-# --- delete in the pin PR (RUNBOOK.md §7, The first release) ---------------
-# cs_base_legacy: what the instance ran before its quadlet named a base
-# image, the image built on this VM before ADR-146: its env file's
-# CODESPACE_DEFAULT_IMAGE, else its CODESPACE_IMAGE, else
-# codespace/c-dev:4.137.0.
-cs_base_legacy() {
-	local image
-	image="$(cs_env CODESPACE_DEFAULT_IMAGE)"
-	image="${image:-$(cs_env CODESPACE_IMAGE)}"
-	# Mirrors the portal's config.ts default, which production runs when its
-	# env names no image.
-	echo "${image:-codespace/c-dev:4.137.0}"
-}
-# --- end of the block to delete ---------------------------------------------
-
-# cs_base_current: the base image the instance runs now, its quadlet's or
-# (until the pin PR) cs_base_legacy's.
-cs_base_current() {
-	local image
-	image=$(cs_base_installed)
-	[ -n "$image" ] || image=$(cs_base_legacy)
-	echo "$image"
-}

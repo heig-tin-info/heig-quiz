@@ -8,8 +8,8 @@
 # Prints on standard output the image both quadlets name (their
 # CODESPACE_DEFAULT_IMAGE and CODESPACE_IMAGE move together), and what it
 # did on standard error:
-#   - no release pinned (deploy/quiz-base.ref): the image the prod instance
-#     runs (cs_base_current); exit 0;
+#   - no release pinned (deploy/quiz-base.ref): the image the prod
+#     instance's quadlet names; exit 0;
 #   - the pinned release is the one in service: it (pulled again if it
 #     left the store); exit 0;
 #   - a new candidate: proven public by an anonymous registry call, pulled
@@ -52,7 +52,7 @@ say() { echo "base image: $*" >&2; }
 installed=$(cs_base_installed)
 # keep <status>: the image in service stays.
 keep() {
-	cs_base_current
+	echo "$installed"
 	exit "$1"
 }
 

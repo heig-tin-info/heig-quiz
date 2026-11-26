@@ -84,7 +84,6 @@ step "host-level and instance files"
 # (base-image.sh).
 CS_BASE_IMAGE="$(cs_base_installed)"
 CS_BASE_IMAGE="${CS_BASE_IMAGE:-$(cs_base_pin)}"
-CS_BASE_IMAGE="${CS_BASE_IMAGE:-$(cs_base_legacy)}"
 cs_install_host
 cs_install_instance
 systemctl daemon-reload
