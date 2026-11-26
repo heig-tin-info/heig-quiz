@@ -680,9 +680,9 @@ export const PracticeCard = z.object({
   count: z.number().int().nonnegative(),
   /**
    * Whether the blank print of the series is made (ADR-125 §5, the rule
-   * `printRefusal`): false when one of its types has no paper form or an
-   * item is parameterized, so the card never offers a print the route
-   * refuses with `409 not_printable`. Always false on an exam (ADR-142).
+   * `printRefusal`): false when one of its types has no paper form, so the
+   * card never offers a print the route refuses with `409 not_printable`.
+   * Always false on an exam (ADR-142).
    */
   printable: z.boolean(),
   /**

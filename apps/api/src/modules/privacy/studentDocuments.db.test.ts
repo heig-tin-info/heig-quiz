@@ -9,7 +9,8 @@
  * teacher's comment absent, then present; the student's own answers absent
  * under `showAnswer: false`. The record's student shapes pass the forbidden
  * keys. The blank print is the hand-out of a past series: the statements
- * only, in the paper's order, no seed, its images exactly as the player's.
+ * only, in the paper's order, no seed, its images exactly as the player's;
+ * a parameterized series prints variant 1's values, no template (ADR-148).
  * For both, who reaches them (the caller's own portal session, invariant 6),
  * the shared hourly bucket apart from the personal export's, and the audit,
  * neither of which a refusal or a PDF the server cannot make touches.
@@ -34,12 +35,13 @@ import {
   enrollments,
   evaluationProvidedDocuments,
   evaluations,
+  paperVariants,
   questions,
 } from "../../db/schema.js";
 import { type Payload, sessionOf, testServer, type TestServer } from "../../test/http.js";
 import { kioskStation } from "../../test/kiosk.js";
 import { reload, seedLive } from "../../test/live.js";
-import { publishParameterized } from "../../test/parameterized.js";
+import { legibleSeed, markersIn, publishParameterized, showsKey, VARIABLES } from "../../test/parameterized.js";
 import { pdfText, pdfTools, typstProbe } from "../../test/pdf.js";
 import { addItems, applyState, handout, handoutTree } from "../evaluation/service.js";
 import { writeGrading } from "../grading/service.js";
@@ -103,6 +105,17 @@ const CODE = {
   },
 };
 const CODE_SECRETS = ["CODE_REFERENCE_SECRET", "CODE_HIDDEN_NAME", "CODE_HIDDEN_STDIN", "CODE_HIDDEN_EXPECTED", "@@lock"];
+
+/** A type with no paper form: `codeimage`, whose statement is a picture to reproduce. */
+const CODEIMAGE = {
+  configVersion: 1,
+  prompt: "Draw CODEIMAGE_PROMPT.",
+  language: "c",
+  template: "// @@lock\n#include <stdio.h>\nint main(void) {\n// @@endlock\n    puts(\"1\");\n// @@lock\n    return 0;\n}\n// @@endlock\n",
+  referenceSolution: '    puts("1 0 1 0");\n',
+  image: { width: 4, height: 3, palette: "bw" },
+  target: { width: 4, height: 3, palette: "bw", pixels: "101001011010" },
+};
 
 const PROMPTS = ["MCQ_PROMPT", "SHORT_PROMPT", "CLOZE_PROMPT", "RICH_PROMPT", "MATH_PROMPT"];
 
@@ -168,6 +181,10 @@ const post = (url: string, headers: Record<string, string>, payload?: Payload) =
   server.app.inject({ method: "POST", url, headers, ...(payload === undefined ? {} : { payload }) });
 const copyUrl = (attemptId: string, ext: "json" | "pdf") => `/app/api/attempts/${attemptId}/copy.${ext}`;
 const printUrl = (evaluationId: string) => `/app/api/student/evaluations/${evaluationId}/handout.pdf`;
+
+/** The seed of variant 1 of `evaluationId`'s paper (ADR-148), read behind the API's back; null before the first print. */
+const variantSeed = async (evaluationId: string) =>
+  (await server.app.db.select().from(paperVariants).where(eq(paperVariants.evaluationId, evaluationId)))[0]?.seed ?? null;
 
 /** A fresh hour for the bucket of the student's documents. */
 const nextHour = () => server.clock.advance(3_600_000);
@@ -443,13 +460,13 @@ describe("the blank print of a past series (ADR-122 §9)", () => {
         typstProbe.available ? [{ kind: "handout", evaluationId: seed.evaluationId }] : [],
       );
     }
-    expect((await reload(server.app.db, seed.evaluationId)).paperSeed).toEqual(expect.any(Number));
+    expect(await variantSeed(seed.evaluationId)).toEqual(expect.any(Number));
   });
 
   it("holds no secret, no answer and no seed in its tree and its Typst source", async () => {
     const seed = await pastSeries();
     const found = await handout(server.app.db, await reload(server.app.db, seed.evaluationId), { now: server.clock.now() });
-    const paperSeed = (await reload(server.app.db, seed.evaluationId)).paperSeed!;
+    const paperSeed = (await variantSeed(seed.evaluationId))!;
     const secrets = [...KEYS, ...KEY_HEADINGS, ...EXPLANATIONS, ...ALWAYS_SECRET];
     for (const lang of LOCALES) {
       const tree = handoutTree(found, lang);
@@ -496,7 +513,7 @@ describe("the blank print of a past series (ADR-122 §9)", () => {
     for (const secret of [...KEYS, ...KEY_HEADINGS, ...EXPLANATIONS, ...ALWAYS_SECRET, ...STUDENT_ANSWERS]) {
       expect(text).not.toContain(secret);
     }
-    const paperSeed = (await reload(server.app.db, seed.evaluationId)).paperSeed!;
+    const paperSeed = (await variantSeed(seed.evaluationId))!;
     expect(new RegExp(`(?<![\\w-])${paperSeed}(?![\\w])`).test(text)).toBe(false);
     // The paper's order: the staff hand-out's, drawn from the same seed.
     const staff = HandoutRecord.parse((await get(`/app/api/evaluations/${seed.evaluationId}/handout.json`, teacher.headers)).json());
@@ -571,7 +588,7 @@ describe("the blank print of a past series (ADR-122 §9)", () => {
     await db.update(classrooms).set({ archivedAt: server.clock.now() }).where(eq(classrooms.id, past.classroomId));
     expect((await get(printUrl(past.evaluationId), student.headers)).statusCode).toBe(404);
     // No refusal drew a seed.
-    for (const seed of [draft, running, past]) expect((await reload(db, seed.evaluationId)).paperSeed).toBeNull();
+    for (const seed of [draft, running, past]) expect(await variantSeed(seed.evaluationId)).toBeNull();
   });
 
   /*
@@ -601,26 +618,74 @@ describe("the blank print of a past series (ADR-122 §9)", () => {
     }
   });
 
+  /*
+   * A parameterized series prints (ADR-148): variant 1 for every student,
+   * no variant label, its values drawn and stored on the first print; no
+   * template, seed or values map in the tree or the Typst source.
+   */
+  it("prints a parameterized series with the variant's values, no template, and its card says so", async () => {
+    const db = server.app.db;
+    const seed = await pastSeries(async (poolId) => {
+      const ids = [];
+      for (const type of ["mcq", "short", "cloze"] as const) ids.push(await publishParameterized(db, { poolId, teacherId: teacher.id, type }));
+      return ids;
+    });
+    const card = (await get("/app/api/student/home", student.headers))
+      .json()
+      .practice.find((c: { id: string }) => c.id === seed.evaluationId);
+    expect(card).toMatchObject({ printable: true });
+    const keys = await legibleSeed(db, seed.evaluationId, server.clock.now());
+    nextHour();
+    const printed = await get(printUrl(seed.evaluationId), student.headers);
+    expect(printed.statusCode).toBe(typstProbe.available ? 200 : 503);
+    const found = await handout(db, await reload(db, seed.evaluationId), { now: server.clock.now() });
+    const [variant] = await db.select().from(paperVariants).where(eq(paperVariants.evaluationId, seed.evaluationId));
+    // The PDF's text, the third form (ADR-125 §19), where the tools are.
+    const forms = pdfTools ? [await pdfText(printed.rawPayload)] : [];
+    for (const text of forms) expect(text).toContain("A ball is dropped from");
+    expect(Object.keys(variant!.instances)).toHaveLength(3);
+    // The staff's hand-out is the same paper, values included.
+    const staff = HandoutRecord.parse((await get(`/app/api/evaluations/${seed.evaluationId}/handout.json`, teacher.headers)).json());
+    expect(found.record.items).toEqual(staff.items);
+    const secrets = [...KEYS, ...KEY_HEADINGS, ...EXPLANATIONS, ...ALWAYS_SECRET, "The fall lasts"];
+    const forbiddenKeys = [...live.FORBIDDEN_STUDENT_KEYS, "versionId", "fallback", "instances", "variables"];
+    expect(findStudentLeaks(found.record, { forbiddenKeys, secrets })).toEqual([]);
+    forms.push(JSON.stringify(found.record));
+    for (const lang of LOCALES) {
+      const tree = handoutTree(found, lang);
+      expect(findStudentLeaks(tree, { forbiddenKeys, secrets })).toEqual([]);
+      for (const text of [JSON.stringify(tree), typstOf(tree), ...forms]) {
+        expect(markersIn(text)).toEqual([]);
+        expect(secrets.filter((secret) => text.includes(secret))).toEqual([]);
+        // The drawn keys, searched as numbers of their own (never a substring).
+        for (const values of keys) expect(showsKey(text, values)).toBe(false);
+        expect(new RegExp(`(?<![\\w-])${variant!.seed}(?![\\w])`).test(text)).toBe(false);
+        // The values map: no variable name as a key of its own.
+        for (const row of VARIABLES.rows) expect(text).not.toContain(`"${row.name}":`);
+      }
+      expect(typstOf(tree)).toContain("A ball is dropped from");
+    }
+  });
+
   it("refuses a series that does not print (ADR-125 §5), and any session but the caller's own portal", async () => {
-    const parameterized = await pastSeries((poolId) =>
-      publishParameterized(server.app.db, { poolId, teacherId: teacher.id, type: "mcq" }).then((id) => [id]),
-    );
+    const codeimage = await pastSeries(async (poolId) => [await publish(poolId, "codeimage", CODEIMAGE)]);
     // Its card offers no print (`printRefusal`, the route's own rule).
     const card = (await get("/app/api/student/home", student.headers))
       .json()
-      .practice.find((c: { id: string }) => c.id === parameterized.evaluationId);
+      .practice.find((c: { id: string }) => c.id === codeimage.evaluationId);
     expect(card).toMatchObject({ printable: false });
     nextHour();
-    const res = await get(printUrl(parameterized.evaluationId), student.headers);
+    const res = await get(printUrl(codeimage.evaluationId), student.headers);
     expect(res.statusCode).toBe(409);
-    expect(res.json()).toMatchObject({ error: "not_printable", reason: "parameterized" });
+    expect(res.json()).toMatchObject({ error: "not_printable", reason: "type", types: ["codeimage"] });
 
     const seed = await pastSeries();
     const impersonation = await sessionOf(server.app.db, student.id, { kind: "impersonation", actorUserId: admin.id });
     expect((await get(printUrl(seed.evaluationId), impersonation)).statusCode).toBe(403);
     const seb = await sessionOf(server.app.db, student.id, { kind: "seb", evaluationId: seed.evaluationId });
     expect((await get(printUrl(seed.evaluationId), seb)).statusCode).toBeGreaterThanOrEqual(400);
-    expect((await reload(server.app.db, seed.evaluationId)).paperSeed).toBeNull();
+    expect(await variantSeed(seed.evaluationId)).toBeNull();
+    expect(await variantSeed(codeimage.evaluationId)).toBeNull();
   });
 });
 

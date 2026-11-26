@@ -25,7 +25,6 @@ const FORMATS = [
 /** The sentence of a refusal that names no type. */
 const REFUSAL = {
   poll: "eval.export.poll",
-  parameterized: "eval.export.parameterized",
 } as const satisfies Record<Exclude<PrintRefusal["reason"], "type">, keyof Dict>;
 
 /** `GET /evaluations/:id/<document>.<ext>`: the server names the file. */

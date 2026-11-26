@@ -3,21 +3,25 @@
  * module that owns `attempts` and `answers` writes them, inside the `paper`
  * module's transaction, and nothing else.
  *
- *   - {@link paperKey}: the whole key of each item in the paper's view, for
+ *   - {@link paperKeyItems}: each item of the paper, in its order, with its
+ *     whole key in the paper's view — the staff "statement with key" of a
+ *     printed evaluation — and {@link paperKey}, the same key by item, for
  *     the staff member typing the copy in;
  *   - {@link paperAnswers} reads every answer of the copy exactly as a
  *     student's save reads one (`canonicalAnswer`: the view of the paper
- *     seed, the type's `answerSchema`, `fromStudentAnswer`), and refuses the
- *     whole copy on the first answer refused (`422 answer_invalid`);
+ *     variant, the type's `answerSchema`, `fromStudentAnswer`), and refuses
+ *     the whole copy on the first answer refused (`422 answer_invalid`);
  *   - {@link insertPaperAttempt} ends the student's unfinished attempt, inserts
  *     the paper attempt handed in, stores its answers and marks every attempt
  *     it replaces, in the caller's transaction;
  *   - {@link announcePaperAttempt}, after the commit, tells the listeners of
  *     ended attempts, the dashboard and the player of a replaced attempt.
  *
- * A paper attempt goes through the ordinary ADR-097 path everywhere else: its
- * seed is the evaluation's paper seed, so its views are the hand-out's, with
- * no `origin` case anywhere in the item view.
+ * Every function here takes the paper variant (ADR-148) as an attempt's
+ * seed and stored values, `InstanceAttempt`. A paper attempt goes through
+ * the ordinary ADR-097 path everywhere else: its seed and its values are the
+ * variant's, copied, so its views are the hand-out's, with no `origin` case
+ * anywhere in the item view.
  */
 import { randomUUID } from "node:crypto";
 
@@ -29,36 +33,57 @@ import type { AnswerCoordinates } from "@quiz/contracts";
 import { endKioskSessions } from "../../auth/session.js";
 import type { Tx } from "../../db/client.js";
 import { answers, attempts, officialAttempt } from "../../db/schema.js";
-import type { EvaluationRecord, JoinedItem } from "../evaluation/service.js";
+import { settingsOf, type EvaluationRecord, type JoinedItem } from "../evaluation/service.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
+import type { InstanceAttempt } from "../pool/service.js";
 import type { AttemptRecord } from "./access.js";
 import { AnswerInvalid } from "./failures.js";
 import { canonicalAnswer } from "./autosave.js";
 import { endAttemptsIn, notifyEnded, seated, type EndedAttempt } from "./dwell.js";
 import * as events from "./events.js";
 import { attemptItemView } from "./itemView.js";
-import { solutionViewOf } from "./studentView.js";
+import { orderItems, type OrderedItem } from "./order.js";
+import { solutionViewOf, studentViewOf } from "./studentView.js";
 
-/** A paper attempt draws no values: a parameterized evaluation does not print (ADR-125 §5). */
-const onPaper = (seed: number) => ({ seed, instances: {} });
+/** One item of the paper with its key (staff-only). */
+export interface PaperKeyItem {
+  entry: OrderedItem;
+  /** The statement as the hand-out prints it: the student view of the variant. */
+  statement: unknown;
+  /** The whole key, in the coordinates of that view. */
+  solution: unknown;
+  /** The explanation, with the variant's values. */
+  explanation: string;
+}
 
-/** Item id → the whole key, in the coordinates of the paper's view. Staff-only. */
-export function paperKey(
+/** Every item of the paper of `variant`, in the paper's order, with its key. Staff-only. */
+export function paperKeyItems(
   evaluation: EvaluationRecord,
   items: readonly JoinedItem[],
-  seed: number,
-): Record<string, unknown> {
-  return Object.fromEntries(
-    items.map((entry) => {
-      const { type, config, view } = attemptItemView(evaluation, entry, onPaper(seed));
-      return [entry.item.id, solutionViewOf(type, config, view)];
-    }),
-  );
+  variant: InstanceAttempt,
+): PaperKeyItem[] {
+  return orderItems(items, settingsOf(evaluation), variant.seed, evaluation.id).map((entry) => {
+    const { type, config, view, instance } = attemptItemView(evaluation, entry, variant);
+    return {
+      entry,
+      statement: studentViewOf(type, config, view),
+      solution: solutionViewOf(type, config, view),
+      explanation: instance.explanation,
+    };
+  });
 }
+
+/** Item id → the whole key, in the coordinates of the paper's view. Staff-only. */
+export const paperKey = (
+  evaluation: EvaluationRecord,
+  items: readonly JoinedItem[],
+  variant: InstanceAttempt,
+): Record<string, unknown> =>
+  Object.fromEntries(paperKeyItems(evaluation, items, variant).map((key) => [key.entry.item.id, key.solution]));
 
 /**
  * The answers of a paper copy, canonical, by item: each one read through the
- * student save's path on the view of `seed`. An item left out, or given
+ * student save's path on the view of `variant`. An item left out, or given
  * `null`, was left blank, and so is an answer that holds nothing (the type's
  * `isAnswered`): no answer row, worth zero like an absent answer (F-GRADE-01)
  * — or, for an untranscribed free zone, a proposal (ADR-125 §14). An item id
@@ -67,7 +92,7 @@ export function paperKey(
 export function paperAnswers(
   evaluation: EvaluationRecord,
   items: readonly JoinedItem[],
-  seed: number,
+  variant: InstanceAttempt,
   raw: Readonly<Record<string, unknown>>,
   coordinates: AnswerCoordinates | undefined,
 ): Map<string, unknown> {
@@ -78,7 +103,7 @@ export function paperAnswers(
     if (!joined) throw new AnswerInvalid([{ path: [itemId], message: "answer.item_unknown" }]);
     if (value === null || value === undefined) continue;
     try {
-      const { payload, answered } = canonicalAnswer(evaluation, joined, onPaper(seed), value, coordinates);
+      const { payload, answered } = canonicalAnswer(evaluation, joined, variant, value, coordinates);
       if (answered) out.set(itemId, payload);
     } catch (error) {
       // Which item was refused, for the entry page to say so.
@@ -107,7 +132,9 @@ export interface InsertedPaperAttempt {
  *      (`endAttemptsIn`), which frees the one open attempt the partial index
  *      allows;
  *   2. the paper attempt is inserted, `submitted` by `teacher` now, with no
- *      start and no deadline, on the paper seed, numbered after the highest;
+ *      start and no deadline, on the paper variant's seed and with a copy of
+ *      its values — a fallback flag included, which the grading details
+ *      carry (ADR-056 §7) — numbered after the highest;
  *   3. its answers are stored, revision 1, never shown on a screen;
  *   4. every official attempt before it is marked replaced by it.
  */
@@ -116,7 +143,7 @@ export async function insertPaperAttempt(
   input: {
     evaluation: EvaluationRecord;
     userId: string;
-    seed: number;
+    variant: InstanceAttempt;
     answers: ReadonlyMap<string, unknown>;
     now: Date;
   },
@@ -146,8 +173,8 @@ export async function insertPaperAttempt(
       state: "submitted",
       closedBy: "teacher",
       origin: "paper",
-      seed: input.seed,
-      instances: {},
+      seed: input.variant.seed,
+      instances: input.variant.instances,
       startedAt: null,
       deadlineAt: null,
       submittedAt: now,

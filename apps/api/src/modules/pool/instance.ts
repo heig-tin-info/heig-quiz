@@ -253,6 +253,57 @@ export function itemInstance(entry: InstanceItem, attempt: InstanceAttempt): Ins
   });
 }
 
+/** Whether a stored entry is kept for `entry` (true) or drawn again (false): a rule of {@link completeInstances}. */
+export type KeepRule = (entry: InstanceItem, stored: StoredInstance, seed: number) => boolean;
+
+/** Kept only when drawn for the item's current version: an edited or retargeted question is drawn again. */
+export const sameVersion: KeepRule = (entry, stored) => stored.versionId === entry.version.id;
+
+/**
+ * Kept whenever it still renders the item's version: drawn for it, or
+ * replayed under the same names (§5). Values that cannot be read under it —
+ * other names (`InstanceMismatch`), a replay that fails — are not.
+ */
+export const replays: KeepRule = (entry, stored, seed) => {
+  try {
+    instanceOf(entry.question.type, entry.version, { seed, itemId: entry.item.id, stored });
+    return true;
+  } catch (error) {
+    if (error instanceof InstanceMismatch || error instanceof ParameterError) return false;
+    throw error;
+  }
+};
+
+/**
+ * THE draw rule of stored values (§5): the values of every parameterized
+ * item of `items` for `attempt` — its stored entry where `keep` holds,
+ * otherwise values drawn from its seed (`instanceOf`, the item's own stream)
+ * — and whether any was drawn. A static item stores nothing, so an entry
+ * left by an item since made static, or no longer in `items`, drops. A new
+ * attempt (nothing stored) and a paper variant (ADR-148) both draw through
+ * here.
+ */
+export function completeInstances(
+  items: readonly InstanceItem[],
+  attempt: InstanceAttempt,
+  keep: KeepRule,
+): { instances: Record<string, StoredInstance>; drew: boolean } {
+  const instances: Record<string, StoredInstance> = {};
+  let drew = false;
+  for (const entry of items) {
+    if (!isParameterized(entry.version)) continue;
+    const kept = attempt.instances[entry.item.id];
+    if (kept && keep(entry, kept, attempt.seed)) {
+      instances[entry.item.id] = kept;
+      continue;
+    }
+    const { stored } = instanceOf(entry.question.type, entry.version, { seed: attempt.seed, itemId: entry.item.id });
+    if (stored) instances[entry.item.id] = stored;
+    drew = true;
+  }
+  return { instances, drew };
+}
+
 /**
  * The parsed config of one item, per attempt: parsed ONCE for a static
  * question — the readers that walk a whole column (the live grid, the

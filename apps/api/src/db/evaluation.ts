@@ -52,7 +52,7 @@ import {
 } from "@quiz/domain";
 
 import { users } from "./auth.js";
-import { oneOf } from "./columns.js";
+import { oneOf, type StoredInstance } from "./columns.js";
 import { courseDocuments } from "./library.js";
 import { classrooms, courses } from "./org.js";
 import { questionVersions } from "./pool.js";
@@ -170,12 +170,14 @@ export const evaluations = pgTable(
     contestationClosesAt: timestamp("contestation_closes_at", { withTimezone: true }),
     modifiedAfterRelease: boolean("modified_after_release").notNull().default(false),
     /**
-     * The seed of the printed paper (ADR-125 §8): the order and the shuffles
-     * every paper copy of this evaluation follows, as a digital attempt's
-     * `seed` drives its own. Drawn on the first print by `paperSeedOf`, the
-     * one writer, and never cleared. A SECRET: never in a response, a record,
-     * a log or a copy of the evaluation — with it and the public code, the
-     * base order (and so the key of an mcq) could be read off the paper.
+     * The seed of the printed paper before paper variants (ADR-125 §8),
+     * superseded by {@link paperVariants} (ADR-148): migration 0164 copied
+     * every value into variant 1. Read and written only where variant 1 is
+     * created, in one statement: its seed is a value found here (one an
+     * older server wrote during the deploy), and a new seed is written back
+     * where this is null, so a rolled-back image prints the same order.
+     * Expand, then contract: the contract migration removes this column,
+     * that write-back and that read together. A SECRET, like a variant's seed.
      */
     paperSeed: integer("paper_seed"),
     /**
@@ -335,5 +337,41 @@ export const evaluationProvidedDocuments = pgTable(
   (t) => [
     primaryKey({ columns: [t.evaluationId, t.documentId] }),
     index("evaluation_provided_documents_document_idx").on(t.documentId),
+  ],
+);
+
+/**
+ * The paper variants of an evaluation (ADR-148): a variant is ONE draw of
+ * the whole paper — the item order and the choice order recomputed from its
+ * `seed` (D19, ADR-097), and the values of its parameterized items STORED,
+ * in the shape of `attempts.instances` (ADR-056 §5) — which the hand-out,
+ * the statement with key, the blank print of a series and every paper
+ * attempt entered on it share. Variant 1 is the only one so far.
+ *
+ * Owned by the `evaluation` module, written by `paperVariant` alone, read
+ * by the `paper` and `live` modules through the evaluation service. The
+ * seed is a SECRET: never in a response, a record, a log, the zone
+ * manifest or a copy of the evaluation (ADR-125 §8) — with it and the
+ * public code, the base order (and so an mcq's key) could be read off the
+ * paper. A duplicate and a template copy nothing of it.
+ */
+export const paperVariants = pgTable(
+  "paper_variants",
+  {
+    evaluationId: uuid("evaluation_id")
+      .notNull()
+      .references(() => evaluations.id, { onDelete: "cascade" }),
+    /** From 1, unique per evaluation: what a later label is derived from, never the seed. */
+    number: integer("number").notNull(),
+    /** In the range of an attempt's seed, from the CSPRNG; never changed. */
+    seed: integer("seed").notNull(),
+    /** Item id → its values (ADR-056 §5), `fallback` included; completed at each print and paper entry. */
+    instances: jsonb("instances").$type<Record<string, StoredInstance>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.evaluationId, t.number] }),
+    check("paper_variants_number_ck", sql`${t.number} >= 1`),
   ],
 );

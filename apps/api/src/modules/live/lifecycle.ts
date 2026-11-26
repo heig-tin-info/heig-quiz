@@ -34,7 +34,7 @@ import {
   validatedOfAttempt,
   type GradingRecord,
 } from "../grading/service.js";
-import { instanceOf } from "../pool/service.js";
+import { completeInstances, replays } from "../pool/service.js";
 import {
   attemptById,
   attemptOf,
@@ -70,13 +70,8 @@ export async function drawInstances(
 ): Promise<Record<string, StoredInstance>> {
   // A poll never holds a parameterized question (ADR-056 §10): nothing to read.
   if (evaluation.mode === "poll") return {};
-  const items = await parameterizedItems(db, evaluation.id);
-  const out: Record<string, StoredInstance> = {};
-  for (const item of items) {
-    const { stored } = instanceOf(item.question.type, item.version, { seed, itemId: item.item.id });
-    if (stored !== null) out[item.item.id] = stored;
-  }
-  return out;
+  // Nothing stored yet: every value is drawn, whatever the keep rule.
+  return completeInstances(await parameterizedItems(db, evaluation.id), { seed, instances: {} }, replays).instances;
 }
 
 /**

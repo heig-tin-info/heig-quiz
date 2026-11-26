@@ -24,11 +24,12 @@ export const explanationBlocks = (text: string | null, l: Labels): Block[] =>
 /**
  * `## Question n: name`, its points set apart at the line's end (`2 pt`),
  * the statement and, when the type draws one, the reference solution.
- * `position` is the item's canonical place.
+ * `rank` is the item's place on the document, from 0: its canonical place,
+ * or its place on the paper (ADR-148).
  */
 export function itemKeyBlocks(
   type: AnyQuestionTypeServer,
-  position: number,
+  rank: number,
   name: string,
   points: number,
   statement: unknown,
@@ -36,7 +37,7 @@ export function itemKeyBlocks(
   l: Labels,
 ): Block[] {
   return [
-    heading(2, labelled(l, `${l.question} ${position + 1}`, name), pointsAside(l, points)),
+    heading(2, labelled(l, `${l.question} ${rank + 1}`, name), pointsAside(l, points)),
     ...statementBlocks(type, statement, l),
     ...solutionBlocks(type, solution, statement, l),
   ];

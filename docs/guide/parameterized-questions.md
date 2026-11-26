@@ -64,3 +64,9 @@ Publication draws the variables 200 times and refuses the question when a row ha
 The question list shows a **Parameterized** pill on such a question, and so does the editor's header once a version with variables is published.
 
 A student's values are drawn when their attempt starts and kept with it: the paper, the review, the results and a regrade with a newer version all show the same numbers. A retake draws new ones.
+
+## On paper
+
+An evaluation with parameterized questions prints like any other, from **Export…**: the **Hand-out** and the **Statement with answer key** show the same numbers, drawn once for the paper and kept, so a reprint is identical and a paper copy typed in with **Enter a paper copy** is graded against them. For now, every student's sheet carries the same numbers.
+
+If you change a question or the list of questions before the evaluation opens, print the hand-out and the key again: a question added, edited or moved to a newer version gets new numbers, even when its variables kept their names, and a sheet printed before the change no longer matches. Once the evaluation has opened, the numbers already drawn stay; a question moved to a newer version afterwards (a regrade) keeps them, its other values recomputed from them as for a student's attempt.

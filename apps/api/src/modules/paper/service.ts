@@ -3,8 +3,9 @@
  * typed in by a staff member and handed in ONCE, and its scan.
  *
  *   - {@link paperItems}: the paper as the student read it — the student
- *     views of the evaluation's paper seed, the hand-out's order — with the
- *     key beside each item, for the entry page. Staff only;
+ *     views of the evaluation's paper variant (ADR-148), the hand-out's order
+ *     and values — with the key beside each item, for the entry page. Staff
+ *     only;
  *   - {@link enterPaperCopy}: the submission. Refused unless the evaluation
  *     is an exam that has run, is not released and prints, and the student
  *     holds a claimed student seat of its classroom; each answer read
@@ -97,11 +98,11 @@ async function studentSeat(db: Db | Tx, record: EvaluationRecord, userId: string
 
 /**
  * The entry page's paper (ADR-125 §8, §9): the evaluation exactly as the
- * hand-out printed it — the student views of the paper seed, built by the
- * one builder of an attempt's view — with the whole key of each item in the
- * coordinates of that view, and the attempt the copy would replace. Refused
- * like the submission, so the page never offers what the server refuses.
- * The seed itself goes nowhere.
+ * hand-out printed it — the student views of the paper variant (ADR-148),
+ * built by the one builder of an attempt's view — with the whole key of
+ * each item in the coordinates of that view, and the attempt the copy would
+ * replace. Refused like the submission, so the page never offers what the
+ * server refuses. The variant's seed and values go nowhere but in the views.
  */
 export async function paperItems(
   db: Db,
@@ -111,12 +112,12 @@ export async function paperItems(
 ): Promise<PaperItems> {
   const items = await eligibleItems(db, record);
   const student = await studentSeat(db, record, userId);
-  const seed = await evaluation.paperSeedOf(db, record);
+  const variant = await evaluation.paperVariant(db, record, items, now);
   const current = await live.attemptOf(db, record.id, userId);
   return {
     student,
-    view: await live.previewView(db, record, now, seed, items),
-    solutions: live.paperKey(record, items, seed),
+    view: await live.previewView(db, record, now, variant, items),
+    solutions: live.paperKey(record, items, variant),
     replaces: current && { attemptId: current.id, state: current.state, origin: current.origin },
     examDate: localDate(record.opensAt ?? record.startedAt!),
   };
@@ -137,9 +138,9 @@ export async function enterPaperCopy(
   const { db } = app;
   const items = await eligibleItems(db, record);
   await studentSeat(db, record, body.userId);
-  const seed = await evaluation.paperSeedOf(db, record);
+  const variant = await evaluation.paperVariant(db, record, items, now);
   // Before any write: one refused answer refuses the copy.
-  const answers = live.paperAnswers(record, items, seed, body.answers, body.coordinates);
+  const answers = live.paperAnswers(record, items, variant, body.answers, body.coordinates);
   let inserted: live.InsertedPaperAttempt;
   try {
     inserted = await db.transaction(async (tx) => {
@@ -150,7 +151,7 @@ export async function enterPaperCopy(
       const moved = current ? evaluation.paperRefusal(current, []) : { code: "paper_mode" as const };
       if (moved) throw new PaperError(moved.code);
       await studentSeat(tx, record, body.userId, true);
-      const rows = await live.insertPaperAttempt(tx, { evaluation: record, userId: body.userId, seed, answers, now });
+      const rows = await live.insertPaperAttempt(tx, { evaluation: record, userId: body.userId, variant, answers, now });
       await tx.insert(paperSheets).values({ attemptId: rows.attempt.id, examDate: body.examDate, enteredBy: by });
       return rows;
     });

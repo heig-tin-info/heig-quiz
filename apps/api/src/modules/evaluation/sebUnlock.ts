@@ -15,7 +15,7 @@ import type { DbOrTx, EvaluationRecord } from "./shared.js";
 /**
  * The unlock password of `evaluation`: the stored one, or one drawn now from
  * the CSPRNG and stored by a single statement, so two first downloads at the
- * same moment keep the one that landed first (as `paperSeedOf`). Never
+ * same moment keep the one that landed first (as a paper variant's seed). Never
  * changed once drawn: every `.seb` of the evaluation carries the same hash.
  */
 export async function sebUnlockPasswordOf(

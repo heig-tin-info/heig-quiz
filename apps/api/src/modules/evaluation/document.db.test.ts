@@ -2,10 +2,12 @@
  * An evaluation's two documents (ADR-121 step 3, ADR-125), over the real
  * application: the staff "statement with key" and the hand-out, as Markdown
  * as PDFs and as their records; the hand-out searched for every secret of
- * its questions (invariant 4, 05 §5.7) and for the paper seed, which it
- * follows and never shows (ADR-125 §8), in its three forms (§19); the
- * refusals of an evaluation that does not print (§5); and who reaches them
- * (invariant 6).
+ * its questions (invariant 4, 05 §5.7) and for its variant's seed, which it
+ * follows and never shows (ADR-125 §8, ADR-148), in its three forms (§19);
+ * a parameterized evaluation on paper — one variant's values on the
+ * hand-out and its key, stored, kept across prints and edits, and no
+ * template anywhere (ADR-148, ADR-056 §4); the refusals of an evaluation
+ * that does not print (§5); and who reaches them (invariant 6).
  */
 import { randomUUID } from "node:crypto";
 
@@ -19,16 +21,16 @@ import { renderTypst } from "@quiz/docexport/typst";
 import { splitFrontMatter } from "@quiz/docrender/frontMatter";
 import { LOCALES } from "@quiz/domain";
 
-import { evaluations, questions } from "../../db/schema.js";
+import { evaluationItems, evaluations, paperVariants, questions } from "../../db/schema.js";
 import { sessionOf, type TestServer, testServer } from "../../test/http.js";
 import { reload, seedLive } from "../../test/live.js";
-import { publishParameterized } from "../../test/parameterized.js";
+import { fallOf, legibleSeed, markersIn, publishParameterized, showsKey, VARIABLES } from "../../test/parameterized.js";
 import { pdfText, pdfTools } from "../../test/pdf.js";
 import * as live from "../live/service.js";
 import { typeOf } from "../pool/config.js";
 import * as poolService from "../pool/service.js";
 import { handout, handoutTree } from "./document.js";
-import { addItems, joinedItems, patchItem, settingsOf } from "./service.js";
+import { addItems, joinedItems, latestPublished, patchItem, settingsOf, updateVersions } from "./service.js";
 
 /** One question of each printable type, every secret a marker the search finds. */
 const QUESTIONS = {
@@ -143,14 +145,20 @@ async function exam(extra: (poolId: string) => Promise<string[]> = async () => [
   return reload(db, seed.evaluationId);
 }
 
-/** The stored paper seed, read behind the API's back. */
-const storedSeed = async (id: string) => (await reload(server.app.db, id)).paperSeed;
+/** Variant 1 of the paper (ADR-148), read behind the API's back; null before the first print. */
+const storedVariant = async (id: string) =>
+  (await server.app.db.select().from(paperVariants).where(eq(paperVariants.evaluationId, id)))[0] ?? null;
+/** Its seed. */
+const storedSeed = async (id: string) => (await storedVariant(id))?.seed ?? null;
+/** A seed an older server stored on the evaluation, which variant 1 takes when it is created. */
+const olderSeed = (id: string, seed: number) =>
+  server.app.db.update(evaluations).set({ paperSeed: seed }).where(eq(evaluations.id, id));
 
 /** Whether `text` shows `seed` as a number of its own (never a digit run inside an id). */
 const showsSeed = (text: string, seed: number) => new RegExp(`(?<![\\w-])${seed}(?![\\w])`).test(text);
 
 describe("the statement with key (F-EXP-04)", () => {
-  it("serves every item in the base order with its key and explanation, in the reader's language", async () => {
+  it("is the key of the paper's variant: the hand-out's order, its key and explanation, in the reader's language", async () => {
     const evaluation = await exam();
     const res = await get(url(evaluation.id, "document.md"), teacher.headers);
     expect(res.statusCode).toBe(200);
@@ -159,21 +167,25 @@ describe("the statement with key (F-EXP-04)", () => {
     expect(res.headers["cache-control"]).toBe("no-store");
     const { frontMatter, body } = splitFrontMatter(res.body);
     expect(frontMatter).toMatchObject({
-      export: { kind: "evaluation-document", format: "md", version: 1 },
+      export: { kind: "evaluation-document", format: "md", version: 2 },
       source: { evaluationId: evaluation.id },
       attempts: [],
     });
     for (const marker of ["SHORT_KEY_SECRET", "CLOZE_KEY_SECRET", "x^3+11x", "EXPLANATION_SECRET_mcq", nameOf("rich")]) {
       expect(body).toContain(marker);
     }
-    // The base order: the editor's order, the key where it was written.
-    const positions = [...body.matchAll(/^## Question (\d+): INTERNAL_NAME_(\w+) \(\d+ pt\)$/gm)].map((m) => [m[1], m[2]]);
-    expect(positions).toEqual(Object.keys(QUESTIONS).map((type, i) => [String(i + 1), type]));
-    // Every choice listed, the right one ticked; no rule between the questions.
-    expect(body).toContain("### Answer key\n\n- [x] **A.** MCQ_KEY_CHOICE\n- [ ] **B.** MCQ_OTHER_ONE");
+    // The paper's order (ADR-148), numbered as the hand-out numbers it: the variant drawn by the key.
+    const seed = await storedSeed(evaluation.id);
+    expect(seed).toEqual(expect.any(Number));
+    const handout = HandoutRecord.parse((await get(url(evaluation.id, "handout.json"), teacher.headers)).json());
+    const numbered = [...body.matchAll(/^## Question (\d+): INTERNAL_NAME_(\w+) \(\d+ pt\)$/gm)].map((m) => [m[1], m[2]]);
+    expect(numbered).toEqual(handout.items.map((item, rank) => [String(rank + 1), item.type]));
+    expect(await storedSeed(evaluation.id)).toBe(seed);
+    // Every choice listed in the paper's order, the right one ticked; no rule between the questions.
+    expect(body).toMatch(/^### Answer key\n\n(- \[[ x]\] \*\*[A-D]\.\*\* MCQ_\w+\n){4}/m);
+    expect(body.match(/- \[x\] \*\*[A-D]\.\*\* (\w+)/)?.[1]).toBe("MCQ_KEY_CHOICE");
+    expect(body.match(/- \[x\]/g)).toHaveLength(1);
     expect(body).not.toMatch(/^---$/m);
-    // The paper seed is the hand-out's: the staff document never draws it.
-    expect(await storedSeed(evaluation.id)).toBeNull();
   });
 
   it("words the key in French for a French teacher (ADR-121 §4, amended 2026-11-04)", async () => {
@@ -181,7 +193,7 @@ describe("the statement with key (F-EXP-04)", () => {
     const res = await get(url(evaluation.id, "document.md"), { ...teacher.headers, "accept-language": "fr-CH" });
     expect(res.statusCode).toBe(200);
     const { body } = splitFrontMatter(res.body);
-    expect(body).toMatch(/^## Question 1 : INTERNAL_NAME_mcq \(\d+ pt\)$/m);
+    expect(body).toMatch(/^## Question 1 : INTERNAL_NAME_\w+ \(\d+ pt\)$/m);
     for (const heading of ["### Énoncé", "### Corrigé", "### Explication"]) expect(body).toContain(heading);
     expect(body).not.toMatch(/Statement|Answer key|Explanation/);
   });
@@ -193,15 +205,19 @@ describe("the statement with key (F-EXP-04)", () => {
     expect(EvaluationDocumentRecord.safeParse(JSON.parse(res.body)).success).toBe(true);
   });
 
-  it("serves the same as a record", async () => {
+  it("serves the same as a record, in the paper's order, each item keeping its canonical place", async () => {
     const evaluation = await exam();
     const res = await get(url(evaluation.id, "document.json"), teacher.headers);
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-disposition"]).toMatch(/-key\.json"$/);
     const record = EvaluationDocumentRecord.parse(res.json());
-    expect(record.items.map((i) => i.type)).toEqual(Object.keys(QUESTIONS));
-    expect(record.items.map((i) => i.explanation)).toEqual(Object.keys(QUESTIONS).map(explanationOf));
-    expect(record.items[0]!.internalName).toBe(nameOf("mcq"));
+    const handout = HandoutRecord.parse((await get(url(evaluation.id, "handout.json"), teacher.headers)).json());
+    expect(record.items.map((i) => [i.id, i.position, i.statement])).toEqual(handout.items.map((i) => [i.id, i.position, i.statement]));
+    expect(record.items.map((i) => i.explanation)).toEqual(record.items.map((i) => explanationOf(i.type)));
+    expect(record.items.map((i) => i.internalName)).toEqual(record.items.map((i) => nameOf(i.type)));
+    expect(record.version).toBe(2);
+    expect(res.body).not.toMatch(/seed/i);
+    expect(showsSeed(res.body, (await storedSeed(evaluation.id))!)).toBe(false);
   });
 });
 
@@ -271,12 +287,13 @@ describe("the hand-out (ADR-125)", () => {
     const evaluation = await exam();
     const items = await joinedItems(db, evaluation.id);
     const base = items.map((i) => i.item.id);
-    // A seed whose order is not the base order, set before the first print.
+    // A seed whose order is not the base order, set before the first print by
+    // an older server (`paper_seed`): variant 1 takes it (ADR-148).
     let seed = 1;
     while (live.orderItems(items, settingsOf(evaluation), seed, evaluation.id).every((o, i) => o.item.id === base[i])) {
       seed += 1;
     }
-    await db.update(evaluations).set({ paperSeed: seed }).where(eq(evaluations.id, evaluation.id));
+    await olderSeed(evaluation.id, seed);
 
     const first = HandoutRecord.parse((await get(url(evaluation.id, "handout.json"), teacher.headers)).json());
     const second = HandoutRecord.parse((await get(url(evaluation.id, "handout.json"), teacher.headers)).json());
@@ -285,7 +302,7 @@ describe("the hand-out (ADR-125)", () => {
     expect(second.items).toEqual(first.items);
     expect(await storedSeed(evaluation.id)).toBe(seed);
     // Exactly what a digital attempt of the same seed is served, choices included (ADR-097).
-    const attempt = await live.previewView(db, await reload(db, evaluation.id), server.clock.now(), seed);
+    const attempt = await live.previewView(db, await reload(db, evaluation.id), server.clock.now(), { seed, instances: {} });
     expect(first.items.map((i) => [i.id, i.statement])).toEqual(attempt.items.map((i) => [i.id, i.student]));
   });
 
@@ -301,7 +318,7 @@ describe("the hand-out (ADR-125)", () => {
     let seed = 1;
     const sectioned = await joinedItems(db, evaluation.id);
     while (live.orderItems(sectioned, settingsOf(evaluation), seed, evaluation.id)[1]!.item.id === head) seed += 1;
-    await db.update(evaluations).set({ paperSeed: seed }).where(eq(evaluations.id, evaluation.id));
+    await olderSeed(evaluation.id, seed);
 
     const record = HandoutRecord.parse((await get(url(evaluation.id, "handout.json"), teacher.headers)).json());
     expect(record.items[0]!.id).toBe(items[0]!.item.id);
@@ -324,25 +341,193 @@ describe("the hand-out (ADR-125)", () => {
   });
 });
 
-describe("an evaluation that does not print (ADR-125 §5)", () => {
-  it("refuses both documents with a parameterized item, and says so in the detail", async () => {
-    const evaluation = await exam((poolId) =>
-      publishParameterized(server.app.db, { poolId, teacherId: teacher.id, type: "mcq" }).then((id) => [id]),
-    );
-    for (const file of ["document.md", "document.json", "document.pdf", "handout.md", "handout.json", "handout.pdf"]) {
-      const res = await get(url(evaluation.id, file), teacher.headers);
-      expect(res.statusCode).toBe(409);
-      expect(res.json()).toMatchObject({ error: "not_printable", reason: "parameterized", types: [] });
-    }
-    const detail = EvaluationDetail.parse((await get(`/app/api/evaluations/${evaluation.id}`, teacher.headers)).json());
-    expect(detail.exports).toEqual({
-      document: { reason: "parameterized", types: [] },
-      handout: { reason: "parameterized", types: [] },
-      paper: "paper_not_started",
+/*
+ * A parameterized evaluation on paper (ADR-148): one variant's values,
+ * drawn from its seed, stored, shared by the hand-out and the key, kept or
+ * drawn again by the keep rule of each side of the opening; and no
+ * template in any form of the hand-out (ADR-056 §4; 05 §5.7; ADR-125 §19),
+ * no drawn key, nor the variant's seed, version ids or values map.
+ */
+describe("a parameterized evaluation on paper (ADR-148)", () => {
+  /** An exam of the printable static types and one parameterized question of each v1 type. */
+  const parameterizedExam = () =>
+    exam(async (poolId) => {
+      const ids = [];
+      for (const type of ["mcq", "short", "cloze"] as const) {
+        ids.push(await publishParameterized(server.app.db, { poolId, teacherId: teacher.id, type, name: `PARAM_${type}` }));
+      }
+      return ids;
     });
-    expect(await storedSeed(evaluation.id)).toBeNull();
+  const parameterizedItems = async (id: string) =>
+    (await joinedItems(server.app.db, id)).filter((j) => j.version.variables !== null);
+
+  it("prints a hand-out and a key whose values agree, stored once and stable across prints", async () => {
+    const db = server.app.db;
+    const evaluation = await parameterizedExam();
+    const detail = EvaluationDetail.parse((await get(`/app/api/evaluations/${evaluation.id}`, teacher.headers)).json());
+    expect(detail.exports).toEqual({ document: null, handout: null, paper: "paper_not_started" });
+
+    const first = HandoutRecord.parse((await get(url(evaluation.id, "handout.json"), teacher.headers)).json());
+    const stored = (await storedVariant(evaluation.id))!;
+    // Written back for a rolled-back image, which prints from `paper_seed` (ADR-148 §2).
+    expect((await reload(db, evaluation.id)).paperSeed).toBe(stored.seed);
+    const ids = (await parameterizedItems(evaluation.id)).map((j) => j.item.id);
+    expect(Object.keys(stored.instances).sort()).toEqual([...ids].sort());
+    server.clock.advance(60_000);
+    const key = EvaluationDocumentRecord.parse((await get(url(evaluation.id, "document.json"), teacher.headers)).json());
+    const second = HandoutRecord.parse((await get(url(evaluation.id, "handout.json"), teacher.headers)).json());
+    expect(second.items).toEqual(first.items);
+    // Nothing to draw: nothing written.
+    expect(await storedVariant(evaluation.id)).toEqual(stored);
+    // The key is the paper's: the same statements, in the same order, with the same values.
+    expect(key.items.map((i) => [i.id, i.statement])).toEqual(first.items.map((i) => [i.id, i.statement]));
+    for (const id of ids) {
+      const values = stored.instances[id]!.values;
+      const keyItem = key.items.find((i) => i.id === id)!;
+      // The key: the number itself, or for an mcq the choice its position names.
+      const choices = (keyItem.statement as { choices?: { text: string }[] }).choices;
+      const keyText = choices
+        ? JSON.stringify((keyItem.solution as { correct: number[] }).correct.map((at) => choices[at]!.text))
+        : JSON.stringify(keyItem.solution);
+      expect(showsKey(keyText, values)).toBe(true);
+      expect(keyItem.explanation).toBe(`The fall lasts ${fallOf(values)} s.`);
+    }
   });
 
+  it("holds no template, no drawn key, no seed, no version id and no values map in any form of the hand-out", async () => {
+    const evaluation = await parameterizedExam();
+    const keys = await legibleSeed(server.app.db, evaluation.id, server.clock.now());
+    const res = await get(url(evaluation.id, "handout.json"), teacher.headers);
+    const record = HandoutRecord.parse(res.json());
+    const items = await joinedItems(server.app.db, evaluation.id);
+    const { seed, instances } = (await storedVariant(evaluation.id))!;
+    expect(Object.keys(instances)).toHaveLength(3);
+    // The keys searched are the variant's own.
+    const stored = (await parameterizedItems(evaluation.id)).filter((j) => j.question.type !== "mcq").map((j) => instances[j.item.id]!.values);
+    expect(stored).toEqual(keys);
+    const forbidden = [...live.FORBIDDEN_STUDENT_KEYS, "versionId", "instances", "variables", "fallback", "condition"];
+    expect(findStudentLeaks(record, { forbiddenKeys: forbidden, secrets: SECRETS })).toEqual([]);
+    const markdownExport = (await get(url(evaluation.id, "handout.md"), teacher.headers)).body;
+    const found = await handout(server.app.db, evaluation, { now: server.clock.now() });
+    const forms = [res.body, withoutRandomHex(markdownExport)];
+    for (const lang of LOCALES) {
+      const tree = handoutTree(found, lang);
+      expect(findStudentLeaks(tree, { forbiddenKeys: forbidden, secrets: SECRETS })).toEqual([]);
+      forms.push(JSON.stringify(tree), markdownBody(tree), renderTypst(tree).source);
+    }
+    for (const text of forms) {
+      expect(markersIn(text)).toEqual([]);
+      expect(text).not.toContain("The fall lasts");
+      for (const values of keys) expect(showsKey(text, values)).toBe(false);
+      expect(showsSeed(text, seed)).toBe(false);
+      for (const entry of items) expect(text).not.toContain(entry.version.id);
+      // The values map: no variable name as a key of its own.
+      for (const row of VARIABLES.rows) expect(text).not.toContain(`"${row.name}":`);
+    }
+  });
+
+  it.skipIf(!pdfTools)("prints the hand-out as a PDF whose text holds no template and no drawn key", async () => {
+    const evaluation = await parameterizedExam();
+    const keys = await legibleSeed(server.app.db, evaluation.id, server.clock.now());
+    const res = await get(url(evaluation.id, "handout.pdf"), teacher.headers);
+    expect(res.statusCode).toBe(200);
+    const text = await pdfText(res.rawPayload);
+    expect(text).toContain("A ball is dropped from");
+    expect(markersIn(text)).toEqual([]);
+    for (const values of keys) expect(showsKey(text, values)).toBe(false);
+    for (const secret of SECRETS) expect(text).not.toContain(secret);
+    expect(showsSeed(text, (await storedSeed(evaluation.id))!)).toBe(false);
+  });
+
+  /** The short's question published again: other names (`height`), or the same names on a corrected range. */
+  async function republishShort(evaluationId: string, rename: boolean) {
+    const db = server.app.db;
+    const short = (await joinedItems(db, evaluationId)).find((j) => j.question.internalName === "PARAM_short")!;
+    const h = rename ? "height" : "h";
+    const [question] = await db.select().from(questions).where(eq(questions.id, short.question.id));
+    const saved = await poolService.putDraft(db, question!, {
+      config: {
+        configVersion: 3,
+        prompt: `A ball is dropped from [[${h}]] m where g = [[g]] m/s². How many seconds does it fall?`,
+        kind: "number",
+        matchers: [{ kind: "number", value: "[[t]]", tolerance: "[[t/100]]" }],
+      },
+      explanation: "The fall lasts [[t]] s.",
+      variables: {
+        rows: [
+          { name: h, expr: "randint(200, 300)", format: "int" },
+          { name: "g", expr: "choice([3.71, 9.81, 24.79])", format: ".2" },
+          { name: "t", expr: `sqrt(2*${h}/g)`, format: ".2" },
+        ],
+        condition: "t > 1.5",
+      },
+    });
+    expect(saved.valid).toBe(true);
+    await poolService.publishQuestion(db, question!, { userId: teacher.id });
+    const latest = (await latestPublished(db, [short.question.id])).get(short.question.id)!;
+    return { short, latest };
+  }
+
+  it("before the opening, draws again an item edited or added, keeping every other item's values", async () => {
+    const db = server.app.db;
+    const evaluation = await parameterizedExam();
+    expect((await get(url(evaluation.id, "handout.json"), teacher.headers)).statusCode).toBe(200);
+    const before = (await storedVariant(evaluation.id))!.instances;
+
+    // The short corrected, same names, and the item moved onto it: drawn again, never replayed.
+    const { short, latest } = await republishShort(evaluation.id, false);
+    await updateVersions(db, await reload(db, evaluation.id), [short.item.id], { attemptCount: 0 });
+    // One more parameterized question added.
+    const added = await publishParameterized(db, { poolId: short.question.poolId!, teacherId: teacher.id, type: "mcq", name: "PARAM_added" });
+    await addItems(db, await reload(db, evaluation.id), [added], (type, version) =>
+      typeOf(type).defaultPoints(poolService.exampleConfig(type, version)), { attemptCount: 0 });
+
+    const res = await get(url(evaluation.id, "handout.json"), teacher.headers);
+    expect(res.statusCode, res.body).toBe(200);
+    const after = (await storedVariant(evaluation.id))!.instances;
+    const addedItem = (await joinedItems(db, evaluation.id)).find((j) => j.question.internalName === "PARAM_added")!;
+    expect(Object.keys(after).sort()).toEqual([...Object.keys(before), addedItem.item.id].sort());
+    for (const [id, kept] of Object.entries(before)) if (id !== short.item.id) expect(after[id]).toEqual(kept);
+    // Drawn for the corrected version, in its corrected range.
+    expect(after[short.item.id]).toMatchObject({ versionId: latest.id });
+    expect(after[short.item.id]!.values["h"]).toBeGreaterThanOrEqual(200);
+
+    // Renamed variables, before the opening: drawn again too, no error.
+    const renamed = await republishShort(evaluation.id, true);
+    await updateVersions(db, await reload(db, evaluation.id), [short.item.id], { attemptCount: 0 });
+    expect((await get(url(evaluation.id, "handout.json"), teacher.headers)).statusCode).toBe(200);
+    const third = (await storedVariant(evaluation.id))!.instances[short.item.id]!;
+    expect(third.versionId).toBe(renamed.latest.id);
+    expect(Object.keys(third.values).sort()).toEqual(["g", "height", "t"]);
+  });
+
+  it("after the opening, keeps an entry that replays, and draws again only one that cannot (a lost update)", async () => {
+    const db = server.app.db;
+    const evaluation = await parameterizedExam();
+    expect((await get(url(evaluation.id, "handout.json"), teacher.headers)).statusCode).toBe(200);
+    const before = (await storedVariant(evaluation.id))!;
+    const { short, latest } = await republishShort(evaluation.id, false);
+    // Opened, and the item retargeted onto the corrected version behind the guards (a regrade's retarget keeps the names).
+    await db.update(evaluations).set({ state: "running", startedAt: server.clock.now() }).where(eq(evaluations.id, evaluation.id));
+    await db.update(evaluationItems).set({ questionVersionId: latest.id }).where(eq(evaluationItems.id, short.item.id));
+    server.clock.advance(60_000);
+    expect((await get(url(evaluation.id, "handout.json"), teacher.headers)).statusCode).toBe(200);
+    // Replayed, never redrawn: the row is untouched.
+    expect(await storedVariant(evaluation.id)).toEqual(before);
+
+    // The lost update: values of the old names stored while the item sits on renamed variables.
+    const renamed = await republishShort(evaluation.id, true);
+    await db.update(evaluationItems).set({ questionVersionId: renamed.latest.id }).where(eq(evaluationItems.id, short.item.id));
+    const res = await get(url(evaluation.id, "handout.json"), teacher.headers);
+    expect(res.statusCode, res.body).toBe(200);
+    const after = (await storedVariant(evaluation.id))!.instances;
+    expect(after[short.item.id]).toMatchObject({ versionId: renamed.latest.id });
+    expect(Object.keys(after[short.item.id]!.values).sort()).toEqual(["g", "height", "t"]);
+    for (const [id, kept] of Object.entries(before.instances)) if (id !== short.item.id) expect(after[id]).toEqual(kept);
+  });
+});
+
+describe("an evaluation that does not print (ADR-125 §5)", () => {
   it("prints a code question: a ruled frame to write the program by hand (ADR-126 §8, amended 2026-11-04)", async () => {
     const code = {
       configVersion: 1,

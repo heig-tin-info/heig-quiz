@@ -13,13 +13,13 @@ import { EVALUATION_MODES, ITEM_COUNTINGS } from "@quiz/domain";
 import { StaffItemRef } from "./common.js";
 
 /**
- * Why an evaluation does not print (ADR-125 §5): a poll (never printed), a
- * parameterized item (a copy has no draw, ADR-056), or items whose type
- * declares no paper form (`types`, the registered type ids, each once;
- * empty for the other reasons).
+ * Why an evaluation does not print (ADR-125 §5): a poll (never printed), or
+ * items whose type declares no paper form (`types`, the registered type
+ * ids, each once; empty for a poll). A parameterized item prints: a paper
+ * is a variant, which has its draw (ADR-148).
  */
 export const PrintRefusal = z.object({
-  reason: z.enum(["poll", "parameterized", "type"]),
+  reason: z.enum(["poll", "type"]),
   types: z.array(z.string()),
 });
 export type PrintRefusal = z.infer<typeof PrintRefusal>;
@@ -47,14 +47,17 @@ export const EvaluationExports = z.object({
 export type EvaluationExports = z.infer<typeof EvaluationExports>;
 
 /**
- * `GET /evaluations/:id/document.json` (staff, F-EXP-04): every item in the
- * base order, its statement as a student is served it (seed 0, no shuffle),
- * the type's `toSolution` and the explanation. `statement` and `solution`
- * are each type's own shapes, typed per type later (ADR-121 §1).
+ * `GET /evaluations/:id/document.json` (staff, F-EXP-04): the key of the
+ * evaluation's paper variant (ADR-148) — the items in the paper's order,
+ * each statement as the hand-out prints it, the type's `toSolution` in that
+ * view and the explanation, with the variant's values; `position` stays the
+ * item's canonical place. Version 2: version 1 listed the items in the base
+ * order. `statement` and `solution` are each type's own shapes, typed per
+ * type later (ADR-121 §1).
  */
 export const EvaluationDocumentRecord = z.object({
   kind: z.literal("evaluation-document"),
-  version: z.literal(1),
+  version: z.literal(2),
   /** The server's clock. */
   generatedAt: z.iso.datetime(),
   evaluation: z.object({
@@ -80,10 +83,11 @@ export type EvaluationDocumentRecord = z.infer<typeof EvaluationDocumentRecord>;
 
 /**
  * `GET /evaluations/:id/handout.json` (ADR-125): the paper as every student
- * holds it — student shapes only. The items follow the paper's order (the
- * evaluation's secret paper seed, ADR-125 §8), choices shuffled as a digital
- * attempt of that seed would show them; `position` is the item's canonical
- * place. No internal name, no key, no explanation, no seed.
+ * holds it — student shapes only. The items follow the paper's order (its
+ * variant's secret seed, ADR-148), choices shuffled and values drawn as a
+ * digital attempt of that seed and those values would show them; `position`
+ * is the item's canonical place. No internal name, no key, no explanation,
+ * no seed, no version id, no variables nor values map.
  */
 export const HandoutRecord = z.object({
   kind: z.literal("handout"),
