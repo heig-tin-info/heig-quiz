@@ -5,7 +5,7 @@
  * are checked by its contract (`@quiz/contracts`), not here.
  */
 import { WORKFLOWS_DIR } from "./protectedFiles.js";
-import type { OnlineModeName } from "./workMode.js";
+import { weighsLastWriter, type WorkModeName } from "./workMode.js";
 
 /**
  * The paths a collection takes from the branch's head instead of the
@@ -168,26 +168,29 @@ export const collectionTooLate = (deadline: Date, now: Date): boolean =>
   now.getTime() - deadline.getTime() > COLLECTION_ORDER_WINDOW_MS;
 
 /**
- * The student's last push by the deadline, as the collection weighs it
- * (ADR-149 §2): `relayed` when it came from the online workspace — its head
- * one the portal declared before relaying it (`codespace_relays`), or the
- * commit an earlier collection signed.
+ * A head that stands between the workspace and the branch, as the
+ * collection weighs it (ADR-149 §2): `outside` when it was written outside
+ * the workspace and the platform — by a person, from a machine: neither
+ * relayed by the workspace, nor an earlier collection's commit, nor the
+ * App's or a workflow's, nor made on GitHub's web interface (an edit, a pull
+ * request merged there, the teacher's sync among them).
  */
-export interface CollectionLastPush {
-  relayed: boolean;
+export interface CollectionWrite {
+  outside: boolean;
 }
 
 /**
- * Whether the deadline collects a repository's workspace (ADR-130 §2 as
- * amended by ADR-149 §2), once the repository is otherwise due (a workspace
- * launched, the deadline applied, no lock): always in `online` and
- * `online_seb`, where only the workspace writes; in `hybrid`, the last
- * writer wins — collected when the student's last push came from the
- * workspace or there was none, never over a push from their own machine
- * (`last_push_local`).
+ * Whether the deadline collects a repository's workspace over `writes`
+ * (ADR-130 §2 as amended by ADR-149 §2), once the repository is otherwise
+ * due (a workspace launched, the deadline applied, no lock): always where
+ * only the workspace writes (`online`, `online_seb`); in `hybrid` the last
+ * writer wins — never over a head written outside: the student's last push
+ * by the deadline, the branch's head when the order leaves, or any head the
+ * commit then meets (`last_push_local`). No write weighed (no push at all)
+ * collects.
  */
-export function collectsWorkspace(mode: OnlineModeName, last: CollectionLastPush | null): boolean {
-  return mode !== "hybrid" || last === null || last.relayed;
+export function collectsWorkspace(mode: WorkModeName, writes: readonly CollectionWrite[]): boolean {
+  return !weighsLastWriter(mode) || writes.every((w) => !w.outside);
 }
 
 /** What Quiz records of a collection (ADR-130 §7): the portal's answers, and Quiz's own. */

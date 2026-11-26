@@ -64,13 +64,22 @@ export function portalMode(mode: OnlineModeName): "online" | "online_seb" {
 }
 
 /**
- * Whether a project's workspaces offer the teacher's update to merge
- * (ADR-132 §11): `online`, and `hybrid` beside the GitHub pull request its
- * students also get (ADR-149 §4). `online_seb` waits for its own delivery,
- * `free` has no workspace.
+ * THE portal's lab mode: a workspace without supervision, `online` and
+ * `hybrid` (ADR-149 §3). Its workspaces follow the repository's writability
+ * under `commit` (ADR-078 §11) and offer the teacher's update to merge
+ * (ADR-132 §11; `hybrid` beside the pull request its students also get,
+ * ADR-149 §4). `online_seb` is the exam mode, `free` has no workspace.
  */
-export function takesWorkspaceUpdate(mode: WorkModeName): boolean {
-  return mode === "online" || mode === "hybrid";
+export function isLabMode(mode: WorkModeName): boolean {
+  return isOnlineMode(mode) && portalMode(mode) === "online";
+}
+
+/**
+ * Whether the deadline weighs who wrote last before it collects a
+ * workspace (ADR-149 §2): `hybrid`, the one mode with two write paths.
+ */
+export function weighsLastWriter(mode: WorkModeName): boolean {
+  return mode === "hybrid";
 }
 
 /**
@@ -109,16 +118,19 @@ export type WorkSettingBody =
   | { mode: "online_seb"; devices: SupervisedDeviceLevel };
 
 /**
- * The three places a project's screen offers (ADR-149 §1): the students'
- * own tools, their choice between them and the workspace, the workspace.
+ * The three places a project's screen offers for the four modes (ADR-149
+ * §1): the students' own tools, their choice between them and the
+ * workspace, the workspace at a device level.
  */
-export const WORK_PLACES = ["own", "hybrid", "online"] as const;
-export type WorkPlace = (typeof WORK_PLACES)[number];
+export type WorkPlace = "own" | "hybrid" | "online";
 
 /** The place a mode is shown as: the workspace at any device level is `online`. */
 export function workPlaceOf(mode: WorkModeName): WorkPlace {
   return mode === "free" ? "own" : mode === "hybrid" ? "hybrid" : "online";
 }
+
+/** The places, in {@link WORK_MODES}' order. */
+export const WORK_PLACES: readonly WorkPlace[] = [...new Set(WORK_MODES.map(workPlaceOf))];
 
 /**
  * THE mapping between what a project's screen shows and the mode's write
@@ -249,7 +261,7 @@ export interface WorkspaceRepo {
  * Browser keeps its deadline.
  */
 function followsWritability(project: Pick<WorkspaceProject, "workMode" | "deadlineStrategy">): boolean {
-  return (project.workMode === "online" || project.workMode === "hybrid") && project.deadlineStrategy === "commit";
+  return isLabMode(project.workMode) && project.deadlineStrategy === "commit";
 }
 
 /**

@@ -1,10 +1,11 @@
-# ADR-149 — A third work mode: the students' own tools or the online workspace, at their choice
+# ADR-149 — A fourth work mode: the students' own tools or the online workspace, at their choice
 
 ## Status
 
-Accepted (2026-11-26, the product owner's decisions 1 to 4 below; the
-reading of a relayed push, the outcome `last_push_local` and the portal's
-mapping are the orchestrator's, within them). Delivered in two parts: this
+Accepted (2026-11-26, the product owner's decisions below; what counts as
+written outside — a GitHub web commit included — is the orchestrator's
+reading of them, after review; the outcome `last_push_local` and the
+portal's mapping are the orchestrator's, within them). Delivered in two parts: this
 record's §1–§6 first, §7 afterwards; progress lives in `changes/`.
 
 Scope: the work mode `hybrid` of a project (F-PROJ-19) — who may write to
@@ -49,7 +50,7 @@ state may be older than a push the student made from their own machine.
 
 ### 1. The mode
 
-`hybrid` joins `free`, `online` and `online_seb`
+`hybrid` joins `free`, `online` and `online_seb`, a fourth mode
 (`WORK_MODES`, `@quiz/domain`). The staff's setting shows three places,
 in this order: **Own tools | Either | Online workspace** (fr *Leurs outils |
 Au choix | Espace en ligne*); Either is `hybrid` (`workSettingFor`,
@@ -71,16 +72,32 @@ writability, as `online` does (ADR-078 §11).
 
 At the effective deadline, a repository otherwise due for collection
 (ADR-130 §2: a workspace launched, the deadline applied, no lock) is
-collected **when the student's last push by the deadline came from the
-workspace, or when there was none**; it is **not** collected when that push
-came from the student's own machine — the push is the work handed in, and a
-workspace left behind never overwrites it. The rule is `collectsWorkspace`
-(`@quiz/domain`). A push came from the workspace when its head is one the
-portal declared before relaying it (`codespace_relays`, ADR-078 §6), or when
-it is an earlier collection's commit (`push_receipts.collected`). A skipped
-repository is recorded and audited like any outcome, as `last_push_local`,
-with the push it stood on; nothing is ordered from the portal. `online` and
-`online_seb` are unchanged: always collected.
+collected **unless a head written outside stands between the workspace and
+the branch**: the student's last push by the deadline, the branch's head
+when the order leaves — a push received after the deadline, its receipt in
+or not — or a head the signed commit meets after a 422. The push is the
+work handed in, and a workspace left behind never overwrites it, whether
+the push came before or after the deadline. Without any push, the head is
+the handout and the workspace is collected. The rule is
+`collectsWorkspace` (`@quiz/domain`), the weighing `weighsLastWriter`
+(`hybrid` only).
+
+A head is **written outside** when a person pushed it from a machine. It
+is not when it came from the workspace (`workspaceHead` of the `codespace`
+module: a head the portal declared before relaying it, ADR-078 §6, or an
+earlier collection's commit), when it is one of the App's own commits
+(`bot_commits`), when it was received as a bot's push (the App's, a
+workflow's), or when it was made on **GitHub's web interface** — its
+committer `web-flow`: an edit there, or a pull request merged there, the
+teacher's sync (§4) among them. A student who only works in the workspace
+and merges the sync on GitHub is therefore still collected.
+
+A skipped repository is recorded and audited like any outcome, as
+`last_push_local`, with the head it stood on: before the order nothing is
+ordered from the portal; after a 422 nothing is signed (never a
+`check_refused`, which flags a failure). A GitHub read that fails is
+`failed` (`github_failed`), as anywhere in the collection. `online` and
+`online_seb` are unchanged: always collected, nothing weighed.
 
 ### 3. The portal is told `online`
 
@@ -111,10 +128,9 @@ with `pull` under `online` keep `pull` until §7.
   under "No tools installed? Work in your browser." and a sentence on what
   the deadline hands in. The project's card keeps GitHub's action.
 - **The staff**: the setting's sentence says the collection rule; a skipped
-  repository's row says "Not collected: the last push came from the
-  student's own machine", without the `not collected` flag (nothing is
-  missing); the workspace section (Resync, open workspaces) is shown as for
-  `online`.
+  repository's row says "Not collected: the last push came from a personal
+  machine", without the `not collected` flag (nothing is missing); the
+  workspace section (Resync, open workspaces) is shown as for `online`.
 
 ### 7. Later, in a second delivery
 
@@ -133,6 +149,18 @@ with `pull` under `online` keep `pull` until §7.
 - A student who pushes from their machine and then edits in the workspace
   without pushing from it hands in the push, not the edits. The page says
   so; the rule keeps a deliberate push from being overwritten.
+- A commit made on GitHub's web interface does not stop the collection: a
+  student who edits a file there and then leaves a stale workspace has the
+  workspace collected over the edit (ADR-130 §1 decision 3, "the latest
+  state wins"). The sync's pull request merged there is the case this
+  serves.
+- One residual window: a student's first push ever, made after the
+  deadline and whose receipt is not in when the order leaves, reads as the
+  handout, and the workspace is collected over it. Webhooks arrive within
+  seconds, and the order leaves some twenty seconds after the deadline.
+- The weighing reads GitHub once per weighed head that is not the
+  workspace's nor the App's (its committer), for `hybrid` repositories
+  only.
 - The content of a `hybrid` repository is no more defensible than a `free`
   one's: `hybrid` is never offered under supervision.
 - The staff's review session (ADR-129) and the distribution's (ADR-147) are

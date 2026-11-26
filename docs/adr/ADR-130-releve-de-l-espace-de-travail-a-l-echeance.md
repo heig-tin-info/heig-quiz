@@ -14,8 +14,8 @@ student's surface — the workspace's status bar is not built.
 
 Amended 2026-11-26 by [ADR-149](ADR-149-mode-de-travail-au-choix.md) §2,
 scope: §1 decisions 3 and 4, §2 and §7 — a `hybrid` project is collected
-too, only when the student's last push by the deadline came from the
-workspace or there was none (`last_push_local` otherwise).
+too, never over a head a person pushed from a machine, before the deadline
+or after it (`last_push_local`).
 
 Scope: what happens, at a repository's effective deadline (F-PROJ-09), to
 the work of an `online` or `online_seb` project (F-PROJ-19) that sits in the

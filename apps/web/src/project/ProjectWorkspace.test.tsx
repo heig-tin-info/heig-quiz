@@ -99,7 +99,7 @@ describe("the project's workspace section", () => {
     expect(within(group).getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual(["Own tools", "Either", "Online workspace"]);
     await userEvent.click(within(group).getByText("Either"));
     await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ mode: "hybrid" }));
-    expect(await screen.findByText(/unless the last push came from their machine/)).toBeInTheDocument();
+    expect(await screen.findByText(/unless the last push came from a personal machine/)).toBeInTheDocument();
     expect(screen.queryByRole("group", { name: "Allowed devices" })).toBeNull();
     expect(await screen.findByText("No student has opened a workspace yet.")).toBeInTheDocument();
   });

@@ -4,12 +4,13 @@ import {
   collaboratorPermission,
   gitTokenRefusal,
   isOnlineMode,
+  isLabMode,
   kioskProjectPairable,
-  ONLINE_MODES,
   portalMode,
   quotaHolder,
   portalDeadline,
-  takesWorkspaceUpdate,
+  weighsLastWriter,
+  WORK_PLACES,
   distributionReviewRefusal,
   staffReviewRefusal,
   workModeChoices,
@@ -37,7 +38,6 @@ describe("collaboratorPermission (ADR-047 §2)", () => {
     expect(collaboratorPermission("online")).toBe("pull");
     expect(collaboratorPermission("online_seb")).toBeNull();
     expect([isOnlineMode("free"), isOnlineMode("hybrid"), isOnlineMode("online"), isOnlineMode("online_seb")]).toEqual([false, true, true, true]);
-    expect(ONLINE_MODES).toEqual(["hybrid", "online", "online_seb"]);
   });
 });
 
@@ -48,8 +48,10 @@ describe("what the portal is told and offers (ADR-149 §3, §4)", () => {
     expect(portalMode("online_seb")).toBe("online_seb");
   });
 
-  it("offers the teacher's update in the workspaces of online and hybrid projects only", () => {
-    expect(["free", "hybrid", "online", "online_seb"].map((m) => takesWorkspaceUpdate(m as WorkSetting["mode"]))).toEqual([false, true, true, false]);
+  it("has one lab mode predicate, online and hybrid, and weighs the last writer in hybrid only", () => {
+    const modes = ["free", "hybrid", "online", "online_seb"] as const;
+    expect(modes.map(isLabMode)).toEqual([false, true, true, false]);
+    expect(modes.map(weighsLastWriter)).toEqual([false, true, false, false]);
   });
 });
 
@@ -148,7 +150,8 @@ describe("the mapping between the setting and the screen (ADR-089 point 2)", () 
     for (const level of DEVICE_LEVEL_IDS) expect(workSettingOf(workSettingFor("hybrid", level))).toEqual(HYBRID);
   });
 
-  it("shows each mode at its place", () => {
+  it("shows each mode at its place, three places for four modes", () => {
+    expect(WORK_PLACES).toEqual(["own", "hybrid", "online"]);
     expect(["free", "hybrid", "online", "online_seb"].map((m) => workPlaceOf(m as WorkSetting["mode"]))).toEqual(["own", "hybrid", "online", "online"]);
   });
 });

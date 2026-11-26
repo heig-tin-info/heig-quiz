@@ -54,8 +54,8 @@ const AUTHOR = {
 
 /** The App's id in the private address GitHub gives the commits it signs for it. */
 const APP_ID = 4242;
-/** The committer GitHub sets on a commit it creates and signs (web-flow). */
-const GITHUB_COMMITTER = { name: "GitHub", email: "noreply@github.com" };
+/** The committer GitHub sets on a commit it creates and signs, and on one made on its web interface: the account `web-flow`. */
+export const GITHUB_COMMITTER = { name: "GitHub", email: "noreply@github.com" };
 
 /** A commit's git author. */
 export interface CommitAuthor {
@@ -139,7 +139,12 @@ export interface RepoWorld {
    * to delete), as a student or a workflow pushes it; its sha. By `t <t@x>`,
    * message `work`, unless `as` says otherwise.
    */
-  commit: (fullName: string, branch: string, files: Record<string, string | null>, as?: { author?: CommitAuthor; message?: string }) => string;
+  commit: (
+    fullName: string,
+    branch: string,
+    files: Record<string, string | null>,
+    as?: { author?: CommitAuthor; committer?: CommitAuthor; message?: string },
+  ) => string;
   /** The content of `path` at `ref`, or null when there is none. */
   read: (fullName: string, ref: string, path: string) => string | null;
   remove: () => void;
@@ -443,7 +448,7 @@ export function repoWorld(): RepoWorld {
         path,
         sha: content === null ? null : writeBlob(fullName, Buffer.from(content)),
       }));
-      const sha = commitTree(fullName, buildTree(fullName, head, entries), [head], as.message ?? "work", as.author);
+      const sha = commitTree(fullName, buildTree(fullName, head, entries), [head], as.message ?? "work", as.author, as.committer);
       world.git(fullName, "update-ref", `refs/heads/${branch}`, sha);
       return sha;
     },
@@ -516,6 +521,18 @@ export function repoWorld(): RepoWorld {
         const from = url.searchParams.get("sha");
         if (from === null) return json([{ sha: world.git(fullName, "rev-parse", branches[0]!).trim() }]);
         return json(commitsOf(fullName, from, Number(url.searchParams.get("per_page") ?? 30), url.searchParams.get("path")));
+      }
+      // One commit, with the account GitHub names its committer: `web-flow` for its web interface's
+      // address (`noreply@github.com`, an edit or a merge made there), else by the private address.
+      if ((m = /^\/commits\/([0-9a-f]{40})$/.exec(rest))) {
+        let email: string;
+        try {
+          email = world.git(fullName, "log", "-1", "--format=%ce", m[1]!).trim();
+        } catch {
+          return json({ message: "Not Found" }, 404);
+        }
+        const login = email === GITHUB_COMMITTER.email ? "web-flow" : /^(?:\d+\+)?([^@]+)@users\.noreply\.github\.com$/.exec(email)?.[1];
+        return json({ sha: m[1], committer: login ? { login } : null });
       }
       if (rest === "/branches") return json(pageOf(url, branches).map((b) => ({ name: b, protected: false })));
       if ((m = /^\/git\/matching-refs\/heads\/(.+)$/.exec(rest))) {

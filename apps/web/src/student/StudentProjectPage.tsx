@@ -155,7 +155,8 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
   const kind = projectActionKind(facts, now);
   const accepted = kind === "open";
   const projectAction = useProjectAction(facts, { now, primary: true, readOnly });
-  const action = noGithub && accepted ? null : hybrid && accepted && projectAction ? { ...projectAction, primary: true } : projectAction;
+  let action = noGithub && accepted ? null : projectAction;
+  if (action && hybrid && accepted) action = { ...action, primary: true };
   const live = project.repo && !project.repo.deleted ? project.repo : null;
   const coursesRoot = useRootCrumb("studentCourses");
 
@@ -365,11 +366,11 @@ function WorkspaceSection({
 }) {
   const t = useT();
   const [launching, setLaunching] = useState(false);
-  const mode = project.workspace?.mode;
-  const hybrid = mode === "hybrid";
-  const online = mode === "online" || hybrid;
-  // ADR-089: at Kiosk only there is no `.seb` to offer; the student is sent to a station.
+  const hybrid = project.workspace?.mode === "hybrid";
+  // ADR-089: at Kiosk only there is no `.seb` to offer; the student is sent to a station. Any device is the
+  // portal's lab mode (`online`, `hybrid`): the workspace opens from here.
   const devices = project.workspace?.devices ?? "any";
+  const online = devices === "any";
   const variant = primary ? "primary" : "secondary";
   const action = !live ? null : online || inSeb ? (
     <OpenWorkspaceButton projectId={project.id} variant={variant} />

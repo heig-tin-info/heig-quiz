@@ -30,7 +30,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, notExists, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -63,6 +63,7 @@ import {
   type TeacherCodespaceGrant,
 } from "@quiz/contracts";
 import {
+  isLabMode,
   isOnlineMode,
   portalDeadline,
   portalMode,
@@ -74,7 +75,6 @@ import {
   signHs256,
   distributionReviewRefusal,
   staffReviewRefusal,
-  takesWorkspaceUpdate,
   workModeChoices,
   workspaceStartRefusal,
 } from "@quiz/domain";
@@ -83,9 +83,11 @@ import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import { kioskProjectsOn, type AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import {
+  botCommits,
   classrooms,
   codespaceLaunches,
   codespaceProjects,
+  codespaceRelays,
   codespaceReviews,
   courseStaff,
   courseWorkspaceImages,
@@ -93,6 +95,7 @@ import {
   githubAccounts,
   projectRepos,
   projects,
+  pushReceipts,
   teacherGrants,
   users,
 } from "../../db/schema.js";
@@ -369,7 +372,7 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
 
 /**
  * The update an `online` or `hybrid` project's workspaces offer to merge
- * (ADR-132 §11, ADR-149 §4; `takesWorkspaceUpdate`): the heads its latest
+ * (ADR-132 §11, ADR-149 §4; `isLabMode`): the heads its latest
  * sync handed out, on the handed-out branches, with that sync's message —
  * on a project its students can read only, as the message itself
  * (`requestSync`). `online_seb` waits for its own delivery (§11), `free`
@@ -378,7 +381,7 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
 export function workspaceUpdateOf(
   project: Pick<typeof projects.$inferSelect, "workMode" | "state" | "branches" | "syncHeads" | "syncMessage" | "syncMessageAt">,
 ): CodespaceWorkspaceUpdate | null {
-  if (!takesWorkspaceUpdate(project.workMode) || !projectIsVisible(project.state) || project.syncHeads === null) return null;
+  if (!isLabMode(project.workMode) || !projectIsVisible(project.state) || project.syncHeads === null) return null;
   // A branch the contract refuses (GitHub's default taken as it is, `développement`)
   // carries no update, rather than failing every assignment sync of the project.
   const heads = project.branches.flatMap((branch) => {
@@ -391,6 +394,38 @@ export function workspaceUpdateOf(
       ? null
       : { text: project.syncMessage, at: project.syncMessageAt.toISOString() };
   return { heads, message };
+}
+
+/**
+ * Whether a repository's head `sha` came from the online workspace, THE one
+ * read of it (ADR-078 §6, ADR-130 §6): `collection` when the deadline job
+ * recorded it as a collection (its receipt, written before the ref moved),
+ * `relayed` when the portal declared it before relaying it (a row of
+ * `codespace_relays`) and it is none of the App's own commits
+ * (`bot_commits`: a restore, a sync or a deadline commit is never the
+ * student's, declared or not); null otherwise. Primary-key lookups
+ * (N-SEC-17), the `github` and `project` modules' tables read by join. The
+ * intake names a push's author by it (`pushAuthor`), the deadline's
+ * collection weighs the last writer by it (ADR-149 §2).
+ */
+export async function workspaceHead(db: Db | Tx, githubRepoId: number, sha: string): Promise<"collection" | "relayed" | null> {
+  const [collection] = await db
+    .select({ id: pushReceipts.id })
+    .from(pushReceipts)
+    .where(and(eq(pushReceipts.githubRepoId, githubRepoId), eq(pushReceipts.headSha, sha), eq(pushReceipts.collected, true)))
+    .limit(1);
+  if (collection) return "collection";
+  const ownCommit = db
+    .select({ sha: botCommits.sha })
+    .from(botCommits)
+    .innerJoin(projectRepos, eq(projectRepos.id, botCommits.repoId))
+    .where(and(eq(projectRepos.githubRepoId, githubRepoId), eq(botCommits.sha, sha)));
+  const [declared] = await db
+    .select({ sha: codespaceRelays.sha })
+    .from(codespaceRelays)
+    .where(and(eq(codespaceRelays.githubRepoId, githubRepoId), eq(codespaceRelays.sha, sha), notExists(ownCommit)))
+    .limit(1);
+  return declared ? "relayed" : null;
 }
 
 /** Writes the outcome of a sync attempt on the project's portal row. */

@@ -10,10 +10,12 @@
  * The rules it holds, in order:
  *
  *  - in a `hybrid` project the last writer wins (ADR-149 §2,
- *    `collectsWorkspace`): a student whose last push by the deadline came
- *    from their own machine is not collected (`last_push_local`, nothing
- *    ordered); one whose last push came through the relay, or who never
- *    pushed, is;
+ *    `collectsWorkspace`): nothing is collected over a head written outside
+ *    the workspace and the platform ({@link writtenOutside}) — the
+ *    student's last push by the deadline, the branch's head when the order
+ *    leaves (a push received after the deadline), or a head the commit
+ *    meets after a 422 — but `last_push_local`, nothing ordered or nothing
+ *    signed;
  *  - an order leaves only within `COLLECTION_ORDER_WINDOW_MS` of the
  *    effective deadline, judged on Quiz's clock right before it is sent,
  *    which also dates its token (§5): later, `too_late`;
@@ -44,8 +46,9 @@ import {
   collectionTooLate,
   collectsWorkspace,
   effectiveDeadline,
-  isOnlineMode,
   ONLINE_MODES,
+  weighsLastWriter,
+  type CollectionWrite,
   zonedIso,
   type CollectionFailureReason,
 } from "@quiz/domain";
@@ -53,9 +56,9 @@ import {
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { codespaceCollections, codespaceLaunches, codespaceRelays, projectRepos, projects } from "../../db/schema.js";
+import { botCommits, codespaceCollections, codespaceLaunches, projectRepos, projects, pushReceipts } from "../../db/schema.js";
 import { branchHead, githubStatus, ownerRepo } from "../../github/app.js";
-import { collectionLanded, deleteCollectionRef, keptEntriesHold, pushedCommitIs } from "../../github/collection.js";
+import { collectionLanded, deleteCollectionRef, keptEntriesHold, madeOnGitHub, pushedCommitIs } from "../../github/collection.js";
 import { commitOnBranch } from "../../github/commit.js";
 import {
   claimCollection,
@@ -63,6 +66,7 @@ import {
   recordCollectionCommit,
   settleCollection,
   unsettledCollections,
+  workspaceHead,
   type CollectionSettlement,
 } from "../codespace/service.js";
 import { dropCollectedReceipt, recordCollectedReceipt } from "../github/service.js";
@@ -95,17 +99,38 @@ export const COLLECTION_DUE = and(
 )!;
 
 /**
- * Whether a student push came from the online workspace (ADR-149 §2): its
- * head one the portal declared before relaying it (`codespace_relays`, one
- * primary-key lookup), or the commit an earlier collection signed.
+ * Whether the head `sha` of `repo` was written outside the workspace and
+ * the platform (ADR-149 §2, `CollectionWrite`): a person's push from a
+ * machine. Not when it came from the workspace (`workspaceHead`: relayed,
+ * or an earlier collection's commit), is one of the App's own commits
+ * (`bot_commits`), was received as a bot's push (the App's, a workflow's),
+ * or was made on GitHub's web interface (an edit, a pull request merged
+ * there — the teacher's sync among them, ADR-073). Cheapest first; the
+ * GitHub read last, which throws on an outage.
  */
-async function relayedPush(db: Db, githubRepoId: number, last: { sha: string; collected: boolean }): Promise<boolean> {
-  if (last.collected) return true;
-  const [row] = await db
-    .select({ sha: codespaceRelays.sha })
-    .from(codespaceRelays)
-    .where(and(eq(codespaceRelays.githubRepoId, githubRepoId), eq(codespaceRelays.sha, last.sha)));
-  return row !== undefined;
+async function writtenOutside(db: Db, octokit: Octokit, repo: RepoRow, sha: string): Promise<boolean> {
+  const githubRepoId = repo.githubRepoId!;
+  if ((await workspaceHead(db, githubRepoId, sha)) !== null) return false;
+  const [own] = await db.select({ sha: botCommits.sha }).from(botCommits).where(and(eq(botCommits.repoId, repo.id), eq(botCommits.sha, sha))).limit(1);
+  if (own) return false;
+  const [receipt] = await db
+    .select({ isBot: pushReceipts.isBot })
+    .from(pushReceipts)
+    .where(and(eq(pushReceipts.githubRepoId, githubRepoId), eq(pushReceipts.headSha, sha)))
+    .limit(1);
+  if (receipt?.isBot) return false;
+  const { owner, repo: name } = ownerRepo(repo.fullName!);
+  return !(await madeOnGitHub(octokit, owner, name, sha));
+}
+
+/** Whether any push of `sha` was received on the repository, a bot's included. */
+async function received(db: Db, githubRepoId: number, sha: string): Promise<boolean> {
+  const [receipt] = await db
+    .select({ id: pushReceipts.id })
+    .from(pushReceipts)
+    .where(and(eq(pushReceipts.githubRepoId, githubRepoId), eq(pushReceipts.headSha, sha)))
+    .limit(1);
+  return receipt !== undefined;
 }
 
 /** What the portal's answer records when it is not `pushed`: its outcome, a failure with its reason. Exhaustive by type. */
@@ -153,17 +178,25 @@ async function collectRepository(app: FastifyInstance, config: AppConfig, octoki
   const [row] = await repoWithProject(db).where(and(eq(projectRepos.id, repoId), LIVE, COLLECTION_DUE));
   if (!row) return null;
   const { repo, project } = row;
-  const mode = project.workMode;
-  // COLLECTION_DUE holds the portal's modes only: the guard narrows the type.
-  if (!isOnlineMode(mode)) return null;
   const deadline = effectiveDeadline(repo, project);
   const claim = await claimCollection(db, repo.id, deadline, app.clock.now());
   if (claim === null) return null;
   const settle = settler(app, repo, project, claim, deadline);
+  // ADR-149 §2: in `hybrid`, the heads between the workspace and the branch are weighed; elsewhere none is read.
+  const weigh = weighsLastWriter(project.workMode);
+  const write = async (sha: string): Promise<CollectionWrite> => ({ outside: await writtenOutside(db, octokit, repo, sha) });
+  const local = (branch: string, sha: string) => settle({ outcome: "last_push_local" }, branch, sha);
 
   const last = await lastStudentPush(db, repo.githubRepoId!, null, deadline);
-  if (!collectsWorkspace(mode, last && { relayed: await relayedPush(db, repo.githubRepoId!, last) })) {
-    return settle({ outcome: "last_push_local" }, last?.branch ?? null, last?.sha ?? null);
+  if (weigh && last) {
+    let writes: CollectionWrite[];
+    try {
+      writes = [await write(last.sha)];
+    } catch (err) {
+      app.log.warn({ repo: repo.id, status: githubStatus(err) }, "the last push could not be read on GitHub");
+      return settle({ outcome: "failed", reason: "github_failed" }, last.branch);
+    }
+    if (!collectsWorkspace(project.workMode, writes)) return local(last.branch, last.sha);
   }
   if (collectionTooLate(deadline, app.clock.now())) return settle({ outcome: "too_late" });
   const branch = collectionBranch(project.branches, last?.branch ?? null);
@@ -177,6 +210,10 @@ async function collectRepository(app: FastifyInstance, config: AppConfig, octoki
   try {
     const base = await branchHead(octokit, owner, name, branch);
     if (base === null) return failed("github_failed");
+    // A head that moved since the last push by the deadline (a push received after it, its receipt perhaps
+    // not in yet); without any push, a head nobody pushed is the handout itself.
+    const moved = base !== last?.sha && (last !== null || (await received(db, repo.githubRepoId!, base)));
+    if (weigh && moved && !collectsWorkspace(project.workMode, [await write(base)])) return local(branch, base);
     // The bound again, right before the order, on the clock that dates its token (§5).
     const now = app.clock.now();
     if (collectionTooLate(deadline, now)) return settle({ outcome: "too_late" }, branch);
@@ -193,6 +230,8 @@ async function collectRepository(app: FastifyInstance, config: AppConfig, octoki
     unreadable = answer.unreadable;
 
     const kept = collectionKeptPaths(project.protectedFiles);
+    // A head written outside the commit met after a 422 (an object: the callback writes it).
+    const refused = { outside: null as string | null };
     if (!(await pushedCommitIs(octokit, owner, name, ref, base, answer.tree))) return failed("check_refused");
     const outcome = await commitOnBranch({
       octokit,
@@ -200,8 +239,15 @@ async function collectRepository(app: FastifyInstance, config: AppConfig, octoki
       repo: name,
       branch,
       message: `Collected from the online workspace at the deadline — ${project.name} (${zonedIso(deadline)})`,
-      // Checked against the head it goes on, every try: the base first, a new head after a 422.
-      treeFor: async (head) => ((await keptEntriesHold(octokit, owner, name, answer.tree, head, kept)) ? answer.tree : null),
+      // Checked against the head it goes on, every try: the base first, a new head after a 422 — which,
+      // in `hybrid`, must not be a head written outside (ADR-149 §2): then nothing is signed, `last_push_local`.
+      treeFor: async (head) => {
+        if (weigh && head !== base && !collectsWorkspace(project.workMode, [await write(head)])) {
+          refused.outside = head;
+          return null;
+        }
+        return (await keptEntriesHold(octokit, owner, name, answer.tree, head, kept)) ? answer.tree : null;
+      },
       // The commit and its receipt before the move (§6): the push's webhook then reads it as the collection.
       beforeMove: async (sha) => {
         await db.transaction(async (tx) => {
@@ -217,7 +263,7 @@ async function collectRepository(app: FastifyInstance, config: AppConfig, octoki
       },
       tries: MOVE_TRIES,
     });
-    if (outcome === "refused") return failed("check_refused");
+    if (outcome === "refused") return refused.outside === null ? failed("check_refused") : local(branch, refused.outside);
     if (outcome === null) return failed("github_failed");
     const settled = await settle({ outcome: "collected", unreadable }, branch, outcome);
     if (settled === null) {

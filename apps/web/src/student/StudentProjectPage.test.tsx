@@ -480,7 +480,7 @@ describe("the online workspace (ADR-047, M6-06)", () => {
     expect(document.querySelectorAll(".bg-accent")).toHaveLength(1);
     const section = screen.getByTestId("sproj-workspace");
     expect(within(section).getByText("No tools installed? Work in your browser.")).toBeInTheDocument();
-    expect(within(section).getByText(/unless your last push came from your own machine/)).toBeInTheDocument();
+    expect(within(section).getByText(/unless your last push came from a personal machine/)).toBeInTheDocument();
   });
 
   it("words the start route's refusal in place", async () => {

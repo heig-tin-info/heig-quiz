@@ -29,19 +29,22 @@ describe("collectionRef", () => {
 });
 
 describe("collectsWorkspace (ADR-130 §2 as amended by ADR-149 §2)", () => {
-  const RELAYED = { relayed: true };
-  const LOCAL = { relayed: false };
+  const INSIDE = { outside: false };
+  const OUTSIDE = { outside: true };
 
   it("always collects where only the workspace writes", () => {
     for (const mode of ["online", "online_seb"] as const) {
-      for (const last of [null, RELAYED, LOCAL]) expect(collectsWorkspace(mode, last)).toBe(true);
+      for (const writes of [[], [INSIDE], [OUTSIDE], [INSIDE, OUTSIDE]]) expect(collectsWorkspace(mode, writes)).toBe(true);
     }
   });
 
-  it("lets the last writer win in hybrid: the workspace's push or none collects, a local push does not", () => {
-    expect(collectsWorkspace("hybrid", null)).toBe(true);
-    expect(collectsWorkspace("hybrid", RELAYED)).toBe(true);
-    expect(collectsWorkspace("hybrid", LOCAL)).toBe(false);
+  it("lets the last writer win in hybrid: no push or only heads written inside collect, any head written outside does not", () => {
+    expect(collectsWorkspace("hybrid", [])).toBe(true);
+    expect(collectsWorkspace("hybrid", [INSIDE])).toBe(true);
+    expect(collectsWorkspace("hybrid", [INSIDE, INSIDE])).toBe(true);
+    expect(collectsWorkspace("hybrid", [OUTSIDE])).toBe(false);
+    // The head moved after the deadline by a push from a machine: the last push before it does not save the workspace.
+    expect(collectsWorkspace("hybrid", [INSIDE, OUTSIDE])).toBe(false);
   });
 });
 

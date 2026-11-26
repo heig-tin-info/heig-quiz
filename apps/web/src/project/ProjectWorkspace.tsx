@@ -154,7 +154,7 @@ export function WorkModeSetting({
         title={<span id="project-work-mode">{t("project.workspace.mode")}</span>}
         desc={
           <>
-            {t(`project.workspace.mode.desc.${place === "own" ? "free" : place}`)}
+            {t(`project.workspace.mode.desc.${place}`)}
             {shown.mode === "online_seb" ? <span className="block">{t("project.workspace.mode.desc.supervised")}</span> : null}
             {ws.refusal && !archived ? (
               <span className="mt-1 block text-fg-faint" data-testid="workspace-refusal">

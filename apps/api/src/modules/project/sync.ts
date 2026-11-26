@@ -65,7 +65,7 @@ import type {
   SyncOutcome,
   SyncPrState,
 } from "@quiz/contracts";
-import { previewPaths, projectIsVisible, syncSkips, takesWorkspaceUpdate } from "@quiz/domain";
+import { isLabMode, previewPaths, projectIsVisible, syncSkips } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import { iso, isoOrNull } from "../../clock.js";
@@ -605,7 +605,7 @@ export async function runSyncJob(app: FastifyInstance, config: AppConfig, job: P
     await hintProjectStaff(db, [project.id]);
     // The online workspace takes the update from each `sync/<branch>` this pass wrote (ADR-132 §11): an
     // `online` project's, and a `hybrid` one's beside the pull request its students get as in `free` (ADR-149 §4).
-    if (takesWorkspaceUpdate(project.workMode)) await requestCodespaceSync(app, config, project.id);
+    if (isLabMode(project.workMode)) await requestCodespaceSync(app, config, project.id);
   };
   // A failed repository gives the lease back: nothing re-claims a sync but the staff, at once.
   await runLeased(app, config, "syncJobAt", job, "project sync", body, { onFailure: "release" });
