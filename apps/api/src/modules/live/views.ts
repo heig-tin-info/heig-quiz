@@ -219,7 +219,9 @@ export async function attemptView(
  * The teacher's "see it as a student" (§4.3): a real student view, and NO
  * attempt row anywhere. Seed 0 by default, so it is stable between reloads;
  * the stateless preview of issue #75 passes the seed it drew instead, and
- * gets exactly the order and the shuffles an attempt of that seed would.
+ * gets exactly the order and the shuffles an attempt of that seed would; a
+ * paper variant (ADR-147) passes its seed and its stored values, as an
+ * attempt holds them.
  * Its documents are what the caller hands it (ADR-144 §7): the teacher's
  * stateless preview loads the selection as the staff read it, whose files
  * the staff routes of the course's library serve; the hand-out a student
@@ -230,19 +232,24 @@ export async function previewView(
   db: Db,
   evaluation: EvaluationRecord,
   now: Date,
-  seed = 0,
+  /**
+   * The seed and the stored values: none for a teacher's preview, which
+   * draws them from the seed; a paper variant's (ADR-147) for the hand-out
+   * and the paper entry.
+   */
+  draw: InstanceAttempt = { seed: 0, instances: {} },
   /** The evaluation's items when the caller already read them, not read twice. */
   items?: readonly JoinedItem[],
   /** The selection, the teacher's stateless preview's alone; its length is the conditions' count. */
   documents: ProvidedDocument[] = [],
 ): Promise<AttemptView> {
   return viewOf(db, evaluation, {
-    seed,
+    seed: draw.seed,
     timeBonusPercent: 0,
     practice: false,
     documents,
     documentCount: documents.length,
-    instances: {},
+    instances: draw.instances,
     acquired: [],
     items,
     answered: new Map(),
@@ -279,7 +286,7 @@ async function viewOf(
     /** ADR-144 §7: what the attempt may read now, and how many documents the conditions count. */
     documents: ProvidedDocument[];
     documentCount: number;
-    /** The attempt's stored values (ADR-056); `{}` for a preview, which draws them from `seed`. */
+    /** The attempt's stored values (ADR-056); `{}` for a teacher's preview, which draws them from `seed`. */
     instances: Readonly<Record<string, StoredInstance>>;
     /** ADR-091: the items a partial retake carried over; none in a preview. */
     acquired: readonly string[];

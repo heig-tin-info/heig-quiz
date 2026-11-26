@@ -191,7 +191,6 @@ export const evaluation: Record<keyof typeof en, string> = {
   "eval.export.handout.desc": "Les questions telles que les étudiants les voient, avec la place pour répondre.",
   "eval.export.document": "Énoncé avec corrigé",
   "eval.export.document.desc": "Chaque question avec son corrigé et son explication.",
-  "eval.export.parameterized": "Indisponible avec une question paramétrée.",
   "eval.export.poll": "Un sondage ne s'imprime pas.",
   "eval.export.types": "Indisponible pour : {types}",
   "eval.export.loadFailed": "Impossible de charger les exports.",

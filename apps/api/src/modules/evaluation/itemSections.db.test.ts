@@ -221,7 +221,7 @@ describe("the student's order and where the texts are shown", () => {
     return s;
   }
   const view = async (evaluationId: string, seedValue: number) =>
-    (await previewView(db(), await reload(db(), evaluationId), server.clock.now(), seedValue)).items;
+    (await previewView(db(), await reload(db(), evaluationId), server.clock.now(), { seed: seedValue, instances: {} })).items;
   const shown = (items: readonly AttemptItem[]) => items.map((i) => [i.id, i.sectionIntro, i.intro, i.section]);
 
   it("without shuffle, keeps each text on its item and names the section", async () => {

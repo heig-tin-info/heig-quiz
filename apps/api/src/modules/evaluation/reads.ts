@@ -598,7 +598,7 @@ export async function handoutPrints(
 ): Promise<Set<string>> {
   if (list.length === 0) return new Set();
   const rows = await db
-    .select({ evaluationId: evaluationItems.evaluationId, type: questions.type, variables: questionVersions.variables })
+    .select({ evaluationId: evaluationItems.evaluationId, type: questions.type })
     .from(evaluationItems)
     .innerJoin(questionVersions, eq(evaluationItems.questionVersionId, questionVersions.id))
     .innerJoin(questions, eq(questionVersions.questionId, questions.id))
@@ -607,7 +607,7 @@ export async function handoutPrints(
   const itemsOf = new Map<string, Printed[]>();
   for (const r of rows) {
     const items = itemsOf.get(r.evaluationId) ?? [];
-    items.push({ question: { type: r.type }, version: { variables: r.variables } });
+    items.push({ question: { type: r.type } });
     itemsOf.set(r.evaluationId, items);
   }
   const prints = list.filter((evaluation) => printRefusal(evaluation, itemsOf.get(evaluation.id) ?? [], "handout") === null);

@@ -47,15 +47,6 @@ describe("the export sheet", () => {
     expect(within(section("Statement with answer key")).getAllByRole("link")).toHaveLength(2);
   });
 
-  it("says a parameterized question refuses both", async () => {
-    const refusal = { reason: "parameterized" as const, types: [] };
-    mockFetch({ [DETAIL]: ok(makeEvaluationDetail({ exports: { document: refusal, handout: refusal, paper: "paper_not_started" as const } })) });
-    render();
-    await screen.findByRole("region", { name: "Hand-out" });
-    expect(screen.queryByRole("link")).not.toBeInTheDocument();
-    expect(screen.getAllByText("Not available with a parameterized question.")).toHaveLength(2);
-  });
-
   it("says why a poll is refused", async () => {
     const refusal = { reason: "poll" as const, types: [] };
     mockFetch({ [DETAIL]: ok(makeEvaluationDetail({ exports: { document: refusal, handout: refusal, paper: "paper_not_started" as const } })) });

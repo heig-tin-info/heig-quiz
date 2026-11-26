@@ -161,7 +161,7 @@ export async function startPreview(
   // One read: the view and the versions it is checked against are the same items.
   const items = await joinedItems(db, evaluation.id);
   // ADR-144 §7: the stateless preview alone lists the selection.
-  const view = await live.previewView(db, evaluation, now, seed, items, await providedDocumentsOf(db, evaluation.id));
+  const view = await live.previewView(db, evaluation, now, { seed, instances: {} }, items, await providedDocumentsOf(db, evaluation.id));
   return {
     seed,
     durationS: previewDurationS({
@@ -465,7 +465,7 @@ export async function gradePreview(
   const { evaluation, seed, now } = input;
   budget.spend(`grade:${input.userId}`, GRADES_PER_MINUTE, now);
 
-  const view = await live.previewView(db, evaluation, now, seed);
+  const view = await live.previewView(db, evaluation, now, { seed, instances: {} });
   const byId = new Map((await joinedItems(db, evaluation.id)).map((i) => [i.item.id, i]));
   // An answer to an item this evaluation does not hold is a stale tab (the
   // teacher edited the structure since): it is ignored, never trusted.

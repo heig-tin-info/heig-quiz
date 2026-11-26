@@ -86,12 +86,14 @@ export { practiceEntry, startPractice } from "./practice.js";
 export { studentHome } from "./studentHome.js";
 export { onAttemptsEnded, type EndedAttempt } from "./dwell.js";
 export { attemptOwnerName, fullName } from "./names.js";
-// ADR-125 §9: the paper attempt's rows, written in the `paper` module's transaction.
+// ADR-125 §9: the paper attempt's rows, written in the `paper` module's transaction;
+// the paper's key, for the entry page and the statement with key (ADR-147).
 export {
   announcePaperAttempt,
   insertPaperAttempt,
   paperAnswers,
   paperKey,
+  paperKeyItems,
   type InsertedPaperAttempt,
 } from "./paperAttempt.js";
 export { studentEvaluationGrades, studentGrades } from "./grades.js";

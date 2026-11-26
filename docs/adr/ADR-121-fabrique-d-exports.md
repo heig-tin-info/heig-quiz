@@ -13,6 +13,10 @@ server, no browser print view; ADR-125 §1–§3) and §8 steps 2, 3 and 6
 (step 3's hand-out follows the evaluation's stored random paper seed, not seed 0, ADR-125 §8; step 6
 comes before step 5).
 
+Amended 2026-11-26 by [ADR-147](ADR-147-variantes-papier.md), scope: §8
+step 3 (a parameterized question is no longer refused: the hand-out and the
+key follow a stored paper variant).
+
 Amended 2026-11-04 by [ADR-126](ADR-126-types-a-canevas-sur-papier.md),
 scope: §1 (the `drawing` block holds a closed drawing model, never
 target-format markup; ADR-126 §1–§2).
@@ -152,7 +156,8 @@ question must come from the type through its contract.
    3. the evaluation document, **staff only** through the evaluation's
       loader (a student's series: step 5): statement and key, and a hand-out to print from the student
       views in the base order (seed 0, no shuffle); a parameterized question
-      is refused in its first version;
+      is refused in its first version *(amended by ADR-147: printed from a
+      stored paper variant)*;
    4. JSON records of the results, then of the projects;
    5. the student's Markdown export: the ADR-112 record and an exercise
       series, by an amendment of ADR-112 (same rate limit, session rule and

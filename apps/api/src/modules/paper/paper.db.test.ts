@@ -2,7 +2,8 @@
  * The paper attempt (ADR-125 §9–§16, F-PAPER-01..05), over the real
  * application: every refusal of the submission; the one transaction that
  * ends and replaces a digital attempt and inserts the paper one on the paper
- * seed; its answers read through the student save's path; its grading (now
+ * variant (ADR-147), a parameterized one graded against the variant's key
+ * with its values copied; its answers read through the student save's path; its grading (now
  * on a closed exam, at the close on a running one, an untyped essay
  * proposed at zero); its scan; who reaches what (invariant 6); what the
  * student reads of it (invariant 4); and the cascade of an evaluation that
@@ -24,6 +25,7 @@ import {
   ResultsView,
   type StaffCopy,
 } from "@quiz/contracts";
+import { INSTANCE_WARNING_KEY } from "@quiz/core/reasons";
 import { findStudentLeaks } from "@quiz/core/testing";
 
 import {
@@ -34,11 +36,13 @@ import {
   evaluations,
   gradings,
   paperSheets,
+  paperVariants,
   questions,
 } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive } from "../../test/live.js";
-import { addItems, isLatestAttempt } from "../evaluation/service.js";
+import { fallOf, publishParameterized, showsKey } from "../../test/parameterized.js";
+import { addItems, isLatestAttempt, joinedItems } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import { typeOf } from "../pool/config.js";
 import * as poolService from "../pool/service.js";
@@ -177,6 +181,9 @@ const attemptsOf = (evaluationId: string, userId: string) =>
     .where(and(eq(attempts.evaluationId, evaluationId), eq(attempts.userId, userId)))
     .orderBy(attempts.attemptNumber);
 
+/** The paper variants of an evaluation (ADR-147), read behind the API's back. */
+const variantsOf = (evaluationId: string) => db().select().from(paperVariants).where(eq(paperVariants.evaluationId, evaluationId));
+
 /** A multipart body of one file, as a browser's `FormData` sends it. */
 function multipart(bytes: Buffer, filename: string, mime: string) {
   const boundary = `----paper${randomUUID()}`;
@@ -313,7 +320,7 @@ describe("the paper attempt (F-PAPER-01..03)", () => {
     const { attemptId, supersededAttemptId } = res.json();
     expect(supersededAttemptId).toBe(digital.id);
 
-    const seed = (await reload(db(), evaluation.id)).paperSeed;
+    const seed = (await variantsOf(evaluation.id))[0]!.seed;
     const [old, row] = await attemptsOf(evaluation.id, student.id);
     expect(old).toMatchObject({ id: digital.id, state: "expired", closedBy: "teacher", supersededBy: attemptId, origin: "digital" });
     expect(row).toMatchObject({
@@ -426,6 +433,45 @@ describe("the paper attempt (F-PAPER-01..03)", () => {
       [1, "paper", again.attemptId],
       [2, "paper", null],
     ]);
+  });
+
+  it("grades a copy of a parameterized exam against its variant's key, the variant's values copied (ADR-147)", async () => {
+    const { evaluation, poolId } = await exam({ mcq: MCQ });
+    const question = await publishParameterized(db(), { poolId, teacherId: teacher.id, type: "short" });
+    await addItems(db(), await reload(db(), evaluation.id), [question], (type, version) =>
+      typeOf(type).defaultPoints(poolService.exampleConfig(type, version)), { attemptCount: 0 });
+    const item = (await joinedItems(db(), evaluation.id)).find((j) => j.question.id === question)!;
+    // Printed before the sitting: the variant's values drawn and stored then.
+    expect((await get(`/app/api/evaluations/${evaluation.id}/handout.json`, teacher.headers)).statusCode).toBe(200);
+    const [variant] = await variantsOf(evaluation.id);
+    const drawn = variant!.instances[item.item.id]!;
+    expect(drawn).toMatchObject({ versionId: item.version.id });
+    // A draw served from a fallback (ADR-056 §7): the flag must travel with the copy.
+    const flagged = { ...drawn, fallback: "exhausted" as const };
+    await db().update(paperVariants).set({ instances: { [item.item.id]: flagged } }).where(eq(paperVariants.evaluationId, evaluation.id));
+    await started(evaluation.id);
+    await closed(evaluation.id);
+
+    // The entry page shows the paper's numbers and the variant's key.
+    const paper = await paperOf(evaluation.id, second.id);
+    const statement = JSON.stringify(paper.view.items.find((i) => i.id === item.item.id)!.student);
+    expect(statement).toContain(`${drawn.values["h"]} m`);
+    expect(showsKey(statement, drawn.values)).toBe(false);
+    expect(showsKey(JSON.stringify(paper.solutions[item.item.id]), drawn.values)).toBe(true);
+
+    const res = await enter(evaluation.id, body(second.id, { [item.item.id]: { text: fallOf(drawn.values) } }));
+    expect(res.statusCode, res.body).toBe(201);
+    const [row] = await attemptsOf(evaluation.id, second.id);
+    expect(row).toMatchObject({ seed: variant!.seed, instances: { [item.item.id]: flagged } });
+    // Graded at once (closed), right against the variant's key, the teacher warned of the fallback.
+    const [grading] = await db()
+      .select()
+      .from(gradings)
+      .where(and(eq(gradings.attemptId, row!.id), eq(gradings.itemId, item.item.id)));
+    expect(grading).toMatchObject({ state: "validated", points: item.item.points });
+    expect(grading!.details).toMatchObject({ [INSTANCE_WARNING_KEY]: "exhausted" });
+    // After the opening, nothing is redrawn: the variant is as it was.
+    expect((await variantsOf(evaluation.id))[0]!.instances).toEqual({ [item.item.id]: flagged });
   });
 
   it("hands two copies of one student entered at once in one after the other", async () => {

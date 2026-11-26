@@ -3,16 +3,20 @@
  * Sources of the export factory for the export sheet.
  *
  *   - {@link evaluationDocument}, the staff "statement with key" (F-EXP-04):
- *     every item in the base order, its statement as a student is served it
- *     (seed 0, no shuffle, like the grading panel's expected row), the
- *     type's key and the explanation. Worded in the reader's language
- *     (ADR-121 §4, amended 2026-11-04).
+ *     of an evaluation whose hand-out prints, the key of its paper variant
+ *     (ADR-147) — every item in the paper's order, its statement as the
+ *     hand-out prints it, its whole key in that view and its explanation,
+ *     with the variant's values; of any other, every item in the base order,
+ *     its statement as a student is served it (seed 0, no shuffle, like the
+ *     grading panel's expected row), a parameterized one with its example
+ *     values (ADR-056 §9), said so. Worded in the reader's language (ADR-121
+ *     §4, amended 2026-11-04).
  *   - {@link handout}, the paper a student is handed (ADR-125 §5–§8): the
- *     student views only, through the one exit (invariant 4), in the order
- *     and with the shuffles of the evaluation's secret paper seed — built
- *     exactly as a digital attempt of that seed is (`live.previewView`) —
- *     each item followed by its answer zones; the name frame first. Worded
- *     in the reader's language (ADR-125 §7).
+ *     student views only, through the one exit (invariant 4), in the order,
+ *     with the shuffles and the values of the evaluation's paper variant —
+ *     built exactly as a digital attempt of that seed and those values is
+ *     (`live.previewView`) — each item followed by its answer zones; the
+ *     name frame first. Worded in the reader's language (ADR-125 §7).
  *
  * The staff routes load the evaluation through `staffEvaluation`
  * (invariant 6); the hand-out has a second reader, a student printing a past
@@ -42,8 +46,8 @@ import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { explanationBlocks, itemKeyBlocks, provenanceOf } from "../../documents/blocks.js";
 import * as live from "../live/service.js";
-import { explanationOrNull, loadConfig, typeOf } from "../pool/service.js";
-import { paperSeedOf, printRefusal } from "./print.js";
+import { exampleInstance, explanationOrNull, loadConfig, typeOf } from "../pool/service.js";
+import { paperVariant, printRefusal } from "./print.js";
 import { joinedItems, type JoinedItem } from "./reads.js";
 import { EvaluationError, type EvaluationRecord } from "./shared.js";
 
@@ -70,13 +74,48 @@ async function printableItems(
 const basenameOf = (evaluation: EvaluationRecord, suffix: string): string =>
   `${slugify(evaluation.title) || "evaluation"}-${suffix}`;
 
-/** The staff "statement with key" (F-EXP-04): the record, in the base order. */
+/** One item of the statement with key, before it becomes a record's row. */
+interface KeyedItem {
+  entry: JoinedItem;
+  statement: unknown;
+  solution: unknown;
+  explanation: string;
+  /** Shown with its example values: every student had their own (ADR-056 §9). */
+  example: boolean;
+}
+
+/**
+ * Each item of `evaluation` in the base order, with its key: a static one as
+ * written, a parameterized one with its example values (`exampleInstance`,
+ * draw 0), never its template — a template never reaches a type's hook
+ * (ADR-056 §4).
+ */
+const baseKey = (items: readonly JoinedItem[]): KeyedItem[] =>
+  items.map((entry) => {
+    const { type } = entry.question;
+    const instance = exampleInstance(type, entry.version);
+    const { student, solution } = live.staffViews(type, loadConfig(type, instance.version), entry.item.id);
+    return { entry, statement: student, solution, explanation: instance.explanation, example: instance.values !== null };
+  });
+
+/**
+ * The staff "statement with key" (F-EXP-04): the record. An evaluation whose
+ * hand-out prints gets the key of its paper variant (ADR-147), in the paper's
+ * order with its values, so the key and the hand-out agree; any other, the
+ * base order.
+ */
 export async function evaluationDocument(
   db: Db,
   evaluation: EvaluationRecord,
   options: { now: Date },
 ): Promise<Found<EvaluationDocumentRecord>> {
   const items = await printableItems(db, evaluation, "document");
+  const keyed: KeyedItem[] =
+    printRefusal(evaluation, items, "handout") === null
+      ? live
+          .paperKeyItems(evaluation, items, await paperVariant(db, evaluation, items, options.now))
+          .map((key) => ({ ...key, example: false }))
+      : baseKey(items);
   return {
     record: {
       kind: "evaluation-document",
@@ -88,51 +127,56 @@ export async function evaluationDocument(
         mode: evaluation.mode,
         totalPoints: evaluationTotal(items.map((i) => i.item)),
       },
-      items: items.map((entry) => {
-        const { type } = entry.question;
-        // Static by the refusal above.
-        const { student, solution } = live.staffViews(type, loadConfig(type, entry.version), entry.item.id);
-        return {
-          id: entry.item.id,
-          position: entry.item.position,
-          internalName: entry.question.internalName,
-          type,
-          points: entry.item.points,
-          counting: entry.item.counting,
-          questionId: entry.question.id,
-          questionVersionId: entry.version.id,
-          intro: entry.item.intro,
-          statement: student,
-          solution,
-          explanation: explanationOrNull(entry.version.explanation),
-        };
-      }),
+      items: keyed.map(({ entry, statement, solution, explanation, example }) => ({
+        id: entry.item.id,
+        position: entry.item.position,
+        internalName: entry.question.internalName,
+        type: entry.question.type,
+        points: entry.item.points,
+        counting: entry.item.counting,
+        questionId: entry.question.id,
+        questionVersionId: entry.version.id,
+        intro: entry.item.intro,
+        statement,
+        solution,
+        explanation: explanationOrNull(explanation),
+        example,
+      })),
     },
     basename: basenameOf(evaluation, "key"),
   };
 }
 
-/** The Markdown tree of {@link evaluationDocument}, worded in `lang`. No rule between items: each heading opens one. */
+/**
+ * The Markdown tree of {@link evaluationDocument}, worded in `lang`: each
+ * item numbered in the record's order — the paper's, or the base order — and
+ * an item shown with example values says so under its heading. No rule
+ * between items: each heading opens one.
+ */
 export function evaluationDocumentTree(found: Found<EvaluationDocumentRecord>, lang: Lang): Document {
   const { record } = found;
   const l = LABELS[lang];
   const blocks: Block[] = [heading(1, record.evaluation.title)];
-  for (const item of record.items) {
+  record.items.forEach((item, rank) => {
+    const [head, ...key] = itemKeyBlocks(typeOf(item.type), rank, item.internalName, item.points, item.statement, item.solution, l);
     blocks.push(
       // The teacher's passage before the item (ADR-084).
       ...(item.intro ? [markdown(item.intro)] : []),
-      ...itemKeyBlocks(typeOf(item.type), item.position, item.internalName, item.points, item.statement, item.solution, l),
+      head!,
+      ...(item.example ? [markdown(`*${l.exampleValues}*`)] : []),
+      ...key,
       ...explanationBlocks(item.explanation, l),
     );
-  }
+  });
   return { provenance: provenanceOf(record, { evaluationId: record.evaluation.id }, []), lang, blocks };
 }
 
 /**
  * The hand-out (ADR-125): the record, in the paper's order. The views are a
- * digital attempt's of the paper seed, through the live module's one
- * builder, so the paper and a paper attempt entered later agree item for
- * item and choice for choice (ADR-097). The seed itself goes nowhere.
+ * digital attempt's of the paper variant (ADR-147), through the live
+ * module's one builder, so the paper, its key and a paper attempt entered
+ * later agree item for item, choice for choice and value for value
+ * (ADR-097). The variant's seed and values map go nowhere.
  */
 export async function handout(
   db: Db,
@@ -140,8 +184,8 @@ export async function handout(
   options: { now: Date },
 ): Promise<Found<HandoutRecord>> {
   const items = await printableItems(db, evaluation, "handout");
-  const seed = await paperSeedOf(db, evaluation);
-  const view = await live.previewView(db, evaluation, options.now, seed, items);
+  const variant = await paperVariant(db, evaluation, items, options.now);
+  const view = await live.previewView(db, evaluation, options.now, variant, items);
   return {
     record: {
       kind: "handout",

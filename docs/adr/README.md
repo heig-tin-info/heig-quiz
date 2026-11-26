@@ -147,6 +147,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-142 — Practice of a released exam: redone blank, counted nowhere, when the teacher allows it](ADR-142-entrainement-sur-un-examen-publie.md)
 - [ADR-125 — Paper copies: the hand-out and its answer zones, PDF through Typst, the paper attempt entered by the teacher](ADR-125-copies-papier-pdf-typst.md)
 - [ADR-126 — Canvas question types on paper: a closed drawing model, inline SVG, a ruled free frame](ADR-126-types-a-canevas-sur-papier.md)
+- [ADR-147 — Paper variants: one stored draw of the whole paper, parameterized questions printed](ADR-147-variantes-papier.md)
 
 ### Question analytics
 

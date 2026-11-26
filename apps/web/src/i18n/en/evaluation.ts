@@ -192,7 +192,6 @@ export const evaluation = {
   "eval.export.handout.desc": "The questions as students see them, with room to answer.",
   "eval.export.document": "Statement with answer key",
   "eval.export.document.desc": "Each question with its answer key and explanation.",
-  "eval.export.parameterized": "Not available with a parameterized question.",
   "eval.export.poll": "A poll is not printed.",
   "eval.export.types": "Not available for: {types}",
   "eval.export.loadFailed": "Could not load the exports.",
