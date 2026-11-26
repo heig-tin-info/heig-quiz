@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from "vitest";
 
 import { FIXTURE_ENV, makeSourceRepo, tempDir } from "./fixtures.js";
 import { git, gitAuthEnv, gitBare } from "./gitRunner.js";
-import { RECEIVE_MAX_INPUT_BYTES, ensureStagingRepo, refSnapshot, stagingHeadBranch, stagingPaths } from "./staging.js";
+import { RECEIVE_MAX_INPUT_BYTES, ensureStagingRepo, refSnapshot, refreshStagingRepo, stagingHeadBranch, stagingPaths } from "./staging.js";
 
 const roots: string[] = [];
 async function root(): Promise<string> {
@@ -244,5 +244,58 @@ describe("ensureStagingRepo", () => {
       uploadPack: false,
     });
     expect((await gitBare(staging.gitDir, ["config", "http.uploadpack"])).trim()).toBe("false");
+  });
+});
+
+describe("refreshStagingRepo (ADR-149 §7)", () => {
+  /** A forge seeded into a staging repository, and a clone of the forge to push from as a machine would. */
+  async function world() {
+    const base = await root();
+    const src = await makeSourceRepo({ dir: join(base, "src"), files: { "main.c": "v1\n" } });
+    const staging = await ensureStagingRepo({ volumesRoot: join(base, "volumes"), student: "e1", assignment: "tp", source: { mode: "lab", mirrorFrom: src.gitDir } });
+    const machine = join(base, "machine");
+    await git(["clone", "-q", src.gitDir, machine], { env: FIXTURE_ENV });
+    const commit = async (dir: string, file: string, text: string) => {
+      await writeFile(join(dir, file), text, "utf8");
+      await git(["-C", dir, "add", "-A"], { env: FIXTURE_ENV });
+      await git(["-C", dir, "commit", "-qm", text], { env: FIXTURE_ENV });
+      return (await git(["-C", dir, "rev-parse", "HEAD"], { env: FIXTURE_ENV })).trim();
+    };
+    return { base, src, staging, machine, commit };
+  }
+
+  it("fast-forwards a branch behind, creates a missing one, fetches no tag, and leaves none of its scratch refs", async () => {
+    const { src, staging, machine, commit } = await world();
+    const ahead = await commit(machine, "main.c", "v2\n");
+    await git(["-C", machine, "tag", "v2"], { env: FIXTURE_ENV });
+    await git(["-C", machine, "checkout", "-qb", "feature"], { env: FIXTURE_ENV });
+    const feature = await commit(machine, "f.c", "feature\n");
+    await git(["-C", machine, "push", "-q", "--tags", "origin", "main", "feature"], { env: FIXTURE_ENV });
+
+    expect(await refreshStagingRepo(staging.gitDir, src.gitDir)).toEqual({ created: ["feature"], advanced: ["main"], diverged: [] });
+    const refs = await refSnapshot(staging.gitDir);
+    expect(refs.get("refs/heads/main")).toBe(ahead);
+    expect(refs.get("refs/heads/feature")).toBe(feature);
+    expect([...refs.keys()].filter((ref) => !ref.startsWith("refs/heads/"))).toEqual([]);
+    // A second refresh changes nothing.
+    expect(await refreshStagingRepo(staging.gitDir, src.gitDir)).toEqual({ created: [], advanced: [], diverged: [] });
+  });
+
+  it("never forces: a branch the workspace moved past the forge, or that diverged, stays as it is; none is deleted", async () => {
+    const { base, src, staging, machine, commit } = await world();
+    // The workspace's own commit, in the staging repository only (a push the relay was refused, say).
+    const work = join(base, "work-clone");
+    await git(["clone", "-q", staging.gitDir, work], { env: FIXTURE_ENV });
+    const own = await commit(work, "main.c", "workspace\n");
+    await git(["-C", work, "checkout", "-qb", "only-here"], { env: FIXTURE_ENV });
+    await git(["-C", work, "push", "-q", "origin", "main", "only-here"], { env: FIXTURE_ENV });
+    // Meanwhile the machine pushed another commit on the same branch.
+    await commit(machine, "main.c", "machine\n");
+    await git(["-C", machine, "push", "-q", "origin", "main"], { env: FIXTURE_ENV });
+
+    expect(await refreshStagingRepo(staging.gitDir, src.gitDir)).toEqual({ created: [], advanced: [], diverged: ["main"] });
+    const refs = await refSnapshot(staging.gitDir);
+    expect(refs.get("refs/heads/main")).toBe(own);
+    expect(refs.has("refs/heads/only-here")).toBe(true);
   });
 });

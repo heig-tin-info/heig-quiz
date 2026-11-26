@@ -1,0 +1,1 @@
+ALTER TABLE `assignments` ADD `refresh_on_open` integer DEFAULT false NOT NULL;

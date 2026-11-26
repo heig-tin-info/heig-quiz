@@ -927,3 +927,55 @@ describe("the teacher's update (ADR-132 §11)", () => {
     expect(sessionUpdateOf({ targetRepo: null }, { ...lab, workspaceUpdate: null })).toBeUndefined();
   });
 });
+
+describe("a workspace its students may also push to from their own machines (ADR-149 §7)", () => {
+  /** A forge repository with one commit, and a session seeded from it. */
+  async function seeded(patch: Partial<AssignmentRow>): Promise<{ assignment: AssignmentRow; sessionId: string; staging: string; first: string }> {
+    const assignment = await insertAssignment({ targetRepoPattern: "org/tp-{student}", ...patch });
+    const src = await makeSourceRepo({ dir: join(root, "amont"), files: { "main.c": "v1\n" }, message: "handout" });
+    await git(["init", "--bare", "-q", forgePath("org", "tp-student")]);
+    await git(["push", "--mirror", forgePath("org", "tp-student")], { env: { GIT_DIR: src.gitDir } });
+    const { session } = await makeManager({ forgeUrlOf: localForgeUrl }).start(user, assignment);
+    return { assignment, sessionId: session.id, staging: join(session.volumeDir, "staging.git"), first: src.sha };
+  }
+
+  /** A push from the student's machine: one more commit on the forge's `main`. */
+  async function pushedFromMachine(): Promise<string> {
+    const clone = join(root, `machine-${Math.random().toString(36).slice(2)}`);
+    await git(["clone", "-q", "-b", "main", forgePath("org", "tp-student"), clone], { env: FIXTURE_ENV });
+    await writeFile(join(clone, "main.c"), "v2\n", "utf8");
+    await git(["-C", clone, "commit", "-qam", "from home"], { env: FIXTURE_ENV });
+    await git(["-C", clone, "push", "-q", "origin", "HEAD:main"], { env: FIXTURE_ENV });
+    return (await git(["-C", clone, "rev-parse", "HEAD"], { env: FIXTURE_ENV })).trim();
+  }
+
+  it.each([
+    ["resumed", true],
+    ["live", false],
+  ])("brings the staging repository up to the forge when the session opens (%s), nothing relayed", async (_label, resumed) => {
+    const { assignment, sessionId, staging } = await seeded({ refreshOnOpen: true });
+    const second = await pushedFromMachine();
+    if (resumed) engine.kill(engine.containerName(sessionId));
+    const pendingRelay = vi.fn(async () => false);
+    await makeManager({ forgeUrlOf: localForgeUrl, pendingRelay }).start(user, assignment);
+    await vi.waitFor(async () => expect((await refSnapshot(staging)).get("refs/heads/main")).toBe(second));
+    expect(pendingRelay).toHaveBeenCalledWith("student", "tp");
+    // The portal's scratch refs are gone.
+    await vi.waitFor(async () => expect([...(await refSnapshot(staging)).keys()].filter((ref) => ref.startsWith("refs/quiz/"))).toEqual([]));
+  });
+
+  it("leaves the staging repository as it is while a push waits for the relay, or when the project is not at the students' choice", async () => {
+    const { assignment, sessionId, staging, first } = await seeded({ refreshOnOpen: true });
+    await pushedFromMachine();
+    const reopen = async (deps: Partial<ManagerDeps>, row: AssignmentRow = assignment) => {
+      engine.kill(engine.containerName(sessionId));
+      await makeManager({ forgeUrlOf: localForgeUrl, ...deps }).start(user, row);
+      expect((await refSnapshot(staging)).get("refs/heads/main")).toBe(first);
+    };
+    await reopen({ pendingRelay: async () => true });
+    // Without the relay's answer, never.
+    await reopen({});
+    // An `online` project: its forge is never ahead but by the relay, as before.
+    await reopen({ pendingRelay: async () => false }, { ...assignment, refreshOnOpen: false });
+  });
+});

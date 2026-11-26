@@ -205,6 +205,15 @@ export const assignments = sqliteTable("assignments", {
    * on an exam (its delivery is still to come) nor on a review.
    */
   workspaceUpdate: text("workspace_update", { mode: "json" }).$type<CodespaceWorkspaceUpdate>(),
+  /**
+   * The students may also push from their own machines (a `hybrid`
+   * project, ADR-149 §7; the sync's `refreshOnOpen`): when a `lab`
+   * session opens and nothing of its workspace waits for the relay, its
+   * staging repository is brought up to GitHub, fast-forward only
+   * (`refreshStagingRepo`). Replaced by every sync; never on an exam nor a
+   * review.
+   */
+  refreshOnOpen: integer("refresh_on_open", { mode: "boolean" }).notNull().default(false),
 });
 
 /** Repository on the forge, as classroom names it (`CodespaceRepoRef`). */
