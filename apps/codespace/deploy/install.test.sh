@@ -56,7 +56,6 @@ pd() {
 }
 pull_retag() { log "pull_retag \$*"; }
 cs_base_installed() { cat "\$S/installed"; }
-cs_base_current() { echo old-image; }
 cs_install_host() { log cs_install_host; [ ! -e "\$S/host-fails" ]; }
 cs_install_instance() { log "cs_install_instance \$CS_BASE_IMAGE"; echo "\$CS_BASE_IMAGE" > "\$S/installed"; }
 caddy_apply() { log caddy_apply; }

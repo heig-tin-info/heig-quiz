@@ -91,8 +91,8 @@ fi
 # waits for the next deploy, as base-image.sh --defer would have.
 if [ -z "$live" ]; then
 	guard || exit 3
-	if [ -n "$live" ] && [ "$CS_BASE_IMAGE" != "$(cs_base_current)" ]; then
-		CS_BASE_IMAGE=$(cs_base_current)
+	if [ -n "$live" ] && [ "$CS_BASE_IMAGE" != "$(cs_base_installed)" ]; then
+		CS_BASE_IMAGE=$(cs_base_installed)
 		echo "deploy: a session started during the base image's tests: $CS_BASE_IMAGE stays, the next deploy switches" >&2
 	fi
 fi

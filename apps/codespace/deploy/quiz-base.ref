@@ -7,7 +7,5 @@
 # deploy pulls it anonymously, runs the image's acceptance tests against it
 # and switches both instances only on a pass (deploy/base-image.sh,
 # RUNBOOK.md §7), then the CI moves the `latest` tag to it.
-#
-# No release is pinned yet: until a line names one, the instances keep the
-# image they ran so far, built on the engine VM before ADR-146 (RUNBOOK.md
-# §7, The first release).
+
+ghcr.io/heig-tin-info/quiz-base:1.0.0@sha256:22eb2f951f903979e1602c4d0a6a572eaad60bb3b00cfa25a425c64ea0b6d81b

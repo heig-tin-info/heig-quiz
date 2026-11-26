@@ -133,17 +133,13 @@ pulled() { grep -qE '^podman .* pull ' "$work/log"; }
 tested() { grep -qE '^test' "$work/log"; }
 
 run
-expect "no pin, no image anywhere: config.ts's default, exit 0" is "$rc:$out" "0:codespace/c-dev:4.137.0"
+expect "no pin, nothing installed: names nothing, exit 0" is "$rc:$out" "0:"
 
-run env=CODESPACE_DEFAULT_IMAGE=codespace/c-dev:4.140.0 env=CODESPACE_IMAGE=codespace/c-dev:4.137.0
+run installed=codespace/c-dev:4.140.0 env=CODESPACE_DEFAULT_IMAGE=codespace/c-dev:4.137.0
 expect "no pin: exits 0" is "$rc" 0
-expect "no pin: the env file's default image" is "$out" codespace/c-dev:4.140.0
+expect "no pin: the installed quadlet's image, never the env file's" is "$out" codespace/c-dev:4.140.0
 expect "no pin: pulls and tests nothing" not grep -qE '^(podman|curl|test)' "$work/log"
 expect "no pin: says so" said "no quiz-base release pinned yet"
-run env=CODESPACE_IMAGE=codespace/c-dev:4.137.0
-expect "no pin: else the env file's CODESPACE_IMAGE" is "$out" codespace/c-dev:4.137.0
-run installed=codespace/c-dev:4.140.0 env=CODESPACE_DEFAULT_IMAGE=codespace/c-dev:4.137.0
-expect "no pin: the installed quadlet's image first" is "$out" codespace/c-dev:4.140.0
 
 run "pin=ghcr.io/heig-tin-info/quiz-base:1.0.0@$DIGEST" "installed=$PIN" "present=$PIN"
 expect "the pin in service: exits 0" is "$rc" 0
