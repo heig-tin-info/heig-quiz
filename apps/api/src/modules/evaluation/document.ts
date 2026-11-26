@@ -3,7 +3,7 @@
  * Sources of the export factory for the export sheet.
  *
  *   - {@link evaluationDocument}, the staff "statement with key" (F-EXP-04):
- *     the key of the evaluation's paper variant (ADR-147) — every item in
+ *     the key of the evaluation's paper variant (ADR-148) — every item in
  *     the paper's order, its statement as the hand-out prints it, its whole
  *     key in that view and its explanation, with the variant's values.
  *     Worded in the reader's language (ADR-121 §4, amended 2026-11-04).
@@ -72,7 +72,7 @@ const basenameOf = (evaluation: EvaluationRecord, suffix: string): string =>
 
 /**
  * The staff "statement with key" (F-EXP-04): the record — the key of the
- * evaluation's paper variant (ADR-147), each item in the paper's order, its
+ * evaluation's paper variant (ADR-148), each item in the paper's order, its
  * statement as the hand-out prints it, its whole key in that view and its
  * explanation, with the variant's values, so the key and the hand-out agree.
  */
@@ -135,7 +135,7 @@ export function evaluationDocumentTree(found: Found<EvaluationDocumentRecord>, l
 
 /**
  * The hand-out (ADR-125): the record, in the paper's order. The views are a
- * digital attempt's of the paper variant (ADR-147), through the live
+ * digital attempt's of the paper variant (ADR-148), through the live
  * module's one builder, so the paper, its key and a paper attempt entered
  * later agree item for item, choice for choice and value for value
  * (ADR-097). The variant's seed and values map go nowhere.

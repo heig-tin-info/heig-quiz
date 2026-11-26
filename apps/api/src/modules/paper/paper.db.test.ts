@@ -2,7 +2,7 @@
  * The paper attempt (ADR-125 §9–§16, F-PAPER-01..05), over the real
  * application: every refusal of the submission; the one transaction that
  * ends and replaces a digital attempt and inserts the paper one on the paper
- * variant (ADR-147), a parameterized one graded against the variant's key
+ * variant (ADR-148), a parameterized one graded against the variant's key
  * with its values copied; its answers read through the student save's path; its grading (now
  * on a closed exam, at the close on a running one, an untyped essay
  * proposed at zero); its scan; who reaches what (invariant 6); what the
@@ -181,7 +181,7 @@ const attemptsOf = (evaluationId: string, userId: string) =>
     .where(and(eq(attempts.evaluationId, evaluationId), eq(attempts.userId, userId)))
     .orderBy(attempts.attemptNumber);
 
-/** The paper variants of an evaluation (ADR-147), read behind the API's back. */
+/** The paper variants of an evaluation (ADR-148), read behind the API's back. */
 const variantsOf = (evaluationId: string) => db().select().from(paperVariants).where(eq(paperVariants.evaluationId, evaluationId));
 
 /** A multipart body of one file, as a browser's `FormData` sends it. */
@@ -435,7 +435,7 @@ describe("the paper attempt (F-PAPER-01..03)", () => {
     ]);
   });
 
-  it("grades a copy of a parameterized exam against its variant's key, the variant's values copied (ADR-147)", async () => {
+  it("grades a copy of a parameterized exam against its variant's key, the variant's values copied (ADR-148)", async () => {
     const { evaluation, poolId } = await exam({ mcq: MCQ });
     const question = await publishParameterized(db(), { poolId, teacherId: teacher.id, type: "short" });
     await addItems(db(), await reload(db(), evaluation.id), [question], (type, version) =>

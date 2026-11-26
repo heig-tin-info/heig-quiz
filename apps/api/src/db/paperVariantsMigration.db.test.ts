@@ -1,5 +1,5 @@
 /**
- * The backfill of `0163_paper_variants` (ADR-147, decision 2), read from the
+ * The backfill of `0164_paper_variants` (ADR-148, decision 2), read from the
  * shipped SQL: its last statement, run on evaluations printed before paper
  * variants. Every stored `paper_seed` becomes variant 1 with no values (a
  * parameterized evaluation did not print before); an evaluation never
@@ -16,7 +16,7 @@ import { testDatabase } from "../test/db.js";
 import { seedLive } from "../test/live.js";
 import { evaluations, paperVariants } from "./schema.js";
 
-const MIGRATION = new URL("../../drizzle/0163_paper_variants.sql", import.meta.url);
+const MIGRATION = new URL("../../drizzle/0164_paper_variants.sql", import.meta.url);
 
 let client: PGlite;
 const ids = { printed: "", never: "", already: "" };
@@ -37,7 +37,7 @@ beforeAll(async () => {
   await client.exec(statements.at(-1)!);
 });
 
-describe("0163_paper_variants' backfill", () => {
+describe("0164_paper_variants' backfill", () => {
   it("makes every stored paper seed variant 1, with no values, and touches nothing else", async () => {
     const { rows } = await client.query<{ evaluation_id: string; number: number; seed: number; instances: unknown }>(
       `SELECT "evaluation_id", "number", "seed", "instances" FROM "paper_variants" WHERE "evaluation_id" = ANY($1)`,

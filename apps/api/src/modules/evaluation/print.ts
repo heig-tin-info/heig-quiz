@@ -1,7 +1,7 @@
 /**
  * Whether an evaluation prints (ADR-125 §5): the one pure rule the detail's
  * `exports`, the document routes and the paper attempt all read — and the
- * paper's variant (ADR-147): its secret seed and its stored values, which
+ * paper's variant (ADR-148): its secret seed and its stored values, which
  * the hand-out, the statement with key, the blank print and the paper
  * attempt share.
  */
@@ -48,7 +48,7 @@ export const declares = (type: string, document: keyof typeof HOOKS): boolean =>
  * Why `evaluation` does not make `document`, or `null` when it does: a poll
  * (run on a beamer, never printed), then every type missing a hook, each
  * named once in the items' order. A parameterized item prints: the paper is
- * a variant, which has its draw (ADR-147).
+ * a variant, which has its draw (ADR-148).
  */
 export function printRefusal(
   evaluation: { mode: string },
@@ -60,11 +60,11 @@ export function printRefusal(
   return types.length === 0 ? null : { reason: "type", types };
 }
 
-/** The one variant this step prints (ADR-147); the number a later label derives from. */
+/** The one variant this step prints (ADR-148); the number a later label derives from. */
 const VARIANT = 1;
 
 /**
- * `evaluation`'s paper variant (ADR-147): its seed, and the values of every
+ * `evaluation`'s paper variant (ADR-148): its seed, and the values of every
  * parameterized item of `items`, completed and stored here by the draw rule
  * of an attempt's (`completeInstances`) — the one writer of
  * `paper_variants`.
@@ -120,7 +120,7 @@ export async function paperVariant(
  * seed is written back to `paper_seed` where it is null, so a rolled-back
  * image prints the same order. A concurrent first call keeps the row that
  * landed first. The contract migration removes the column, this write-back
- * and the `coalesce` read together (ADR-147 §2).
+ * and the `coalesce` read together (ADR-148 §2).
  */
 async function variantRow(db: DbOrTx, evaluationId: string, now: Date) {
   const read = () =>

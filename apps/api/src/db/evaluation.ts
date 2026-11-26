@@ -171,7 +171,7 @@ export const evaluations = pgTable(
     modifiedAfterRelease: boolean("modified_after_release").notNull().default(false),
     /**
      * The seed of the printed paper before paper variants (ADR-125 §8),
-     * superseded by {@link paperVariants} (ADR-147): migration 0163 copied
+     * superseded by {@link paperVariants} (ADR-148): migration 0164 copied
      * every value into variant 1. Read and written only where variant 1 is
      * created, in one statement: its seed is a value found here (one an
      * older server wrote during the deploy), and a new seed is written back
@@ -341,7 +341,7 @@ export const evaluationProvidedDocuments = pgTable(
 );
 
 /**
- * The paper variants of an evaluation (ADR-147): a variant is ONE draw of
+ * The paper variants of an evaluation (ADR-148): a variant is ONE draw of
  * the whole paper — the item order and the choice order recomputed from its
  * `seed` (D19, ADR-097), and the values of its parameterized items STORED,
  * in the shape of `attempts.instances` (ADR-056 §5) — which the hand-out,

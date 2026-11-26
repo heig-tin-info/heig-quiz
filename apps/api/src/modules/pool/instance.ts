@@ -280,7 +280,7 @@ export const replays: KeepRule = (entry, stored, seed) => {
  * otherwise values drawn from its seed (`instanceOf`, the item's own stream)
  * — and whether any was drawn. A static item stores nothing, so an entry
  * left by an item since made static, or no longer in `items`, drops. A new
- * attempt (nothing stored) and a paper variant (ADR-147) both draw through
+ * attempt (nothing stored) and a paper variant (ADR-148) both draw through
  * here.
  */
 export function completeInstances(

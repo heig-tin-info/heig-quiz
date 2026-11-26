@@ -116,7 +116,7 @@ export async function publishParameterized(
 
 /**
  * Sets, before an evaluation's first print, the seed of its paper variant
- * (through `paper_seed`, which variant 1 takes, ADR-147) — a large one, as a
+ * (through `paper_seed`, which variant 1 takes, ADR-148) — a large one, as a
  * drawn seed is — under which each parameterized short and cloze key is a
  * number no statement of the paper prints: not an integer (a question's
  * number), not a gravity, not a value of another item, an mcq's choices

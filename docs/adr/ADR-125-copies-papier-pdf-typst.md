@@ -16,7 +16,7 @@ PDF), scope: §6 (a choice question's choices are its paper zone; the page)
 and §7 (every document in the requester's language); see the amendment at
 the end.
 
-Amended 2026-11-26 by [ADR-147](ADR-147-variantes-papier.md), scope: §5 (a
+Amended 2026-11-26 by [ADR-148](ADR-148-variantes-papier.md), scope: §5 (a
 parameterized question prints: the `parameterized` refusal is gone), §8 (the
 paper seed becomes variant 1 of `paper_variants`, with the values it draws
 stored; the statement with key of a printed evaluation follows the paper's
@@ -111,7 +111,7 @@ nothing of B or C.
    list of type names. One pure `printRefusal(items)` refuses with
    `reason: "parameterized"` (ADR-056: a copy has no draw) or
    `reason: "type"` (a type without the hook, listed) *(amended by
-   ADR-147 §5: no `parameterized` reason, a paper variant has its draw)*; it feeds
+   ADR-148 §5: no `parameterized` reason, a paper variant has its draw)*; it feeds
    `EvaluationDetail.exports`, the hand-out routes and `POST /paper`, all
    answering `409 not_printable` with `PrintRefusal = { reason, types }`.
    The staff "statement with key" accepts every type with `statementDoc`.
@@ -163,7 +163,7 @@ nothing of B or C.
    The hand-out, the blank print and the paper attempt use it, so copies
    are identical and the paper attempt takes the ordinary ADR-097 path,
    with no special case in `itemView.ts`. The staff "statement with key"
-   keeps the base order. *(Amended by ADR-147 §2–§3, §6: the seed is variant
+   keeps the base order. *(Amended by ADR-148 §2–§3, §6: the seed is variant
    1's, in `paper_variants`, beside the values it draws, stored; the key of
    an evaluation whose hand-out prints follows the paper's order.)*
 
@@ -177,7 +177,7 @@ nothing of B or C.
      student save's path — `answerFromStudent`, `answerSchema`,
      `fromStudentAnswer` — on the view of the paper seed; one malformed answer
      refuses the copy (422). No grade, verdict or key comes from the client.
-     *(Amended by ADR-147 §4: on the view of the paper variant, its values
+     *(Amended by ADR-148 §4: on the view of the paper variant, its values
      included; the attempt copies its seed and its values, `fallback`
      included.)*
    - **One transaction**: end the replaced unfinished attempt (point 12),
@@ -276,7 +276,7 @@ nothing of B or C.
     table**: it is anonymised (F-GRADE-03, ADR-044), and a "Paper" badge
     there would name the one student whose computer died. The badge lives
     on the dashboard row, the results row, the staff copy and the inspect
-    view. *(Amended by ADR-147, Consequences: on a parameterized item the
+    view. *(Amended by ADR-148, Consequences: on a parameterized item the
     variant's values, shown in the cell, tell a paper copy apart — an
     accepted limit.)*
 

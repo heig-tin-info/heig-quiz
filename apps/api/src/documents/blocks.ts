@@ -25,7 +25,7 @@ export const explanationBlocks = (text: string | null, l: Labels): Block[] =>
  * `## Question n: name`, its points set apart at the line's end (`2 pt`),
  * the statement and, when the type draws one, the reference solution.
  * `rank` is the item's place on the document, from 0: its canonical place,
- * or its place on the paper (ADR-147).
+ * or its place on the paper (ADR-148).
  */
 export function itemKeyBlocks(
   type: AnyQuestionTypeServer,

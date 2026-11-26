@@ -1,4 +1,4 @@
-# ADR-147 — Paper variants: one stored draw of the whole paper, parameterized questions printed
+# ADR-148 — Paper variants: one stored draw of the whole paper, parameterized questions printed
 
 ## Status
 
@@ -53,7 +53,7 @@ different papers in one room, so that neighbours do not share their numbers.
    key with the evaluation), `seed` (the range of an attempt's seed, from the
    CSPRNG), `instances` (item id → `StoredInstance`, the shape of
    `attempts.instances`, its `fallback` included), and timestamps. Migration
-   `0163_paper_variants` copies every non-null `evaluations.paper_seed` into
+   `0164_paper_variants` copies every non-null `evaluations.paper_seed` into
    variant 1 with no values (a parameterized evaluation did not print
    before). **Expand, then contract**: the column stays in this step and the
    code reads and writes it only where variant 1 is created, in one

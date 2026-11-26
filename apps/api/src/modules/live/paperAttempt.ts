@@ -17,7 +17,7 @@
  *   - {@link announcePaperAttempt}, after the commit, tells the listeners of
  *     ended attempts, the dashboard and the player of a replaced attempt.
  *
- * Every function here takes the paper variant (ADR-147) as an attempt's
+ * Every function here takes the paper variant (ADR-148) as an attempt's
  * seed and stored values, `InstanceAttempt`. A paper attempt goes through
  * the ordinary ADR-097 path everywhere else: its seed and its values are the
  * variant's, copied, so its views are the hand-out's, with no `origin` case

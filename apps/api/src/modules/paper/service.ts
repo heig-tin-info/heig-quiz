@@ -3,7 +3,7 @@
  * typed in by a staff member and handed in ONCE, and its scan.
  *
  *   - {@link paperItems}: the paper as the student read it — the student
- *     views of the evaluation's paper variant (ADR-147), the hand-out's order
+ *     views of the evaluation's paper variant (ADR-148), the hand-out's order
  *     and values — with the key beside each item, for the entry page. Staff
  *     only;
  *   - {@link enterPaperCopy}: the submission. Refused unless the evaluation
@@ -98,7 +98,7 @@ async function studentSeat(db: Db | Tx, record: EvaluationRecord, userId: string
 
 /**
  * The entry page's paper (ADR-125 §8, §9): the evaluation exactly as the
- * hand-out printed it — the student views of the paper variant (ADR-147),
+ * hand-out printed it — the student views of the paper variant (ADR-148),
  * built by the one builder of an attempt's view — with the whole key of
  * each item in the coordinates of that view, and the attempt the copy would
  * replace. Refused like the submission, so the page never offers what the

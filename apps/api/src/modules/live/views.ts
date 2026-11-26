@@ -220,7 +220,7 @@ export async function attemptView(
  * attempt row anywhere. Seed 0 by default, so it is stable between reloads;
  * the stateless preview of issue #75 passes the seed it drew instead, and
  * gets exactly the order and the shuffles an attempt of that seed would; a
- * paper variant (ADR-147) passes its seed and its stored values, as an
+ * paper variant (ADR-148) passes its seed and its stored values, as an
  * attempt holds them.
  * Its documents are what the caller hands it (ADR-144 §7): the teacher's
  * stateless preview loads the selection as the staff read it, whose files
@@ -234,7 +234,7 @@ export async function previewView(
   now: Date,
   /**
    * The seed and the stored values: none for a teacher's preview, which
-   * draws them from the seed; a paper variant's (ADR-147) for the hand-out
+   * draws them from the seed; a paper variant's (ADR-148) for the hand-out
    * and the paper entry.
    */
   attempt: InstanceAttempt = { seed: 0, instances: {} },

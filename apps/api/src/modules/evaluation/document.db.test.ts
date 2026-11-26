@@ -3,10 +3,10 @@
  * application: the staff "statement with key" and the hand-out, as Markdown
  * as PDFs and as their records; the hand-out searched for every secret of
  * its questions (invariant 4, 05 §5.7) and for its variant's seed, which it
- * follows and never shows (ADR-125 §8, ADR-147), in its three forms (§19);
+ * follows and never shows (ADR-125 §8, ADR-148), in its three forms (§19);
  * a parameterized evaluation on paper — one variant's values on the
  * hand-out and its key, stored, kept across prints and edits, and no
- * template anywhere (ADR-147, ADR-056 §4); the refusals of an evaluation
+ * template anywhere (ADR-148, ADR-056 §4); the refusals of an evaluation
  * that does not print (§5); and who reaches them (invariant 6).
  */
 import { randomUUID } from "node:crypto";
@@ -145,7 +145,7 @@ async function exam(extra: (poolId: string) => Promise<string[]> = async () => [
   return reload(db, seed.evaluationId);
 }
 
-/** Variant 1 of the paper (ADR-147), read behind the API's back; null before the first print. */
+/** Variant 1 of the paper (ADR-148), read behind the API's back; null before the first print. */
 const storedVariant = async (id: string) =>
   (await server.app.db.select().from(paperVariants).where(eq(paperVariants.evaluationId, id)))[0] ?? null;
 /** Its seed. */
@@ -174,7 +174,7 @@ describe("the statement with key (F-EXP-04)", () => {
     for (const marker of ["SHORT_KEY_SECRET", "CLOZE_KEY_SECRET", "x^3+11x", "EXPLANATION_SECRET_mcq", nameOf("rich")]) {
       expect(body).toContain(marker);
     }
-    // The paper's order (ADR-147), numbered as the hand-out numbers it: the variant drawn by the key.
+    // The paper's order (ADR-148), numbered as the hand-out numbers it: the variant drawn by the key.
     const seed = await storedSeed(evaluation.id);
     expect(seed).toEqual(expect.any(Number));
     const handout = HandoutRecord.parse((await get(url(evaluation.id, "handout.json"), teacher.headers)).json());
@@ -288,7 +288,7 @@ describe("the hand-out (ADR-125)", () => {
     const items = await joinedItems(db, evaluation.id);
     const base = items.map((i) => i.item.id);
     // A seed whose order is not the base order, set before the first print by
-    // an older server (`paper_seed`): variant 1 takes it (ADR-147).
+    // an older server (`paper_seed`): variant 1 takes it (ADR-148).
     let seed = 1;
     while (live.orderItems(items, settingsOf(evaluation), seed, evaluation.id).every((o, i) => o.item.id === base[i])) {
       seed += 1;
@@ -342,13 +342,13 @@ describe("the hand-out (ADR-125)", () => {
 });
 
 /*
- * A parameterized evaluation on paper (ADR-147): one variant's values,
+ * A parameterized evaluation on paper (ADR-148): one variant's values,
  * drawn from its seed, stored, shared by the hand-out and the key, kept or
  * drawn again by the keep rule of each side of the opening; and no
  * template in any form of the hand-out (ADR-056 §4; 05 §5.7; ADR-125 §19),
  * no drawn key, nor the variant's seed, version ids or values map.
  */
-describe("a parameterized evaluation on paper (ADR-147)", () => {
+describe("a parameterized evaluation on paper (ADR-148)", () => {
   /** An exam of the printable static types and one parameterized question of each v1 type. */
   const parameterizedExam = () =>
     exam(async (poolId) => {
@@ -369,7 +369,7 @@ describe("a parameterized evaluation on paper (ADR-147)", () => {
 
     const first = HandoutRecord.parse((await get(url(evaluation.id, "handout.json"), teacher.headers)).json());
     const stored = (await storedVariant(evaluation.id))!;
-    // Written back for a rolled-back image, which prints from `paper_seed` (ADR-147 §2).
+    // Written back for a rolled-back image, which prints from `paper_seed` (ADR-148 §2).
     expect((await reload(db, evaluation.id)).paperSeed).toBe(stored.seed);
     const ids = (await parameterizedItems(evaluation.id)).map((j) => j.item.id);
     expect(Object.keys(stored.instances).sort()).toEqual([...ids].sort());

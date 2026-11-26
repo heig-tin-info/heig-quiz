@@ -10,7 +10,7 @@
  * under `showAnswer: false`. The record's student shapes pass the forbidden
  * keys. The blank print is the hand-out of a past series: the statements
  * only, in the paper's order, no seed, its images exactly as the player's;
- * a parameterized series prints variant 1's values, no template (ADR-147).
+ * a parameterized series prints variant 1's values, no template (ADR-148).
  * For both, who reaches them (the caller's own portal session, invariant 6),
  * the shared hourly bucket apart from the personal export's, and the audit,
  * neither of which a refusal or a PDF the server cannot make touches.
@@ -182,7 +182,7 @@ const post = (url: string, headers: Record<string, string>, payload?: Payload) =
 const copyUrl = (attemptId: string, ext: "json" | "pdf") => `/app/api/attempts/${attemptId}/copy.${ext}`;
 const printUrl = (evaluationId: string) => `/app/api/student/evaluations/${evaluationId}/handout.pdf`;
 
-/** The seed of variant 1 of `evaluationId`'s paper (ADR-147), read behind the API's back; null before the first print. */
+/** The seed of variant 1 of `evaluationId`'s paper (ADR-148), read behind the API's back; null before the first print. */
 const variantSeed = async (evaluationId: string) =>
   (await server.app.db.select().from(paperVariants).where(eq(paperVariants.evaluationId, evaluationId)))[0]?.seed ?? null;
 
@@ -619,7 +619,7 @@ describe("the blank print of a past series (ADR-122 §9)", () => {
   });
 
   /*
-   * A parameterized series prints (ADR-147): variant 1 for every student,
+   * A parameterized series prints (ADR-148): variant 1 for every student,
    * no variant label, its values drawn and stored on the first print; no
    * template, seed or values map in the tree or the Typst source.
    */

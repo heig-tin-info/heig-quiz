@@ -1,5 +1,5 @@
 /**
- * The draw rule of stored values (ADR-056 §5, ADR-147 §3), on plain
+ * The draw rule of stored values (ADR-056 §5, ADR-148 §3), on plain
  * versions: what `completeInstances` keeps, what it draws, what drops, and
  * the two keep rules a new attempt and a paper variant pass it.
  */
@@ -34,7 +34,7 @@ const RENAMED_SHORT = { ...(PARAMETERIZED.short as object), prompt: "Dropped fro
 const drawnFor = (entry: InstanceItem) =>
   instanceOf(entry.question.type, entry.version, { seed: SEED, itemId: entry.item.id }).stored!;
 
-describe("completeInstances (ADR-056 §5, ADR-147 §3)", () => {
+describe("completeInstances (ADR-056 §5, ADR-148 §3)", () => {
   it("draws every parameterized item from its own stream when nothing is stored, and stores nothing for a static one", () => {
     const a = item("a", version("v1"));
     const b = item("b", version("v1"));
