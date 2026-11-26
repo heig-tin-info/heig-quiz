@@ -25,6 +25,7 @@ const workspace = (over: Partial<Workspace> = {}): Workspace => ({
   syncedAt: null,
   syncError: null,
   review: true,
+  distributionReview: true,
   quota: null,
   image: null,
   ...over,

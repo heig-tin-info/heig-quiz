@@ -638,6 +638,14 @@ const scenes = [
   // ADR-119 §9: the Settings tab with the work mode, its control aligned right like the other options'.
   { name: "project-settings-workspace", role: "teacher", path: "/projects/pj-published?projects=1&codespace=1&tab=settings", settle: 2500 },
   { name: "project-workspace-assistant", role: "teacher", path: "/projects/pj-draft?projects=1&codespace=1&assistant=1" },
+  // ADR-147: an owner's Open in workspace beside the distribution's link, its tooltip shown.
+  {
+    name: "project-distribution-workspace",
+    role: "teacher",
+    path: "/projects/pj-draft?projects=1&codespace=1",
+    fold: true,
+    act: (p) => p.getByRole("button", { name: /read-only|lecture seule/i }).hover(),
+  },
   // D21 (M6-07): a project under Safe Exam Browser, synced like an online one.
   { name: "project-workspace-seb", role: "teacher", path: "/projects/pj-draft-manual?projects=1&codespace=1" },
   // ADR-089 (M6-11e): Own tools | Online workspace, and under it the exam's Allowed devices. At Any (picked on

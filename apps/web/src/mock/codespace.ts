@@ -76,6 +76,8 @@ function view(projectId: string, ws: MockWorkspace): ProjectWorkspace {
     syncedAt: ws.syncedAt,
     syncError: ws.syncError,
     review: true,
+    // ADR-147: the distribution's session is an owner's; `?assistant=1` hides it.
+    distributionReview: !flags.assistant,
     // ADR-089 point 7: the persona's grant (mock/org.ts, 3 at once) against PRG1-2026's claimed students.
     quota: { max: 3, seats: classroomRoster("r1").filter((s) => s.status === "claimed" && !s.staff).length },
     // ADR-146 §4: "Labo 2 — pointeurs" runs a course image (`mock/workspaceImages.ts`), the others the default.

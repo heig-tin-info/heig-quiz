@@ -8,6 +8,8 @@ import { BASE, CLASSROOM_ID, makeProject, makeRepo, PAST, row } from "../test/pr
 import { fail, mockFetch, ok, renderWithProviders, type RouteHandler } from "../test/render";
 import { ProjectRepos } from "./ProjectRepos";
 import { RepoPage } from "./RepoPage";
+import { DistributionRepo } from "./DistributionRepo";
+import { OpenDistributionIcon } from "./OpenInWorkspace";
 
 /*
  * The staff's *Open in workspace* (ADR-129 §11, F-PROJ-27): absent without
@@ -34,6 +36,7 @@ const workspace = (over: Partial<ProjectWorkspace> = {}): ProjectWorkspace => ({
   syncedAt: null,
   syncError: null,
   review: true,
+  distributionReview: true,
   quota: null,
   image: null,
   ...over,
@@ -181,5 +184,50 @@ describe("Open in workspace, on the repository's page", () => {
     await screen.findByRole("heading", { level: 1 });
     await waitFor(() => expect(calls.some((c) => c.url === `${BASE}/workspace`)).toBe(true));
     expect(screen.queryByRole("button", { name: /Open in workspace/ })).toBeNull();
+  });
+});
+
+describe("Open in workspace, on the distribution repository (ADR-147)", () => {
+  const DIST = `POST ${BASE}/workspace/distribution`;
+  const NAME = "Open in workspace, read-only";
+  const renderDistribution = (p: ProjectDetail) =>
+    renderWithProviders(
+      <DistributionRepo projectId={p.id} fullName={p.distribution!.fullName} action={<OpenDistributionIcon project={p} />} />,
+    );
+
+  it.each<[string, Partial<ProjectDetail>]>([
+    ["a draft", { state: "draft" }],
+    ["a scheduled project", { state: "scheduled" }],
+    ["a published one", {}],
+    ["a closed one", { state: "locked" }],
+  ])("is offered to an owner beside the link, on %s, and launches with a POST", async (_case, over) => {
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    const { calls } = routes(ok(workspace()), { [DIST]: ok({ url: LAUNCH }) });
+    renderDistribution(project(over));
+    await userEvent.click(await screen.findByRole("button", { name: NAME }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith(LAUNCH));
+    expect(calls.filter((c) => c.method === "POST")).toEqual([expect.objectContaining({ url: `${BASE}/workspace/distribution`, body: null })]);
+  });
+
+  it.each<[string, RouteHandler, string | null, Partial<ProjectDetail>]>([
+    ["an assistant (or the holder ungranted)", ok(workspace({ distributionReview: false })), null, {}],
+    ["no portal", fail(404, { error: "not_found" }), null, {}],
+    ["an archived project", ok(workspace()), null, { archivedAt: PAST }],
+    ["an archived classroom", ok(workspace()), PAST, {}],
+  ])("is absent for %s", async (_case, ws, roomArchived, over) => {
+    const { calls } = routes(ws, {}, roomArchived);
+    renderDistribution(project(over));
+    await waitFor(() => expect(calls.some((c) => c.url === ROOM)).toBe(true));
+    await waitFor(() => expect(calls.some((c) => c.url === `${BASE}/workspace`)).toBe(true));
+    expect(screen.getByRole("link", { name: /labo-2-pointeurs-squashed/ })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("button", { name: NAME })).toBeNull());
+  });
+
+  it("words a refusal by its code", async () => {
+    routes(ok(workspace()), { [DIST]: fail(409, { error: "review_distribution_missing", message: "x" }) });
+    renderDistribution(project());
+    await userEvent.click(await screen.findByRole("button", { name: NAME }));
+    expect(await screen.findByText("The distribution repository is not built yet.")).toBeInTheDocument();
   });
 });

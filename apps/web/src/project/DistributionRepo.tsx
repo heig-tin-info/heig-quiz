@@ -6,8 +6,10 @@
  * the link, never the page's primary. Without a linked account, a note
  * leads to the Settings card (F-GH-05) instead of the button. On a
  * platform without the App, or while the account loads, the link alone.
+ * `action` sits beside the link: the owner's *Open in workspace* (ADR-147).
  */
 import { useMutation } from "@tanstack/react-query";
+import type { ReactNode } from "react";
 
 import type { ProjectDistributionAccess } from "@quiz/contracts";
 
@@ -28,7 +30,7 @@ const REFUSALS: Partial<Record<string, keyof Dict>> = {
 
 const settingsHref = routeToPath({ view: "settings" });
 
-export function DistributionRepo({ projectId, fullName }: { projectId: string; fullName: string }) {
+export function DistributionRepo({ projectId, fullName, action = null }: { projectId: string; fullName: string; action?: ReactNode }) {
   const t = useT();
   const account = useGithubAccount();
   const access = useMutation({
@@ -77,7 +79,11 @@ export function DistributionRepo({ projectId, fullName }: { projectId: string; f
 
   return (
     <span className="inline-flex max-w-full flex-col items-end gap-1">
-      <RepoLink fullName={fullName} />
+      <span className="inline-flex max-w-full items-center gap-1">
+        {/* The link truncates before the icon is pushed out of a narrow tile. */}
+        <RepoLink fullName={fullName} className="min-w-0" />
+        {action ? <span className="shrink-0">{action}</span> : null}
+      </span>
       {below}
     </span>
   );

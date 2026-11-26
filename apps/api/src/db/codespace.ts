@@ -153,6 +153,28 @@ export const codespaceReviews = pgTable(
 );
 
 /**
+ * An owner's review launches of a project's distribution repository
+ * (ADR-147 §4): per (owner, project), the twin of {@link codespaceReviews}
+ * keyed by the project, since the distribution has no `project_repos` row.
+ * Until when the portal may ask for the distribution's read token, the
+ * launch time plus `REVIEW_GRANT_MINUTES` by the database's clock, moved by
+ * every launch. Never a credential.
+ */
+export const codespaceDistributionReviews = pgTable(
+  "codespace_distribution_reviews",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    grantUntil: timestamp("grant_until", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.projectId] })],
+);
+
+/**
  * The heads the portal declared before relaying them (ADR-078 §2, §6): one
  * row per (GitHub repository, sha), idempotent. A push whose sender is
  * Quiz's App is the student's only when its `after` is one of these — read

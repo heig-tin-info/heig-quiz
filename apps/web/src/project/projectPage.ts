@@ -27,6 +27,7 @@ import {
   type ProjectSummary,
   type ReviewCheckpoint,
   type StaffReviewRefusal,
+  type DistributionReviewRefusal,
   type WorkModeRefusal,
   type WorkspaceStartRefusal,
 } from "@quiz/contracts";
@@ -377,6 +378,7 @@ type KnownCode =
   | WorkModeRefusal
   | Extract<WorkspaceStartRefusal, "not_online" | "seb_required">
   | StaffReviewRefusal
+  | DistributionReviewRefusal
   | ReposOpeningRefusal;
 const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   // ADR-145: the opening of an `online_seb` project's repositories, and the deadline move it refuses.
@@ -455,6 +457,8 @@ const REFUSAL_KEY: Partial<Record<KnownCode, keyof Dict>> = {
   review_archived: "project.refusal.reviewArchived",
   review_repo_unavailable: "project.refusal.reviewRepoUnavailable",
   review_exam_open: "project.refusal.reviewExamOpen",
+  // ADR-147: an owner's *Open in workspace* on the distribution.
+  review_distribution_missing: "project.refusal.reviewDistributionMissing",
 };
 
 /** The dictionary key wording a refusal the page knows, or null (the server's message then). */

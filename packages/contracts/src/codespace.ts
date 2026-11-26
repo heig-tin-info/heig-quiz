@@ -17,6 +17,7 @@ import {
   COLLECTION_REF_PREFIX,
   DEVICE_LEVEL_IDS,
   GIT_TOKEN_REFUSALS,
+  DISTRIBUTION_REVIEW_REFUSALS,
   STAFF_REVIEW_REFUSALS,
   SUPERVISED_DEVICE_LEVELS,
   WORK_MODE_REFUSALS,
@@ -32,7 +33,7 @@ import { SyncMessage } from "./message.js";
  * the trusted clients of its device level (ADR-089).
  * The lists are `@quiz/domain`'s (`workMode.ts`), re-exported here.
  */
-export { GIT_TOKEN_REFUSALS, STAFF_REVIEW_REFUSALS, WORK_MODE_REFUSALS, WORK_MODES, WORKSPACE_START_REFUSALS };
+export { DISTRIBUTION_REVIEW_REFUSALS, GIT_TOKEN_REFUSALS, STAFF_REVIEW_REFUSALS, WORK_MODE_REFUSALS, WORK_MODES, WORKSPACE_START_REFUSALS };
 export const WorkMode = z.enum(WORK_MODES);
 export type WorkMode = z.infer<typeof WorkMode>;
 
@@ -282,13 +283,21 @@ export const REVIEW_AUDIENCE = "heig-codespace-review";
  * one repository of a project. `repo` is the reviewed repository; `holder`
  * the project's quota holder, whose quota the session counts against, and
  * `maxActiveSessions` that holder's grant.
+ *
+ * ADR-147: `projectRepoId` null names the project's distribution repository
+ * (an owner's session on what the students receive; `repo` is then the
+ * distribution and its handed-out default branch). A portal older than it
+ * refuses the null, so a distribution session never opens as a repository's.
+ * `image` is the project's image, pinned by digest (ADR-146 §4), null for
+ * the default; absent from an older platform: the default.
  */
 export const ReviewLaunchTokenClaims = launchIdentityClaims(REVIEW_AUDIENCE)
   .extend({
     projectId: z.uuid(),
-    projectRepoId: z.uuid(),
+    projectRepoId: z.uuid().nullable(),
     holder: z.object({ id: z.string().min(1), email: z.string().min(1) }),
     maxActiveSessions: z.number().int().min(0),
+    image: DigestReference.nullable().default(null),
   })
   .refine(lifetimeWithin(LAUNCH_TOKEN_TTL_SECONDS), "a launch token lives five minutes at most");
 export type ReviewLaunchTokenClaims = z.infer<typeof ReviewLaunchTokenClaims>;
@@ -385,9 +394,13 @@ const gitRequestClaims = <A extends string>(aud: A) =>
  * `reviewRepoId` (a `project_repos.id`) names a repository a staff member
  * launched a review session of (ADR-129 §7): a read grant, decided by that
  * record and the user's staff access, never by ADR-078's launch rule.
+ * `reviewDistribution` names, instead, the project's distribution
+ * repository an owner launched a review session of (ADR-147 §5): a read
+ * grant decided by that record and the user's ownership. Never both.
  */
 export const GitTokenRequestClaims = gitRequestClaims(GIT_TOKEN_AUDIENCE)
-  .extend({ reviewRepoId: z.uuid().optional() })
+  .extend({ reviewRepoId: z.uuid().optional(), reviewDistribution: z.literal(true).optional() })
+  .refine((c) => c.reviewRepoId === undefined || c.reviewDistribution === undefined, "one review target per request")
   .refine(lifetimeWithin(GIT_REQUEST_TTL_SECONDS), "a request lives one minute at most");
 export type GitTokenRequestClaims = z.infer<typeof GitTokenRequestClaims>;
 
@@ -906,6 +919,24 @@ export const WorkspaceReview = z.object({ url: z.url() });
 export type WorkspaceReview = z.infer<typeof WorkspaceReview>;
 
 /**
+ * An owner's review session of the project's distribution repository
+ * (ADR-147): `POST /app/api/projects/:id/workspace/distribution`, a session
+ * write, no body, answering {@link WorkspaceReview}. An assistant is `403
+ * owner_required`; past it, `409 { error: <code> }`
+ * ({@link DistributionReviewRefusal}, the rule `distributionReviewRefusal`
+ * of `@quiz/domain`).
+ */
+export const DistributionReviewRefusal = z.enum(DISTRIBUTION_REVIEW_REFUSALS);
+export type DistributionReviewRefusal = z.infer<typeof DistributionReviewRefusal>;
+
+/** The distribution's review route, as the server registers it. */
+export const WORKSPACE_DISTRIBUTION_ROUTE = "/app/api/projects/:id/workspace/distribution";
+
+/** The distribution's review route of a project. */
+export const workspaceDistributionPath = (projectId: string): string =>
+  `/app/api/projects/${encodeURIComponent(projectId)}/workspace/distribution`;
+
+/**
  * The student's `.seb` of an `online_seb` project (D21, M6-07): a one-time
  * file whose start URL opens a `seb` session confined to the project.
  */
@@ -965,6 +996,14 @@ export const ProjectWorkspace = z.object({
    * the project's quota holder holds an enabled workspace grant.
    */
   review: z.boolean(),
+  /**
+   * The CALLER may open the project's distribution repository in a review
+   * session (ADR-147 §2, §9): an owner of the course (an administrator with
+   * Super Powers counts as one, ADR-068), the quota holder granted. Whether
+   * the distribution is built and the archives are the page's to apply, by
+   * `distributionReviewRefusal`.
+   */
+  distributionReview: z.boolean(),
   /**
    * The quota a station sitting runs against (ADR-089, amendment point 7):
    * the quota holder's `maxActiveSessions` and the classroom's claimed

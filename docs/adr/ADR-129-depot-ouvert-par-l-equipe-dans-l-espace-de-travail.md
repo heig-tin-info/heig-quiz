@@ -8,6 +8,10 @@ challenge and two reviews). Issue [#1088](https://github.com/heig-tin-info/heig-
 spun off option C of [#922](https://github.com/heig-tin-info/heig-quiz/issues/922).
 Delivery progress lives in `changes/`. §11's sheet is the repository's page since
 [ADR-137](ADR-137-page-du-depot.md) (2026-11-19), the action still secondary there.
+Amended 2026-11-26 by [ADR-147](ADR-147-depot-de-distribution-dans-l-espace-de-travail.md)
+(an owner's review of the distribution repository, a second target of §2,
+§4–§6, §10, §11; every review runs the project's image, §9 and §10):
+[§14](#14-amendment-2026-11-26-the-distribution-and-the-projects-image-adr-147).
 
 Scope: a course staff member's **review session** — the online workspace
 portal (`apps/codespace`) opened by the staff on one repository of a
@@ -423,6 +427,32 @@ first), and no review token is minted before the web's action exists:
    the wipe and its sweep, `ForgeOwner.review`; unit tests.
 3. **Web**: the action, its state from the domain rule, its refusals, both
    languages.
+
+### 14. Amendment 2026-11-26: the distribution and the project's image (ADR-147)
+
+[ADR-147](ADR-147-depot-de-distribution-dans-l-espace-de-travail.md) owns
+the rule (product owner, 2026-11-26); this section names what changes here.
+
+- **A second target.** A course owner (an administrator with Super Powers
+  counting as one) may open the project's **distribution repository** in a
+  review session, in any unarchived state of the project, a draft and a
+  scheduled one included (§2's gates do not apply to it; its own rule is
+  `distributionReviewRefusal`). Its route, record
+  (`codespace_distribution_reviews`), token (`projectRepoId: null`) and
+  token grant (`reviewDistribution`) are ADR-147 §4–§5; §4's reach (any
+  staff seat) is unchanged for a repository's review.
+- **The same session.** On the portal its assignment is
+  `review-dist-<projectId>`, under §10's reserved prefix, wiped and swept
+  alike; it shares §1's one live review per staff member and §3's cap.
+- **The project's image (§10).** *"A review assignment … the default
+  image"* no longer holds: every review runs the project's image, carried
+  in the token's `image` claim, the default for a project with none or a
+  `free` one (ADR-147 §6, reversing ADR-146 §3 for reviews).
+- **§9.** The mitigation *automatic tasks off* is the image's machine
+  settings, which a course image's author can defeat; and a course image
+  now runs in a staff member's browser beside their sessions of other
+  courses, student notebook outputs included. Both risks are accepted by
+  the product owner (ADR-147 §8); question 70 stays the fix.
 
 ## Consequences
 

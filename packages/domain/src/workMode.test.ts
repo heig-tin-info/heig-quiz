@@ -7,6 +7,7 @@ import {
   kioskProjectPairable,
   quotaHolder,
   portalDeadline,
+  distributionReviewRefusal,
   staffReviewRefusal,
   workModeChoices,
   workModeRefusal,
@@ -14,6 +15,7 @@ import {
   workSettingOf,
   workspaceClosed,
   workspaceStartRefusal,
+  type DistributionReviewFacts,
   type GitTokenFacts,
   type StaffReviewFacts,
   type WorkModeFacts,
@@ -353,5 +355,27 @@ describe("staffReviewRefusal (ADR-129 §5)", () => {
     expect(staffReviewRefusal({ ...all, holderGranted: true })).toBe("review_archived");
     expect(staffReviewRefusal({ ...all, holderGranted: true, classroomArchived: false })).toBe("review_repo_unavailable");
     expect(staffReviewRefusal({ ...all, holderGranted: true, classroomArchived: false, repo })).toBe("review_exam_open");
+  });
+});
+
+describe("distributionReviewRefusal (ADR-147 §3)", () => {
+  const facts = (over: Partial<DistributionReviewFacts> = {}): DistributionReviewFacts => ({
+    holderGranted: true,
+    classroomArchived: false,
+    projectArchived: false,
+    distributionBuilt: true,
+    ...over,
+  });
+
+  it("opens a built distribution of a project not archived", () => {
+    expect(distributionReviewRefusal(facts())).toBeNull();
+  });
+
+  it("refuses without the grant, archived, or with no distribution built, in that order", () => {
+    expect(distributionReviewRefusal(facts({ distributionBuilt: false }))).toBe("review_distribution_missing");
+    const all = facts({ holderGranted: false, projectArchived: true, distributionBuilt: false });
+    expect(distributionReviewRefusal(all)).toBe("review_not_granted");
+    expect(distributionReviewRefusal({ ...all, holderGranted: true })).toBe("review_archived");
+    expect(distributionReviewRefusal(facts({ classroomArchived: true }))).toBe("review_archived");
   });
 });

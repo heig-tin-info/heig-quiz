@@ -95,7 +95,8 @@ them on exactly two points, and on nothing else:
    `shadow.git` snapshots). The runner's `/work` is a tmpfs and nothing from the host is
    mounted; here the student's work must survive the container. A staff
    member's **review session** ([ADR-129](../../docs/adr/ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md),
-   accepted 2026-11-14) has one directory per (staff member, repository),
+   accepted 2026-11-14; ADR-147 adds the project's distribution repository
+   as a target, assignment `review-dist-<projectId>`) has one directory per (staff member, repository),
    removed when the session closes and swept at startup, never snapshotted:
    narrower than this divergence, not a third one. The `review-` prefix is
    the portal's own (`REVIEW_ASSIGNMENT_PREFIX`; the sync answers
@@ -211,9 +212,13 @@ channel divergence for its containers.
     `--base` only). A course image derived from it may bring notebooks
     back ([ADR-146 §9](../../docs/adr/ADR-146-images-publiques-de-l-espace-de-travail.md)):
     it then controls what code-server serves on the shared origin, a risk
-    the product owner accepted for that course's own sessions; the
-    platform's own runs (default, review sessions, the collection's reader)
-    are always `quiz-base`. Gaps and the full fix: [ADR-047, amendment of 2026-10-11](../../docs/adr/ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
+    the product owner accepted for that course's own sessions and, since
+    the staff's review sessions run the project's image
+    ([ADR-147](../../docs/adr/ADR-147-depot-de-distribution-dans-l-espace-de-travail.md)
+    §6, §8), for a staff member's browser across courses and the students'
+    notebook outputs shown there; the platform's own runs (the default, the
+    collection's reader, the review wipe, the admission) are always
+    `quiz-base`. Gaps and the full fix: [ADR-047, amendment of 2026-10-11](../../docs/adr/ADR-047-espace-de-travail-en-ligne.md#amendment-2026-10-11-one-origin-for-every-session-audit-l24).
 15. **Nothing published comes from a host-side read of `work/`**
     ([ADR-130, correction of 2026-11-16](../../docs/adr/ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md#correction-2026-11-16-the-collection-reads-through-a-confined-reader),
     which gives the reason). Whatever leaves the engine VM reads `work/`
@@ -234,8 +239,11 @@ channel divergence for its containers.
     reference runs only once `admitted_images` holds it `ready` under that
     very reference (one row per reference), else the start is refused
     (`ImageNotAdmittedError`, a page of its own, no container) — and so is
-    an image the store no longer holds. The reader and the review sessions
-    run the default, never a course's image. The sync stores a reference
+    an image the store no longer holds. The reader, the review wipe and the
+    admission containers run the default, never a course's image; a review
+    session (ADR-129, and an owner's on the distribution repository,
+    ADR-147) runs the image its token's `image` claim names, the default
+    when null, refused like any other start when not admitted. The sync stores a reference
     not admitted; a running container keeps the image it started with
     (`sessions.image`). The admission (`images/admission.ts`) reads the
     registry anonymously, decides on the manifest (`manifestVerdict`: the

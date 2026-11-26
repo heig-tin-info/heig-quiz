@@ -1,7 +1,7 @@
 import { Laptop, Loader2 } from "lucide-react";
 
-import { workspaceReviewPath, type ProjectDetail, type ProjectRepoView } from "@quiz/contracts";
-import { staffReviewRefusal, type StaffReviewRefusalCode } from "@quiz/domain";
+import { workspaceDistributionPath, workspaceReviewPath, type ProjectDetail, type ProjectRepoView } from "@quiz/contracts";
+import { distributionReviewRefusal, staffReviewRefusal, type StaffReviewRefusalCode } from "@quiz/domain";
 
 import { useClassroom } from "../course/parts";
 import { useT } from "../i18n";
@@ -95,6 +95,37 @@ export function OpenInWorkspaceIcon({ projectId, repo, action }: { projectId: st
         launch();
       }}
     >
+      {busy ? <Loader2 className="animate-spin" /> : <Laptop />}
+    </IconButton>
+  );
+}
+
+/**
+ * An owner's *Open in workspace* on the distribution repository (ADR-147
+ * §9): what the students receive, read-only, in the project's image, in
+ * any state of the project, a draft and a scheduled one included. Absent
+ * unless the workspace read says the caller may (`distributionReview`: an
+ * owner, the quota holder granted) and THE rule of `@quiz/domain`
+ * (`distributionReviewRefusal`) lets the page's facts through: a built
+ * distribution, nothing archived. An icon beside the link, never the page's
+ * primary action.
+ */
+export function OpenDistributionIcon({ project }: { project: ProjectDetail }) {
+  const t = useT();
+  const toast = useToast();
+  const workspace = useWorkspace(project.id);
+  const classroom = useClassroom(project.classroomId, { retry: false });
+  const { busy, launch } = usePortalLaunch(workspaceDistributionPath(project.id), (error) => toast(refusalMessage(error, t), "error"));
+  if (!workspace.data?.distributionReview) return null;
+  const refusal = distributionReviewRefusal({
+    holderGranted: true,
+    classroomArchived: (classroom.data?.archivedAt ?? null) !== null,
+    projectArchived: project.archivedAt !== null,
+    distributionBuilt: project.distribution !== null,
+  });
+  if (refusal !== null) return null;
+  return (
+    <IconButton label={t("project.distribution.openInWorkspace")} aria-busy={busy} disabled={busy} onClick={launch}>
       {busy ? <Loader2 className="animate-spin" /> : <Laptop />}
     </IconButton>
   );

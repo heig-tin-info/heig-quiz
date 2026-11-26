@@ -20,6 +20,7 @@ import {
 import { foreignZone } from "./newProject";
 import { SyncButton } from "./parts";
 import { DistributionRepo } from "./DistributionRepo";
+import { OpenDistributionIcon } from "./OpenInWorkspace";
 import {
   deadlineDesc,
   deadlineRefusal,
@@ -290,7 +291,12 @@ function SourceTile({
           [
             t("project.distribution"),
             project.distribution ? (
-              <DistributionRepo key="d" projectId={project.id} fullName={project.distribution.fullName} />
+              <DistributionRepo
+                key="d"
+                projectId={project.id}
+                fullName={project.distribution.fullName}
+                action={<OpenDistributionIcon project={project} />}
+              />
             ) : (
               <span className="text-fg-muted">{t("project.distribution.building")}</span>
             ),

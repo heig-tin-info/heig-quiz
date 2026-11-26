@@ -31,6 +31,9 @@ Amended 2026-11-18 by [ADR-132](ADR-132-mise-a-jour-du-projet-greffee-a-la-corre
 §11 (the teacher's update fetched into an `online` workspace): one more use
 of the write grant, no rule changed,
 [§14](#14-amendment-2026-11-18-the-teachers-update-adr-132).
+Amended 2026-11-26 by [ADR-147](ADR-147-depot-de-distribution-dans-l-espace-de-travail.md)
+(an owner's read grant on the distribution in every mode, §2 check 3,
+§9, §12): [§15](#15-amendment-2026-11-26-the-distributions-review-adr-147).
 
 Scope: how the online workspace portal (`apps/codespace`, on the engine VM)
 reaches a student's GitHub repository — seeding a workspace from it and
@@ -652,6 +655,30 @@ repository lacks the commit; a forge with no credentials at all fetches
 anonymously, as the seeding does. No rule changes, the read grant
 on the distribution stays `online_seb`'s, nothing is written on GitHub, and
 §9's blast radius gains nothing.
+
+### 15. Amendment 2026-11-26: the distribution's review (ADR-147)
+
+[ADR-147](ADR-147-depot-de-distribution-dans-l-espace-de-travail.md) §5
+owns the rule (product owner, 2026-11-26); this section names what changes
+here.
+
+- **Check 3 gains a staff read grant on the distribution, in every mode.**
+  `GitTokenRequestClaims` gains an optional `reviewDistribution: true`,
+  never beside `reviewRepoId`. A request carrying it is decided by
+  ADR-147 §5 only: a fresh `codespace_distribution_reviews` record of that
+  user on that project, the user's ownership of the course re-read at the
+  request, the stored distribution's name, and `distributionReviewRefusal`;
+  the grant is `contents: read` on the stored `distribution_repo_id`,
+  `useUntil` = `expiresAt`, whatever the mode, the project's state, the
+  deadline or a lock. Without the claim, checks 2–5 hold unchanged, and the
+  distribution's read grant of check 3 stays `online_seb`'s seeding.
+- **§12** is unchanged for a repository's review; the relay declaration
+  gains nothing.
+- **Blast radius (§9).** A compromised portal may also obtain read tokens
+  on a project's distribution within ADR-129 §6's window after an owner
+  launched a session on it, while that ownership holds; small, since every
+  student of a published project already reads it, and in a draft or
+  scheduled project the handout before publication.
 
 ## Consequences
 

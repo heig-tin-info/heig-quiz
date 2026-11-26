@@ -10,7 +10,9 @@
  *     `contents: write` on the user's own repository, `contents: read` on
  *     the distribution repository of an `online_seb` project, and on a
  *     repository a staff member launched a review session of (ADR-129 §7,
- *     a request naming `reviewRepoId`, {@link reviewGrant}), audited
+ *     a request naming `reviewRepoId`, {@link reviewGrant}) or of a
+ *     project's distribution (ADR-147 §5, `reviewDistribution`,
+ *     {@link distributionGrant}), audited
  *     `codespace.git_token_issued` without the token;
  *   - `POST /app/codespace/relay-heads` → {@link declareRelayHeads}: one
  *     `codespace_relays` row per (repository, sha). A push of Quiz's App
@@ -42,11 +44,20 @@ import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import { bearerOf } from "../../auth/plugin.js";
 import type { AppConfig } from "../../config.js";
 import { qualified, type Db, type Tx } from "../../db/client.js";
-import { classrooms, codespaceLaunches, codespaceRelayJtis, codespaceRelays, codespaceReviews, projectRepos, projects } from "../../db/schema.js";
+import {
+  classrooms,
+  codespaceDistributionReviews,
+  codespaceLaunches,
+  codespaceRelayJtis,
+  codespaceRelays,
+  codespaceReviews,
+  projectRepos,
+  projects,
+} from "../../db/schema.js";
 import { githubStatus, mintRepositoryToken } from "../../github/app.js";
 import { projectInstallation } from "../github/service.js";
-import { userReachesCourse } from "../guards.js";
-import { reviewDecision } from "./service.js";
+import { userOwnsCourse, userReachesCourse } from "../guards.js";
+import { distributionDecision, reviewDecision } from "./service.js";
 
 /** A refusal of either route: its HTTP status and its code (`GitTokenError`). */
 export interface GitRelayRefusal {
@@ -144,6 +155,8 @@ async function authorizeCall<S extends typeof GitTokenRequestClaims | typeof Rel
     // A review session's request (ADR-129 §7): its own rule, never the launch rule below.
     const reviewRepoId = "reviewRepoId" in claims ? claims.reviewRepoId : undefined;
     if (reviewRepoId !== undefined) return reviewGrant(tx, claims, reviewRepoId);
+    // The distribution's (ADR-147 §5): its own rule too.
+    if ("reviewDistribution" in claims && claims.reviewDistribution === true) return distributionGrant(tx, claims);
     const [row] = await tx
       .select({ project: projects, archivedAt: classrooms.archivedAt })
       .from(projects)
@@ -220,6 +233,41 @@ async function reviewGrant(tx: Tx, claims: Pick<GitTokenRequestClaims, "userId" 
 }
 
 /**
+ * The token route's distribution branch (ADR-147 §5), the twin of
+ * {@link reviewGrant}: (1) a `codespace_distribution_reviews` row of this
+ * user on the request's project whose `grant_until` is ahead of the
+ * database's clock; (2) the user's OWNERSHIP re-read now
+ * (`userOwnsCourse`: Super Powers held in a session of their own, or an
+ * owner seat with a staff role) — an owner demoted to assistant meanwhile
+ * gets nothing; (3) the stored distribution's name is the one asked for;
+ * (4) the launch's `distributionDecision` on the facts read now: a holder
+ * without the grant or a distribution gone is `not_found`, an archive
+ * `closed`. Always a read grant on the distribution's stored GitHub id,
+ * until the token's own expiry.
+ */
+async function distributionGrant(tx: Tx, claims: Pick<GitTokenRequestClaims, "userId" | "projectId" | "repository">) {
+  const [row] = await tx
+    .select({ project: projects, courseId: classrooms.courseId, classroomArchivedAt: classrooms.archivedAt })
+    .from(codespaceDistributionReviews)
+    .innerJoin(projects, eq(projects.id, codespaceDistributionReviews.projectId))
+    .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
+    .where(
+      and(
+        eq(codespaceDistributionReviews.userId, claims.userId),
+        eq(codespaceDistributionReviews.projectId, claims.projectId),
+        sql`${qualified(codespaceDistributionReviews.grantUntil)} > now()`,
+        userOwnsCourse(claims.userId, qualified(classrooms.courseId)),
+      ),
+    );
+  if (!row || row.project.distributionFullName?.toLowerCase() !== claims.repository.toLowerCase()) return "not_found" as const;
+  const decision = await distributionDecision(tx, row);
+  if (decision.refusal === "review_not_granted" || decision.refusal === "review_distribution_missing") return "not_found" as const;
+  if (decision.refusal !== null) return "closed" as const;
+  const grant: GitTokenGrantDecision = { permission: "read", githubRepoId: decision.githubRepoId, useUntil: null };
+  return { grant, fullName: decision.fullName, orgId: row.project.orgId };
+}
+
+/**
  * `POST /app/codespace/git-token` (ADR-078 §2): the prologue, then check 6
  * (the organization's installation acting, GitHub answering; otherwise
  * `503`) and the token on ONE repository id; `useUntil` is `min(expiresAt,
@@ -268,6 +316,7 @@ export async function issueGitToken(
       expiresAt: answer.expiresAt,
       jti: claims.jti,
       ...(claims.reviewRepoId !== undefined && { reviewRepoId: claims.reviewRepoId }),
+      ...(claims.reviewDistribution === true && { reviewDistribution: true }),
     },
   });
   log.info({ jti: claims.jti, projectId: claims.projectId, permission: grant.permission }, "codespace.git-token issued");

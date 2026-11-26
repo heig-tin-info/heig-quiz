@@ -117,11 +117,16 @@ export function createQuizForge(opts: QuizForgeOptions): Forge {
         jti: randomUUID(),
         // A review names the reviewed project and repository (ADR-129 §7):
         // without `reviewRepoId` Quiz would decide the request by ADR-078's
-        // launch rule, which a staff member never meets.
+        // launch rule, which a staff member never meets. The distribution's
+        // review names no repository row, `reviewDistribution` instead (ADR-147 §5).
         projectId: owner.review?.projectId ?? owner.assignment,
         userId: owner.student,
         repository: fullName(repo),
-        ...(owner.review ? { reviewRepoId: owner.review.projectRepoId } : {}),
+        ...(owner.review
+          ? owner.review.projectRepoId === null
+            ? { reviewDistribution: true }
+            : { reviewRepoId: owner.review.projectRepoId }
+          : {}),
         ...extra,
       },
       opts.secret,

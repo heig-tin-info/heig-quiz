@@ -186,9 +186,15 @@ export type AuditAction =
    * `review_launched` (ADR-129 §8): a staff member launched a review
    * session of one repository (subject the project; `payload.projectRepoId`,
    * `repository`, `jti`, the caller's `reach`) — never the token.
+   * `distribution_review_launched` (ADR-147 §7): an owner launched a review
+   * session of the project's distribution repository (subject the project;
+   * `payload.repository`, `jti`, the caller's `reach`, the `image` it runs,
+   * null for the default) — never the token. A distribution grant's
+   * `git_token_issued` carries `reviewDistribution: true`.
    */
   | "codespace.launch_issued"
   | "codespace.review_launched"
+  | "codespace.distribution_review_launched"
   | "codespace.work_mode"
   | "codespace.sync_requested"
   | "codespace.synced"

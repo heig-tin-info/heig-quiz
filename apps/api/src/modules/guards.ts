@@ -521,6 +521,18 @@ export function userReachesCourse(userId: string, courseId: AnyColumn | SQL): SQ
 }
 
 /**
+ * {@link userReachesCourse} narrowed to what {@link requireCourseRole}`(owner)`
+ * lets through, for a user with no session in hand (the distribution's review
+ * token route, ADR-147 §5): Super Powers held now — under them an
+ * administrator is an owner (`effectiveCourseRole`) —, or an OWNER seat on the
+ * course while the account's stored role is staff.
+ */
+export function userOwnsCourse(userId: string, courseId: AnyColumn | SQL): SQL {
+  const ownerSeat = sql`EXISTS (SELECT 1 FROM ${courseStaff} WHERE ${courseStaff.courseId} = ${courseId} AND ${courseStaff.userId} = ${userId} AND ${courseStaff.role} = 'owner')`;
+  return sql`(${superPowersHeld(userId)} OR (${staffAccount(userId)} AND ${ownerSeat}))`;
+}
+
+/**
  * The caller of an authenticated request: its user, and its reach by
  * {@link reachOf} — computed once, by the session hook (`auth/plugin.ts`),
  * which reads the clock once per request.

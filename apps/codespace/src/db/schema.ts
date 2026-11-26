@@ -193,7 +193,8 @@ export const assignments = sqliteTable("assignments", {
    * A staff member's review session (ADR-129 §10): the reviewed project and
    * repository, both Quiz's ids. Null on every synchronized assignment; an
    * assignment is a review if and only if it is set. Its row is upserted by
-   * `GET /review` (id `review-<projectRepoId>`), never by a sync.
+   * `GET /review` (id `review-<projectRepoId>`, or `review-dist-<projectId>`
+   * for a project's distribution repository, ADR-147), never by a sync.
    */
   reviewOf: text("review_of", { mode: "json" }).$type<ReviewOf>(),
   /**
@@ -212,10 +213,14 @@ export interface AssignmentRepoRef {
   defaultBranch: string;
 }
 
-/** What a review assignment reviews (ADR-129 §10): Quiz's project and `project_repos.id`. */
+/**
+ * What a review assignment reviews (ADR-129 §10): Quiz's project and
+ * `project_repos.id`, or null for the project's distribution repository
+ * (ADR-147 §4).
+ */
 export interface ReviewOf {
   projectId: string;
-  projectRepoId: string;
+  projectRepoId: string | null;
 }
 
 export type AssignmentRow = typeof assignments.$inferSelect;

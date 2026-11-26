@@ -23,6 +23,7 @@ import { projectGradebookRow, ProtectedFilesRow, useHandoutTree } from "./Projec
 import { WorkModeSetting, useWorkspace } from "./ProjectWorkspace";
 import { advancedCount, type WriteProject } from "./projectPage";
 import { DistributionRepo } from "./DistributionRepo";
+import { OpenDistributionIcon } from "./OpenInWorkspace";
 
 /** The grace, in minutes: written when the teacher leaves the field; 0 is a grace of none. */
 function GraceRow({ value, disabled, onWrite }: { value: number; disabled: boolean; onWrite: (minutes: number) => void }) {
@@ -106,7 +107,12 @@ export function ProjectDraftForm({
               [
                 t("project.distribution"),
                 project.distribution ? (
-                  <DistributionRepo key="d" projectId={project.id} fullName={project.distribution.fullName} />
+                  <DistributionRepo
+                    key="d"
+                    projectId={project.id}
+                    fullName={project.distribution.fullName}
+                    action={<OpenDistributionIcon project={project} />}
+                  />
                 ) : (
                   <span className="text-fg-muted">{t("project.distribution.building")}</span>
                 ),

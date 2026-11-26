@@ -100,6 +100,23 @@ describe("the requests it signs (ADR-078 §2)", () => {
     expect(claims.exp - claims.iat).toBe(60);
   });
 
+  it("a distribution's review asks with reviewDistribution, never a repository id (ADR-147 §5)", async () => {
+    const review = { projectId: "33333333-3333-4333-8333-333333333333", projectRepoId: null };
+    const w = world();
+    await w.forge.authorization(REPO, { assignment: `review-dist-${review.projectId}`, student: OWNER.student, review }, GH);
+    const call = w.quizCalls()[0]!;
+    const jwt = call.authorization!.replace(/^Bearer /, "");
+    const verdict = await verifyHs256<Record<string, unknown>>(jwt, SECRET, {
+      audience: GIT_TOKEN_AUDIENCE,
+      issuer: PORTAL_ISSUER,
+      requireJti: true,
+      now: () => Math.floor(T0 / 1000),
+    });
+    const claims = GitTokenRequestClaims.parse(verdict.ok ? verdict.claims : null);
+    expect(claims).toMatchObject({ projectId: review.projectId, reviewDistribution: true, userId: OWNER.student });
+    expect(claims.reviewRepoId).toBeUndefined();
+  });
+
   it("a review session names the reviewed project and repository on EVERY token request (ADR-129 §7)", async () => {
     const review = { projectId: "33333333-3333-4333-8333-333333333333", projectRepoId: "44444444-4444-4444-8444-444444444444" };
     const owner = { assignment: `review-${review.projectRepoId}`, student: OWNER.student, review };

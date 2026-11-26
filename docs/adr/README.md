@@ -177,6 +177,7 @@ so this index does not duplicate their status or maintain a second dependency gr
 - [ADR-130 — The online workspace is collected at the deadline: read confined, committed by the platform, counted on time](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md)
 - [ADR-145 — An `online_seb` project's repositories opened to their students, read-only, by the course owner](ADR-145-depots-seb-ouverts-aux-etudiants.md)
 - [ADR-146 — Workspace images: public images pulled by digest, a base the platform publishes, a list per course](ADR-146-images-publiques-de-l-espace-de-travail.md)
+- [ADR-147 — The distribution repository opened in the workspace by an owner, and reviews in the project's image](ADR-147-depot-de-distribution-dans-l-espace-de-travail.md)
 - [ADR-048 — Group assignments: groups per assignment, formed by the staff, delivered in three lots](ADR-048-projets-de-groupe.md) (superseded, folded into ADR-070)
 - [ADR-070 — Group sets: a classroom's reusable groups, which a project follows until its deadline](ADR-070-repartitions-de-groupes.md)
 - [ADR-077 — A staff seat accepts a project: the teacher's test repository](ADR-077-depots-de-test-du-personnel.md)

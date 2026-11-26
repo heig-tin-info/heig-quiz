@@ -20,6 +20,8 @@
  *     workspaces, live from the portal;
  *   - `POST /app/api/projects/:id/repos/:rid/workspace/review` — a review
  *     session of one repository (ADR-129), described on the route;
+ *   - `POST /app/api/projects/:id/workspace/distribution` — an owner's review
+ *     session of the distribution repository (ADR-147), described on the route;
  *   - a course's workspace images and a project's choice (ADR-146),
  *     `imageRoutes.ts`.
  *
@@ -40,6 +42,7 @@ import {
   ProjectWorkModeBody,
   ProjectWorkspaceSyncAccepted,
   RELAY_HEADS_PATH,
+  WORKSPACE_DISTRIBUTION_ROUTE,
   WORKSPACE_REVIEW_ROUTE,
   WORKSPACE_START_ROUTE,
   type WorkspaceReview,
@@ -72,6 +75,7 @@ import {
   projectWorkspace,
   requestCodespaceSync,
   sebProjectSeat,
+  startDistributionReview,
   startReview,
   startWorkspace,
   type LaunchVia,
@@ -133,6 +137,29 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     session,
     teacher({ params: ProjectRepoParams, load: accessibleProjectRepo.bind(null, app) }, async ({ req, reply, now, scope }) => {
       const review = await startReview(app.db, config, scope, { user: userOf(req), reach: callerOf(req).reach, actor: actorOf(req) }, now);
+      if (typeof review === "string") return reply.code(409).send({ error: review });
+      const started: WorkspaceReview = { url: `${config.CODESPACE_URL}/review?token=${encodeURIComponent(review.token)}` };
+      return reply.header("cache-control", "no-store").send(started);
+    }),
+  );
+
+  /**
+   * An owner's review session of the project's distribution repository
+   * (ADR-147 §4): a session write, no body. The auth plugin as for a
+   * repository's review; then the loader: the caller's own portal session,
+   * `staffAccess` on the course (or Super Powers), anyone else the 404 of a
+   * missing project; then `requireCourseRole(owner)`, an assistant the `403
+   * owner_required`. Then `distributionReviewRefusal`, `409 { error }`; in
+   * any state of the project, a draft or a scheduled one included. Otherwise
+   * `{ url }`, the portal's `/review?token=…`, `no-store`; the token is never
+   * logged, stored nor audited (its `jti` is).
+   */
+  app.post(
+    WORKSPACE_DISTRIBUTION_ROUTE,
+    session,
+    teacher(onOwnedProject, async ({ req, reply, now, scope }) => {
+      const row = { project: scope.project, courseId: scope.course.id, classroomArchivedAt: scope.room.archivedAt };
+      const review = await startDistributionReview(app.db, config, row, { user: userOf(req), reach: callerOf(req).reach, actor: actorOf(req) }, now);
       if (typeof review === "string") return reply.code(409).send({ error: review });
       const started: WorkspaceReview = { url: `${config.CODESPACE_URL}/review?token=${encodeURIComponent(review.token)}` };
       return reply.header("cache-control", "no-store").send(started);
