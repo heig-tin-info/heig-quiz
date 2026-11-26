@@ -52,4 +52,15 @@ describe("code is shown as written (style.css)", () => {
     const rule = /\n@layer base \{[\s\S]*?\n  code,\n  kbd,\n  samp,\n  pre,\n  \.font-mono \{\s*font-variant-ligatures: none;/;
     expect(css).toMatch(rule);
   });
+
+  it("box drawing comes from the mono face too, so ┌─┬─┐ lines up with the text", () => {
+    expect(css).toContain('@import "./fonts/jetbrains-mono-symbols.css";');
+    const symbols = readFileSync(new URL("./fonts/jetbrains-mono-symbols.css", import.meta.url), "utf8");
+    const faces = [...symbols.matchAll(/@font-face \{([^}]*)\}/g)].map((m) => m[1]);
+    expect(faces).toHaveLength(2);
+    for (const face of faces) {
+      expect(face).toContain('font-family: "JetBrains Mono Variable";');
+      expect(face).toMatch(/unicode-range:[^;]*U\+2500-25A1/);
+    }
+  });
 });
