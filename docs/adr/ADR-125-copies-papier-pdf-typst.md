@@ -20,8 +20,9 @@ Amended 2026-11-26 by [ADR-147](ADR-147-variantes-papier.md), scope: §5 (a
 parameterized question prints: the `parameterized` refusal is gone), §8 (the
 paper seed becomes variant 1 of `paper_variants`, with the values it draws
 stored; the statement with key of a printed evaluation follows the paper's
-order) and §9 (a paper attempt is entered on the variant and carries its
-values).
+order), §9 (a paper attempt is entered on the variant and carries its
+values) and §17 (those values tell a paper copy apart on the anonymised
+table: an accepted limit).
 
 Scope: the printed hand-out of an exam and the PDF of every export; the
 paper attempt a staff member enters, its scan, and every reader of
@@ -275,7 +276,9 @@ nothing of B or C.
     table**: it is anonymised (F-GRADE-03, ADR-044), and a "Paper" badge
     there would name the one student whose computer died. The badge lives
     on the dashboard row, the results row, the staff copy and the inspect
-    view.
+    view. *(Amended by ADR-147, Consequences: on a parameterized item the
+    variant's values, shown in the cell, tell a paper copy apart — an
+    accepted limit.)*
 
 18. **The student's documents** — their own copy and the blank print of a
     past series — follow the

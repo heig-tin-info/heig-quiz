@@ -128,7 +128,7 @@ export async function legibleSeed(db: Db, evaluationId: string, now: Date): Prom
   const keyed = (await joinedItems(db, evaluationId)).filter((j) => j.version.variables !== null && j.question.type !== "mcq");
   const legible = (printed: string) => (values: Values) =>
     !fallOf(values).endsWith(".00") && !["3.71", "9.81", "24.79"].includes(fallOf(values)) && !showsKey(printed, values);
-  for (let seed = 1_234_567_891; ; seed += 1) {
+  for (let seed = 1_234_567_891; seed < 1_234_567_891 + 500; seed += 1) {
     const view = await live.previewView(db, evaluation!, now, { seed, instances: {} });
     const printed = JSON.stringify(view.items.map((i) => i.student));
     const keys = keyed.map((j) => poolService.instanceOf(j.question.type, j.version, { seed, itemId: j.item.id }).values!);
@@ -137,4 +137,5 @@ export async function legibleSeed(db: Db, evaluationId: string, now: Date): Prom
       return keys;
     }
   }
+  throw new Error("legibleSeed: no seed in 500 gives keys a search can tell from the paper's text");
 }

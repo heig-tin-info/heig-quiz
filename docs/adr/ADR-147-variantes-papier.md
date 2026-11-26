@@ -3,7 +3,8 @@
 ## Status
 
 Accepted (2026-11-26, the product owner's decisions 1 to 8, which reverse
-ADR-125 §5's refusal of a parameterized question on paper). Its first step
+ADR-125 §5's refusal of a parameterized question on paper, and the
+anonymity limit under Consequences). Its first step
 delivers variant 1 only; the rest is under "Not in this record's first step".
 
 Scope: what a printed paper of an evaluation is drawn from — the hand-out,
@@ -13,7 +14,8 @@ the paper attempt typed in from it — and where that draw is stored.
 Relations: amends [ADR-125](ADR-125-copies-papier-pdf-typst.md) §5 (the
 `parameterized` refusal disappears), §8 (the paper's seed moves into variant
 1; the statement with key of a printed evaluation follows the paper's order)
-and §9 (a paper attempt carries the variant's values), and
+§9 (a paper attempt carries the variant's values) and §17 (those values
+tell a paper copy apart on the anonymised table: an accepted limit), and
 [ADR-121](ADR-121-fabrique-d-exports.md) §8 step 3 (a parameterized question
 is no longer refused). Depends on [ADR-056](ADR-056-questions-parametrees.md)
 §4, §5, §7 and §9 (a variant is a third place drawn values are stored, beside
@@ -152,11 +154,16 @@ closes no door; none of it is built yet:
   waits for its contract migration.
 - A teacher who edits a question after printing and before the opening must
   print again: the platform holds the new draw, the paper holds the old one.
-- Anonymity: [PLACEHOLDER — wording to come from the coordinator after the
-  owner's answer. A paper attempt on a parameterized item carries the
-  variant's values, which the grading panel shows in each cell and which are
-  the numbers printed on the hand-out the grader holds, so a paper copy can
-  be told apart on the anonymised table (ADR-125 §17, F-GRADE-03).]
+- **Anonymity, an accepted limit** (product owner, 2026-11-26; amends
+  ADR-125 §17). A paper attempt on a parameterized item carries the
+  variant's values. The grading panel shows them in each cell, since a
+  parameterized answer cannot be graded without them, and they are the
+  numbers printed on the hand-out the grader holds: a paper copy can be told
+  apart on the anonymised table (F-GRADE-03), and several paper copies show
+  the same numbers. Anonymise guards against a bias, not a secret, and the
+  teacher who grades is the one who entered the copy. No value is hidden and
+  the entry is not refused on a parameterized evaluation; the "Paper" badge
+  stays off that table as before.
 
 ## Alternatives considered
 
