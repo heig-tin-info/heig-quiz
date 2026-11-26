@@ -77,12 +77,12 @@ const VARIANT = 1;
  *     printing again anyway, since old values may sit outside a corrected
  *     range or fail a corrected condition, which a replay does not check.
  *     After it, an entry is kept whenever it replays (ADR-056 §5); one that
- *     cannot — only a lost update leaves one, a print in flight writing
- *     values of the old names while the item was retargeted — is drawn
- *     again rather than refused for ever.
+ *     cannot — values of other names, or a regrade's version whose derived
+ *     rows fail on them — is drawn again rather than refused for ever.
  *   - The row is written only when something was drawn; an entry of an item
  *     gone, or made static, drops at the next such write. Draws are a
- *     function of the seed, so two concurrent calls write the same values.
+ *     function of the seed, so two concurrent calls draw the same values,
+ *     and the write lands only over the values this call read.
  *
  * Never returned to a client nor logged: the callers hand it to the `live`
  * module's builders only.
@@ -100,7 +100,15 @@ export async function paperVariant(
     await db
       .update(paperVariants)
       .set({ instances, updatedAt: now })
-      .where(and(eq(paperVariants.evaluationId, evaluation.id), eq(paperVariants.number, VARIANT)));
+      // Only over the values this call read: a print that started before a
+      // retarget must not write its older draw over a newer one.
+      .where(
+        and(
+          eq(paperVariants.evaluationId, evaluation.id),
+          eq(paperVariants.number, VARIANT),
+          eq(paperVariants.instances, row.instances),
+        ),
+      );
   }
   return { seed: row.seed, instances };
 }

@@ -82,10 +82,12 @@ different papers in one room, so that neighbours do not share their numbers.
      not check.
    - **After the opening** an entry is kept whenever it replays under the
      item's version (`replays`, ADR-056 §5, as an attempt's are read). One
-     that cannot is drawn again rather than answering 500 for ever; only a
-     lost update leaves one — a print in flight writing values of the old
-     names while the item was moved onto renamed variables, the exam then
-     opened.
+     that cannot — values of other names, or a regrade's version whose
+     derived rows fail on them — is drawn again rather than answering 500
+     for ever.
+   A write lands only over the values the call read (a compare-and-set on
+   `instances`): a print that started before a retarget never writes its
+   older draw over a newer one.
    A draw that fails is served from draw 0's values, the example the debrief
    already shows publicly (ADR-056 §7, §9), flagged in `fallback`. Draws are a
    function of the seed, so two first prints at the same instant write the

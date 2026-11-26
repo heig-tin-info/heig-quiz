@@ -50,7 +50,6 @@ export {
   templateHash,
   writtenConfig,
   type InstanceAttempt,
-  type KeepRule,
   type Reading,
   type VersionContent,
 } from "./instance.js";
