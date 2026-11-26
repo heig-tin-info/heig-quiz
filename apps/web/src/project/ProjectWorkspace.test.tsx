@@ -104,6 +104,23 @@ describe("the project's workspace section", () => {
     expect(await screen.findByText("No student has opened a workspace yet.")).toBeInTheDocument();
   });
 
+  it("leaves Either open on a launched online project, and says it is the only change left (ADR-149 §7)", async () => {
+    const { calls } = mockFetch({
+      [WS]: ok(workspace({ mode: "online", allowed: ["hybrid", "online"], refusal: "work_mode_frozen" })),
+      "PUT /app/api/projects/p1/workspace/mode": ok(workspace({ mode: "hybrid", allowed: ["hybrid"], refusal: "work_mode_frozen" })),
+      [SESSIONS]: ok({ reachable: true, sessions: [] }),
+      "GET /app/api/projects/p1": ok({}),
+    });
+    render();
+    const group = await screen.findByRole("radiogroup", { name: "Where students work" });
+    expect(within(group).getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual(["Either", "Online workspace"]);
+    expect(screen.getByTestId("workspace-refusal")).toHaveTextContent("only Either can still be chosen");
+    await userEvent.click(within(group).getByText("Either"));
+    await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ mode: "hybrid" }));
+    // Once there, nothing is left to choose.
+    await waitFor(() => expect(screen.getByTestId("workspace-refusal")).toHaveTextContent("where students work can no longer change"));
+  });
+
   it("says why the mode cannot change, the selector disabled", async () => {
     mockFetch({
       [WS]: ok(workspace({ mode: "online", allowed: ["online"], refusal: "work_mode_frozen", syncedAt: new Date().toISOString() })),

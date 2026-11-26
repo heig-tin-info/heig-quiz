@@ -36,6 +36,14 @@
  *   failure backdates the lease, a crash leaves it; the ticker claims either
  *   once expired ({@link claimReposAccessWork}).
  *
+ * - **A widening** (ADR-149 §7, amending ADR-047 M6-06 (A)): a change of
+ *   the work mode to one that invites with `push` from one that invited with
+ *   less (`widensInvitations`, `online` to `hybrid` above all) bumps the same
+ *   revision and claims the same lease in the mode's transaction
+ *   (`setWorkMode`); the job's pass for a `push` mode ({@link widenPass})
+ *   then brings every live grant up to `push` on GitHub, never down. The
+ *   invitations sent afterwards carry `push` already (`collaboratorPermission`).
+ *
  * STAFF ONLY: the routes load the project under `staffAccess`, the owner's
  * role checked by their loader (invariant 6). The student reads the
  * outcome through the project's student view alone (N-SEC-20).
@@ -44,13 +52,15 @@ import type { FastifyInstance } from "fastify";
 import { and, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
 import type { ProjectReposAccess } from "@quiz/contracts";
-import { openingOf, reposOpeningRefusal, type ReposOpeningRefusalCode } from "@quiz/domain";
+import { collaboratorPermission, openingOf, reposOpeningRefusal, type ReposOpeningRefusalCode } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import { isoOrNull } from "../../clock.js";
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import { classrooms, projectRepoAccess, projectRepos, projects } from "../../db/schema.js";
+import { ownerRepo } from "../../github/app.js";
+import { widenToWrite } from "../../github/collaborators.js";
 import { PROJECT_REPOS_ACCESS_QUEUE } from "../../jobs.js";
 import { notFoundError } from "../http.js";
 import { followInvitation, inviteAccount, notRecorded, revokeGrants } from "./access.js";
@@ -155,13 +165,21 @@ export async function setReposOpen(app: FastifyInstance, config: AppConfig, proj
       .where(eq(projects.id, projectId));
     return claim ? ({ projectId, lease: now.toISOString() } satisfies ProjectJob) : null;
   });
+  await sendReposAccessJob(app, config, job);
+}
+
+/**
+ * The job a write claimed, sent after its commit (null: a live job holds
+ * the lease and finds the new revision when its pass ends). Without a
+ * queue, in the request, as the deadline's staff actions run theirs.
+ */
+export async function sendReposAccessJob(app: FastifyInstance, config: AppConfig, job: ProjectJob | null): Promise<void> {
   if (job === null) return;
   if (app.boss) {
     await app.boss.send(PROJECT_REPOS_ACCESS_QUEUE, job);
     return;
   }
-  // Without a queue, in the request, as the deadline's staff actions run theirs.
-  await runReposAccessJob(app, config, job).catch((err: unknown) => app.log.error({ err, project: projectId }, "project repos access job failed"));
+  await runReposAccessJob(app, config, job).catch((err: unknown) => app.log.error({ err, project: job.projectId }, "project repos access job failed"));
 }
 
 /** The ticker's claim: a lease a failed job backdated, or a crashed one left, once expired (`claimLeases`). */
@@ -231,9 +249,41 @@ async function revokePass(app: FastifyInstance, run: LeasedRun, moved: () => Pro
 }
 
 /**
- * The `project.repos_access` job (ADR-145), in the leased frame
- * (`runLeased`): a pass for the fact the project holds — nothing for a
- * project of another mode —, the lease given back only while its revision
+ * A mode that invites with `push` (ADR-149 §7): every live grant of the
+ * project's repositories brought up to `push` on GitHub (`widenToWrite`: a
+ * collaborator's seat, a pending invitation, never lowering a higher one,
+ * never inviting anyone), one repository at a time, each one where
+ * something changed audited (`project_repo.access_widened`). A repository
+ * deleted, not live or archived is skipped; a locked one is not — its lock
+ * is a ruleset nobody bypasses, whatever the permission (F-PROJ-09, ADR-130
+ * §9), so `push` changes nothing there until it is lifted. A GitHub failure
+ * fails the repository and the job: the ticker runs the pass again, which
+ * finds the repositories done already unchanged.
+ */
+async function widenPass(app: FastifyInstance, run: LeasedRun, moved: () => Promise<boolean>): Promise<void> {
+  const { project, octokit } = run;
+  const grants = await app.db
+    .select({ repo: projectRepos, githubUserId: projectRepoAccess.githubUserId })
+    .from(projectRepoAccess)
+    .innerJoin(projectRepos, eq(projectRepos.id, projectRepoAccess.repoId))
+    .where(and(eq(projectRepos.projectId, project.id), isNull(projectRepoAccess.revokedAt), isNull(projectRepoAccess.revokingAt)));
+  const accounts = new Map<string, Set<number>>();
+  for (const { repo, githubUserId } of grants) accounts.set(repo.id, (accounts.get(repo.id) ?? new Set()).add(githubUserId));
+  const repos = [...new Map(grants.map((g) => [g.repo.id, g.repo])).values()].filter((r) => isLive(r, project) && r.archivedAt === null);
+  await run.each(repos, async (repo) => {
+    if (await moved()) return;
+    const { owner, repo: name } = ownerRepo(repo.fullName!);
+    const raised = await widenToWrite(octokit, owner, name, accounts.get(repo.id)!);
+    if (raised.collaborators + raised.invitations === 0) return;
+    await audit(app.db, { ...SYSTEM_ACTOR, action: "project_repo.access_widened", subjectType: "project_repo", subjectId: repo.id, payload: { projectId: project.id, ...raised } });
+  });
+}
+
+/**
+ * The `project.repos_access` job (ADR-145, ADR-149 §7), in the leased frame
+ * (`runLeased`): a pass for the fact the project holds — the opening's
+ * under `online_seb`, the widening's in a mode that invites with `push`,
+ * nothing under `online` —, the lease given back only while its revision
  * is the one the pass read, else another pass on the project as it stands.
  */
 export async function runReposAccessJob(app: FastifyInstance, config: AppConfig, job: ProjectJob): Promise<void> {
@@ -244,12 +294,12 @@ export async function runReposAccessJob(app: FastifyInstance, config: AppConfig,
     job,
     "project repos access",
     async (run) => {
-      if (run.project.workMode !== "online_seb") return;
       const moved = async () => {
         const [row] = await app.db.select({ rev: projects.reposAccessRev }).from(projects).where(eq(projects.id, run.project.id));
         return row?.rev !== run.project.reposAccessRev;
       };
-      await (run.project.reposOpenedAt === null ? revokePass : invitePass)(app, run, moved);
+      if (run.project.workMode === "online_seb") await (run.project.reposOpenedAt === null ? revokePass : invitePass)(app, run, moved);
+      else if (collaboratorPermission(run.project.workMode) === "push") await widenPass(app, run, moved);
     },
     { releaseWhile: (project) => eq(projects.reposAccessRev, project.reposAccessRev) },
   );

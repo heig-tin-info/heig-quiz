@@ -389,6 +389,8 @@ function WorkspaceSection({
         <div className="space-y-2">
           <p className="text-fg-muted">{t(where)}</p>
           {hybrid ? <p className="text-fg-muted">{t("sproj.workspace.hybrid.collect")}</p> : null}
+          {/* ADR-149 §7: the workspace opens up to GitHub; a push from a machine still has to be pulled into its work tree. */}
+          {hybrid ? <p className="text-fg-muted">{t("sproj.workspace.hybrid.pull")}</p> : null}
           {collected ? <p className="text-fg-muted">{t("sproj.collected")}</p> : null}
         </div>
         {action}

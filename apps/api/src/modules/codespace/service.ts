@@ -63,6 +63,7 @@ import {
   type TeacherCodespaceGrant,
 } from "@quiz/contracts";
 import {
+  hasTwoWritePaths,
   isLabMode,
   isOnlineMode,
   portalDeadline,
@@ -367,6 +368,7 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     startAt: project.startAt.toISOString(),
     deadlineAt: portalDeadline(project)?.toISOString() ?? null,
     workspaceUpdate: workspaceUpdateOf(project),
+    refreshOnOpen: hasTwoWritePaths(mode),
   });
 }
 

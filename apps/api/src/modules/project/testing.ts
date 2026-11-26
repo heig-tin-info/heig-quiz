@@ -371,6 +371,14 @@ export function repoWorld(): RepoWorld {
       if (pending || !world.collaborators.get(fullName)?.delete(login)) return json({ message: "Not Found" }, 404);
       return new Response(null, { status: 204 });
     }
+    // An invitation's permission changed (GitHub's words: `read`, `write`…), kept as the seat it would give.
+    if (req.method === "PATCH" && (m = /^\/invitations\/(\d+)$/.exec(rest))) {
+      const login = world.invitations.get(fullName)?.get(Number(m[1]));
+      if (login === undefined) return json({ message: "Not Found" }, 404);
+      const { permissions } = JSON.parse(String(req.body)) as { permissions: string };
+      world.collaborators.get(fullName)?.set(login, permissions === "write" ? "push" : permissions === "read" ? "pull" : permissions);
+      return json({ id: Number(m[1]), permissions, invitee: { login } });
+    }
     if (req.method === "DELETE" && (m = /^\/invitations\/(\d+)$/.exec(rest))) {
       const pending = world.invitations.get(fullName);
       const login = pending?.get(Number(m[1]));
@@ -543,7 +551,13 @@ export function repoWorld(): RepoWorld {
       const account = (login: string) => ({ login, id: world.accountIdOf(login) });
       if (rest === "/invitations") {
         const listed = [...(world.invitations.get(fullName) ?? new Map<number, string>())];
-        return json(listed.map(([id, login]) => ({ id, invitee: account(login), expired: world.expiredInvitations.has(id) })));
+        const words: Record<string, string> = { pull: "read", push: "write" };
+        return json(
+          listed.map(([id, login]) => {
+            const held = world.collaborators.get(fullName)?.get(login) ?? "pull";
+            return { id, invitee: account(login), expired: world.expiredInvitations.has(id), permissions: words[held] ?? held };
+          }),
+        );
       }
       // The collaborators (ADR-070, 2026-11-19): those in, a pending invitee is none.
       if (rest === "/collaborators") {

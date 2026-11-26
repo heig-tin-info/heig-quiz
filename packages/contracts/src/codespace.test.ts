@@ -251,6 +251,12 @@ describe("assignment sync", () => {
     expect(CodespaceAssignmentSync.safeParse({ ...sync, id: "a/b" }).success).toBe(false);
   });
 
+  it("says whether to refresh a workspace from GitHub when it opens (ADR-149 §7): absent from an older platform is false", () => {
+    expect(CodespaceAssignmentSync.parse(sync).refreshOnOpen).toBe(false);
+    expect(CodespaceAssignmentSync.parse({ ...sync, refreshOnOpen: true }).refreshOnOpen).toBe(true);
+    expect(CodespaceAssignmentSync.safeParse({ ...sync, refreshOnOpen: "yes" }).success).toBe(false);
+  });
+
   it("carries the project's update (ADR-132 §11): absent from an older platform is null; a branch, a full sha and plain text only", () => {
     expect(CodespaceAssignmentSync.parse(sync).workspaceUpdate).toBeNull();
     const sha = "a".repeat(40);

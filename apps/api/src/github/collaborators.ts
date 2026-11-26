@@ -99,11 +99,51 @@ export interface ListedAccount {
  * invitee, and whether it expired (GitHub keeps listing an expired
  * invitation, which can no longer be accepted, until it is cancelled).
  */
-export async function pendingInvitees(octokit: Octokit, owner: string, repo: string): Promise<({ id: number; expired: boolean } & ListedAccount)[]> {
+export async function pendingInvitees(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+): Promise<({ id: number; expired: boolean; permissions: string } & ListedAccount)[]> {
   const { data } = await octokit.request("GET /repos/{owner}/{repo}/invitations", { owner, repo, per_page: 100 });
-  return data.flatMap((i: { id: number | bigint; expired?: boolean; invitee?: { login: string; id: number | bigint } | null }) =>
-    i.invitee ? [{ id: Number(i.id), login: i.invitee.login, accountId: Number(i.invitee.id), expired: i.expired === true }] : [],
+  return data.flatMap(
+    (i: { id: number | bigint; expired?: boolean; permissions?: string; invitee?: { login: string; id: number | bigint } | null }) =>
+      i.invitee
+        ? [{ id: Number(i.id), login: i.invitee.login, accountId: Number(i.invitee.id), expired: i.expired === true, permissions: i.permissions ?? "read" }]
+        : [],
   );
+}
+
+/**
+ * Every account of `accounts` on `owner/repo` brought up to `write`
+ * (ADR-149 §7), never down: a collaborator holding less is set to `push`
+ * by GitHub's collaborator PUT — which, for an existing collaborator,
+ * changes the permission (204) —, one holding as much or more is left
+ * (`holdsAtLeast`: an owner of the organization keeps `admin`); a pending
+ * invitation offering less is changed to `write` (its PATCH), an expired
+ * one is left for its resend. An account neither in nor invited is left:
+ * the PUT would invite it. Idempotent: a second call changes nothing. How
+ * many seats and invitations it raised.
+ */
+export async function widenToWrite(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  accounts: ReadonlySet<number>,
+): Promise<{ collaborators: number; invitations: number }> {
+  const [seats, offers] = await Promise.all([directCollaborators(octokit, owner, repo), pendingInvitees(octokit, owner, repo)]);
+  let invitations = 0;
+  for (const offer of offers) {
+    if (!accounts.has(offer.accountId) || offer.expired || (PERMISSION_RANK[offer.permissions] ?? 0) >= PERMISSION_RANK.write!) continue;
+    await octokit.request("PATCH /repos/{owner}/{repo}/invitations/{invitation_id}", { owner, repo, invitation_id: offer.id, permissions: "write" });
+    invitations += 1;
+  }
+  let collaborators = 0;
+  for (const seat of seats) {
+    if (!accounts.has(seat.accountId) || (await holdsAtLeast(octokit, owner, repo, seat.login, "write"))) continue;
+    await inviteCollaborator(octokit, owner, repo, seat.login, "push");
+    collaborators += 1;
+  }
+  return { collaborators, invitations };
 }
 
 /**

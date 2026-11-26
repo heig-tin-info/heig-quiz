@@ -75,10 +75,13 @@ export function isLabMode(mode: WorkModeName): boolean {
 }
 
 /**
- * Whether the deadline weighs who wrote last before it collects a
- * workspace (ADR-149 §2): `hybrid`, the one mode with two write paths.
+ * `hybrid`, the one mode with two write paths — the student's own git and
+ * the workspace's relay (ADR-149): the deadline weighs who wrote last
+ * before it collects a workspace (§2), and the portal refreshes a
+ * workspace's staging repository from GitHub when it opens (§7,
+ * `CodespaceAssignmentSync.refreshOnOpen`).
  */
-export function weighsLastWriter(mode: WorkModeName): boolean {
+export function hasTwoWritePaths(mode: WorkModeName): boolean {
   return mode === "hybrid";
 }
 
@@ -179,7 +182,9 @@ export interface WorkModeFacts {
  *   3. once a workspace was launched, the pair is frozen for good — the
  *      mode and the level alike (`409 work_mode_frozen`, ADR-047 §3 as
  *      amended, ADR-089 amendment point 2): a student's repository was
- *      handed out under it — `hybrid` alike (ADR-149 §5);
+ *      handed out under it — `hybrid` alike (ADR-149 §5) —, except the one
+ *      change that only widens what students may do
+ *      ({@link widensAfterLaunch});
  *   4. a group project stays in the students' own tools (`409
  *      work_mode_group`, F-PROJ-06);
  *   5. a change TO a level that accepts a kiosk station while the platform
@@ -195,10 +200,32 @@ export function workModeRefusal(facts: WorkModeFacts, from: WorkSetting, to: Wor
   if (from.mode === to.mode && from.devices === to.devices) return null;
   if (!facts.owner) return "owner_required";
   if (isOnlineMode(to.mode) && !facts.granted) return "codespace_not_granted";
-  if (facts.launched) return "work_mode_frozen";
+  if (facts.launched && !widensAfterLaunch(from, to)) return "work_mode_frozen";
   if (isOnlineMode(to.mode) && facts.groupMode) return "work_mode_group";
   if (acceptsKiosk(to.devices) && !facts.kioskOffered) return "kiosk_unavailable";
   return null;
+}
+
+/**
+ * The one change a launched workspace leaves open (ADR-149 §7, product
+ * owner 2026-11-26): `online` to `hybrid`. The students keep the workspace
+ * and gain their own git: nothing handed out under `online` is taken away.
+ * Every other change after a launch narrows or swaps a write path, and is
+ * frozen.
+ */
+export function widensAfterLaunch(from: WorkSetting, to: WorkSetting): boolean {
+  return from.mode === "online" && to.mode === "hybrid";
+}
+
+/**
+ * Whether a change of the work mode widens the permission of the
+ * invitations already sent (ADR-149 §7, amending ADR-047 M6-06 (A)): to a
+ * mode that invites with `push` from one that invited with less. The API's
+ * `project.repos_access` job then brings every live grant to `push` on
+ * GitHub; a narrowing never takes an access back.
+ */
+export function widensInvitations(from: WorkModeName, to: WorkModeName): boolean {
+  return collaboratorPermission(to) === "push" && collaboratorPermission(from, true) !== "push";
 }
 
 /**

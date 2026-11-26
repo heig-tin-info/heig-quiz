@@ -5,7 +5,7 @@
  * are checked by its contract (`@quiz/contracts`), not here.
  */
 import { WORKFLOWS_DIR } from "./protectedFiles.js";
-import { weighsLastWriter, type WorkModeName } from "./workMode.js";
+import { hasTwoWritePaths, type WorkModeName } from "./workMode.js";
 
 /**
  * The paths a collection takes from the branch's head instead of the
@@ -203,7 +203,7 @@ export function headWriter(facts: HeadFacts): HeadWriter {
  * (`last_push_local`); none left (no push at all) collects.
  */
 export function collectsWorkspace(mode: WorkModeName, writers: Iterable<HeadWriter>): boolean {
-  if (!weighsLastWriter(mode)) return true;
+  if (!hasTwoWritePaths(mode)) return true;
   for (const writer of writers) if (writer !== "neutral") return writer === "workspace";
   return true;
 }

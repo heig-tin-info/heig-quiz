@@ -158,7 +158,8 @@ export function WorkModeSetting({
             {shown.mode === "online_seb" ? <span className="block">{t("project.workspace.mode.desc.supervised")}</span> : null}
             {ws.refusal && !archived ? (
               <span className="mt-1 block text-fg-faint" data-testid="workspace-refusal">
-                {t(`project.workspace.refusal.${ws.refusal}`)}
+                {/* ADR-149 §7: a launched online project may still widen to Either, and only there. */}
+                {t(ws.refusal === "work_mode_frozen" && changeable ? "project.workspace.refusal.work_mode_frozen.either" : `project.workspace.refusal.${ws.refusal}`)}
               </span>
             ) : null}
           </>

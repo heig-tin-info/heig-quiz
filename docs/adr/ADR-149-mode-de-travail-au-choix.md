@@ -5,8 +5,11 @@
 Accepted (2026-11-26, the product owner's decisions below; what counts as
 written outside — a GitHub web commit included — is the orchestrator's
 reading of them, after review; the outcome `last_push_local` and the
-portal's mapping are the orchestrator's, within them). Delivered in two parts: this
-record's §1–§6 first, §7 afterwards; progress lives in `changes/`.
+portal's mapping are the orchestrator's, within them). §7 decided by the
+product owner on the same day: the switch after a launch, the widening of
+the invitations already sent, the portal's refresh; its job, the signal
+to the portal and the refresh's rules are the orchestrator's. Delivered in
+two parts, §1–§6 then §7; progress lives in `changes/`.
 
 Scope: the work mode `hybrid` of a project (F-PROJ-19) — who may write to
 the student's repository, what the deadline collects, what the portal is
@@ -15,14 +18,17 @@ told, what the student and the staff see.
 Relations: amends [ADR-047](ADR-047-espace-de-travail-en-ligne.md)
 decision 2 and rejected alternative 1 (the student's write access) and its
 [M6-06 (A)](ADR-047-espace-de-travail-en-ligne.md#m6-06-2026-10-07-the-work-mode-in-quiz)
-(the list of modes); [ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md)
+(the list of modes, the freeze, "an invitation already sent keeps the
+permission it had"); [ADR-130](ADR-130-releve-de-l-espace-de-travail-a-l-echeance.md)
 §1 decisions 3 and 4, §2 and §7 (the collection); extends
 [ADR-078](ADR-078-codespace-git-relay-tokens.md) §11 (under `commit`, the
 workspace follows the repository's writability),
 [ADR-132](ADR-132-mise-a-jour-du-projet-greffee-a-la-correction.md) §11
 (the teacher's update in the workspace) and
 [ADR-089](ADR-089-kiosque-pour-l-espace-de-travail.md) amendment point 2
-(the one mapping between the screen and the setting).
+(the one mapping between the screen and the setting); extends
+[ADR-145](ADR-145-depots-seb-ouverts-aux-etudiants.md)'s `project.repos_access`
+job to the widening (§7).
 
 ## Context
 
@@ -91,7 +97,7 @@ whether the push came before or after the deadline. None left (no push at
 all): collected. A pull request merged on GitHub therefore changes nothing
 by itself: over a push from the workspace the workspace is collected, over
 a push from a machine it is not. The rule is `headWriter` and
-`collectsWorkspace` (`@quiz/domain`), the weighing `weighsLastWriter`
+`collectsWorkspace` (`@quiz/domain`), the weighing `hasTwoWritePaths`
 (`hybrid` only). A branch's head no receipt names yet is a push whose
 receipt is not in, weighed like any; without any person's push it is the
 handout, left out. The head the signed commit meets after a 422 is weighed
@@ -122,9 +128,8 @@ A sync opens its pull request on a `hybrid` student's repository as in
 
 The mode freezes at the first workspace launched by a student seat
 (`409 work_mode_frozen`, ADR-047 M6-06 (A)): `hybrid` alike. Before it,
-`free → hybrid` and `online → hybrid` pass like any change; an invitation
-already sent keeps the permission it had (M6-06 (A)), so students invited
-with `pull` under `online` keep `pull` until §7.
+`free → hybrid` and `online → hybrid` pass like any change. After it,
+`online → hybrid` alone stays open (§7).
 
 ### 6. What the student and the staff see
 
@@ -138,15 +143,64 @@ with `pull` under `online` keep `pull` until §7.
   without the `not collected` flag (nothing is missing); the
   workspace section (Resync, open workspaces) is shown as for `online`.
 
-### 7. Later, in a second delivery
+### 7. Widening after a launch, and a workspace that sees local pushes
 
-- Switching `online → hybrid` **after** a workspace was launched, with a job
-  that upgrades the invitations already sent to `push`.
-- The portal refreshing a session's `staging.git` from GitHub when the
-  session opens, so a workspace started after a local push begins from it.
-  Until then, a workspace behind GitHub sees its next push refused as a
-  non-fast-forward, the relay fetches GitHub's head and `git pull` merges
-  it (ADR-078 §6, ADR-130 §7).
+*Product owner, 2026-11-26; the second delivery.*
+
+**The switch.** After a workspace was launched, `online → hybrid` is
+allowed: it only widens what students may do — they keep the workspace and
+gain their own git (`widensAfterLaunch`, in `workModeRefusal` and so in
+`workModeChoices`: the staff's screen offers Either on a launched online
+project, and says it is the only change left). `hybrid → online` and
+`hybrid → free` stay refused after a launch (`409 work_mode_frozen`), as
+every other change; `free → hybrid` has no launch to freeze it;
+`online_seb` is unchanged.
+
+**The invitations already sent.** M6-06 (A)'s "an invitation already sent
+keeps the permission it had" is amended: a change of mode to one that
+invites with `push` from one that invited with less (`widensInvitations`:
+`online → hybrid` above all, before or after a launch, and `online → free`
+before one) raises what was already given. In the mode's transaction the
+project's access revision is bumped and its `repos_access_job_at` lease
+claimed — ADR-145's `project.repos_access` job, the project's one runner
+of access on GitHub —, and the job, sent after the commit, brings every
+live grant of the project's live repositories up to `push`: an accepted
+collaborator by GitHub's collaborator PUT (which changes an existing
+collaborator's permission, 204), a pending invitation by its PATCH
+(`write`); never lowering a higher permission (`holdsAtLeast`: an owner of
+the organization keeps `admin`), never inviting anyone (an account neither
+in nor invited gets `push` at its next invitation, like every invitation
+sent after the switch). Idempotent and retried: a GitHub failure fails the
+pass, the lease is backdated, and the ticker runs it again, which finds the
+repositories done already unchanged. Each repository whose access changed
+is audited (`project_repo.access_widened`: how many seats and invitations),
+never a token. A repository deleted, not live or archived is skipped. A
+locked one is not: its lock is a ruleset nobody bypasses (F-PROJ-09,
+ADR-130 §9), independent of the permission, so `push` changes nothing on
+it until the lock is lifted. A narrowing never takes an access back.
+
+**The portal's refresh.** The portal is told that a project's students may
+also push from their own machines: `CodespaceAssignmentSync.refreshOnOpen`
+(`hasTwoWritePaths`, true for `hybrid`, sent as `online`), optional, false
+when absent — an older platform sends none and an older portal ignores it
+(the sync's object is not strict), so the platform and the portal deploy in
+either order. When a `lab` session of such an assignment opens — a new
+one, a resumed one, a live one reopened — and nothing of the workspace
+waits for the relay (a pending push is the student's newest work), the
+portal brings the session's `staging.git` up to the student's GitHub
+repository (`refreshStagingRepo`): the branches fetched into the portal's
+own refs (`refs/quiz/forge/*`, hidden from every push, deleted afterwards),
+each staging branch created when missing, moved when it is behind
+(fast-forward, a compare-and-swap a student's push wins), left as it is
+when it diverged — **never forced**, never deleted, no tag, nothing
+relayed. With the token the seeding uses (ADR-078), in the environment
+only; a failure leaves the workspace as it was and never refuses the
+session. The host runs git on `staging.git`, its own repository, never on
+the student's `work/.git` (the portal's invariant 13): the student's work
+tree takes the new commits with a pull, which the project page says. A
+branch that diverged is the relay's rejection path (ADR-078 §6): the next
+push is refused, the relay fetches GitHub's head, and `git pull` merges it
+(ADR-130 §7).
 
 ## Consequences
 

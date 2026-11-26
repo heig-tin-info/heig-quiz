@@ -23,7 +23,7 @@ amendment is in the [historical record](history/ADR-047-espace-de-travail-en-lig
 - 2026-11-14, [ADR-129](ADR-129-depot-ouvert-par-l-equipe-dans-l-espace-de-travail.md): the staff's review session — a staff member opens a project repository in the workspace, read-only, whatever its mode; it breaks the L24 premise ([amendment](#amendment-2026-11-14-the-staffs-review-session-adr-129)).
 - 2026-11-24, [ADR-145](ADR-145-depots-seb-ouverts-aux-etudiants.md): §2 amended — once the lab test is over, the course owner may open an `online_seb` project's repositories to their students with `pull`, and close them again.
 - 2026-11-25, [ADR-146](ADR-146-images-publiques-de-l-espace-de-travail.md) (accepted): a session runs the default `quiz-base` or an image of its course's list; L24 rule 4 binds `quiz-base`, and a course's image may bring notebook support back, the residual risk accepted by the owner.
-- 2026-11-26, [ADR-149](ADR-149-mode-de-travail-au-choix.md): decision 2, rejected alternative 1 and M6-06 (A) amended — a fourth mode, `hybrid`, invites with `push` beside the workspace's relay: "only the relay writes" now holds for `online` and `online_seb` only; the two-write-paths argument was the exam's, which `hybrid` never is.
+- 2026-11-26, [ADR-149](ADR-149-mode-de-travail-au-choix.md): decision 2, rejected alternative 1 and M6-06 (A) amended — a fourth mode, `hybrid`, invites with `push` beside the workspace's relay: "only the relay writes" now holds for `online` and `online_seb` only; the two-write-paths argument was the exam's, which `hybrid` never is. The same day, §7: M6-06 (A)'s freeze leaves `online` → `hybrid` open after a launch, and a change that widens the invitations to `push` raises those already sent.
 - 2026-10-29, #958: under `commit`, an `online` project's start route opens while the repository is writable ([ADR-078's amendment](ADR-078-codespace-git-relay-tokens.md#amendment-2026-10-29-958-under-commit-the-workspace-follows-the-repositorys-writability)).
 - Extended 2026-10-05 by ADR-075 (proposed): the `workspace` question type opens the workspace in a supervised evaluation, without a git channel; the project rules are unchanged.
 
@@ -187,7 +187,8 @@ route, `PUT /app/api/projects/:id/workspace/mode`, in any state of the
 project, never by the create or the patch. Point 3's one-way door becomes:
 the mode is **frozen once a workspace was launched** for the project — the
 first launch token issued to a student seat, `codespace_projects.first_launch_at`
-— and any change after that is `409 work_mode_frozen`; a staff seat's
+— and any change after that is `409 work_mode_frozen` (*but `online` to
+`hybrid`, which only widens, since [ADR-149 §7](ADR-149-mode-de-travail-au-choix.md#7-widening-after-a-launch-and-a-workspace-that-sees-local-pushes)*); a staff seat's
 launch (ADR-077, a teacher testing the project on their test repository)
 never freezes it; before it, every mode may
 change, `free` included. A group project stays `free` (F-PROJ-06): an
@@ -195,7 +196,8 @@ online mode on a group project, or group mode on an online project, is
 `409 work_mode_group`. Point 2 applies from the next invitation: `push` in
 `free`, `pull` in `online`, none in `online_seb` (the repository is
 provisioned, nobody is invited; a second Accept answers it as it stands);
-an invitation already sent keeps the permission it had. `online_seb` can
+an invitation already sent keeps the permission it had (*unless the
+change widens it to `push`: then it is raised, ADR-149 §7*). `online_seb` can
 be set, but its start is refused outside Safe Exam Browser with a named
 refusal (`seb_required`) until M6-07, and it is not synced: the portal
 refuses an exam without Browser Exam Keys, which come with M6-07.

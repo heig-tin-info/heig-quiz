@@ -22,7 +22,7 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 
-import type { FastifyBaseLogger } from "fastify";
+import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { COMMAND_SETTINGS, criterionConflict, defaultProjectGradingScale, type ProjectCreate, type ProjectPatch } from "@quiz/contracts";
@@ -37,6 +37,7 @@ import {
   repoName,
   SLUG_MAX,
   slugify,
+  widensInvitations,
   withForcedProtected,
   workModeRefusal,
   type ProjectDatesChange,
@@ -57,6 +58,8 @@ import { DomainError, notFoundError } from "../http.js";
 import { forgetFinalPasses, projectDeadlineMoved, rescheduleCheckpoints } from "./deadline.js";
 import { acceptable, CRITERIA_FILE, readCriteria, snapshotLeaves, storeCriteria, type CriteriaSnapshot } from "./criteria.js";
 import { ProjectError } from "./errors.js";
+import { leaseFree, type ProjectJob } from "./lease.js";
+import { sendReposAccessJob } from "./reposAccess.js";
 import { replaceGroupCopy, stopProjects } from "./groupCopy.js";
 import { announcePublished, announceScheduled } from "./notify.js";
 import { classroomClient, fetchSource, readHandout, type Source } from "./sources.js";
@@ -497,21 +500,27 @@ export interface WorkModeCaller {
  * `workModeRefusal` of `@quiz/domain` — an owner (`403 owner_required`)
  * with the grant to go online (`403 codespace_not_granted`), never once a
  * workspace was launched (`409 work_mode_frozen`, the `codespace` module's
- * `first_launch_at`, read by join), never a group project (`409
- * work_mode_group`), never a change to a level that accepts a kiosk
- * station while they are not offered (`422 kiosk_unavailable`). Any state
- * of the project: the mode decides the permission of the invitations still
- * to come; one already sent keeps its own. Audited `codespace.work_mode`,
- * with both levels, when the pair changes.
+ * `first_launch_at`, read by join) but from `online` to `hybrid` (ADR-149
+ * §7), never a group project (`409 work_mode_group`), never a change to a
+ * level that accepts a kiosk station while they are not offered (`422
+ * kiosk_unavailable`). Any state of the project: the mode decides the
+ * permission of the invitations still to come; one already sent keeps its
+ * own unless the change widens it to `push` (`widensInvitations`, ADR-149
+ * §7) — then, in the same transaction, the project's access revision is
+ * bumped and its `project.repos_access` lease claimed, and the job, sent
+ * after the commit, raises the grants on GitHub. Audited
+ * `codespace.work_mode`, with both levels, when the pair changes.
  */
 export async function setWorkMode(
-  db: Db,
+  app: FastifyInstance,
+  config: AppConfig,
   projectId: string,
   to: WorkSetting,
   caller: WorkModeCaller,
   actor: AuditActor,
 ): Promise<ProjectRow> {
-  return db.transaction(async (tx) => {
+  const now = app.clock.now();
+  const { row, job } = await app.db.transaction(async (tx) => {
     const [row] = await tx
       .select({ project: projects, launchedAt: codespaceProjects.firstLaunchAt })
       .from(projects)
@@ -523,10 +532,17 @@ export async function setWorkMode(
     const from = { mode: project.workMode, devices: project.devices };
     const refusal = workModeRefusal({ ...caller, launched: row.launchedAt !== null, groupMode: project.groupMode }, from, to);
     if (refusal) throw new ProjectError(refusal, `The work mode cannot become ${to.mode} (${to.devices})`);
-    if (from.mode === to.mode && from.devices === to.devices) return project;
+    if (from.mode === to.mode && from.devices === to.devices) return { row: project, job: null };
+    const widen = widensInvitations(from.mode, to.mode);
+    const claim = widen && leaseFree(project.reposAccessJobAt, now);
     const [updated] = await tx
       .update(projects)
-      .set({ workMode: to.mode, devices: to.devices })
+      .set({
+        workMode: to.mode,
+        devices: to.devices,
+        ...(widen ? { reposAccessRev: project.reposAccessRev + 1 } : {}),
+        ...(claim ? { reposAccessJobAt: now } : {}),
+      })
       .where(eq(projects.id, project.id))
       .returning();
     await audit(tx, {
@@ -536,8 +552,10 @@ export async function setWorkMode(
       subjectId: project.id,
       payload: { from: from.mode, to: to.mode, devices: { from: from.devices, to: to.devices } },
     });
-    return updated!;
+    return { row: updated!, job: claim ? ({ projectId, lease: now.toISOString() } satisfies ProjectJob) : null };
   });
+  await sendReposAccessJob(app, config, job);
+  return row;
 }
 
 // ---------------------------------------------------------------- publish

@@ -751,6 +751,15 @@ export type AuditAction =
   | "project_repo.deadline_applied"
   /** The online workspace collected at the repository's deadline, or why not (ADR-130 §7): payload `{ projectId, outcome, reason, branch, sha, deadlineAt }`. */
   | "project_repo.workspace_collected"
+  /**
+   * ADR-149 §7: the work mode widened to `push` (`online` to `hybrid`), and
+   * the `project.repos_access` job brought the repository's access already
+   * given up to it on GitHub; by the job, subject the `project_repos` row,
+   * payload `{ projectId, collaborators, invitations }` (how many seats and
+   * pending invitations it raised). Only a repository where something
+   * changed; never a token.
+   */
+  | "project_repo.access_widened"
   | "project_repo.frozen"
   | "project_repo.deadline_set"
   | "project_repo.lock"
