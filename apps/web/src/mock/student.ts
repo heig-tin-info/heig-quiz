@@ -1114,6 +1114,7 @@ const studentProjectView = (card: CardFacts): StudentProject => {
         : null,
     // `?codespace=1` (ADR-047, M6-06): the open project runs in the workspace, the invited one under Safe Exam Browser;
     // `?pjkiosk=1` (ADR-089): the open one at SEB or kiosk, the invited one at Kiosk only.
+    // `?hybrid=1` (ADR-149): the open one at the students' choice.
     // `?collected=1` (ADR-130): the frozen one was worked online.
     workspace: collectedHere
       ? { mode: "online", devices: "any" }
@@ -1122,7 +1123,7 @@ const studentProjectView = (card: CardFacts): StudentProject => {
         : card.id === STUDENT_PROJECT_OPEN
           ? flags.pjkiosk
             ? { mode: "online_seb", devices: "either" }
-            : { mode: "online", devices: "any" }
+            : { mode: flags.hybrid ? "hybrid" : "online", devices: "any" }
           : card.id === STUDENT_PROJECT_INVITED
             ? { mode: "online_seb", devices: flags.pjkiosk ? "kiosk" : "seb" }
             : null,

@@ -471,6 +471,18 @@ describe("the online workspace (ADR-047, M6-06)", () => {
     expect(calls.filter((c) => c.method === "POST").map((c) => c.url)).toEqual(["/app/api/projects/p1/workspace/start"]);
   });
 
+  it("at the students' choice, makes the repository the page's one accent and the workspace the fallback (ADR-149 §6)", async () => {
+    mockFetch({ [URL]: ok(project({ workspace: { mode: "hybrid", devices: "any" } })) });
+    render();
+    const open = await screen.findByRole("button", { name: "Open workspace" });
+    expect(open).not.toHaveClass("bg-accent");
+    expect(screen.getByRole("link", { name: "Open repository" })).toHaveClass("bg-accent");
+    expect(document.querySelectorAll(".bg-accent")).toHaveLength(1);
+    const section = screen.getByTestId("sproj-workspace");
+    expect(within(section).getByText("No tools installed? Work in your browser.")).toBeInTheDocument();
+    expect(within(section).getByText(/unless your last push came from your own machine/)).toBeInTheDocument();
+  });
+
   it("words the start route's refusal in place", async () => {
     mockFetch({
       [URL]: ok(project({ workspace: { mode: "online", devices: "any" } })),

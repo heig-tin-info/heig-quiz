@@ -96,6 +96,9 @@ export const STUDENT_EVAL = "11111111-1111-4111-8111-111111111111";
  * `pjkiosk`: with `codespace`, the projects hold station levels: the staff's
  *   SEB draft is at Kiosk only, the student's invited project at Kiosk only
  *   and its open one at SEB or kiosk (`mock/codespace.ts`, `mock/student.ts`).
+ * `hybrid`: with `codespace`, the published project and the student's open
+ *   one are at the students' choice between their own tools and the
+ *   workspace (ADR-149; `mock/codespace.ts`, `mock/student.ts`).
  * `collected`: the repositories whose deadline was applied show the online
  *   workspace's collection at the deadline (ADR-130), one state each in turn;
  *   the student's frozen project, worked online, was collected (`mock/student.ts`).
@@ -165,6 +168,7 @@ export const FLAG_NAMES = [
   "sebproject",
   "kioskprojects",
   "pjkiosk",
+  "hybrid",
   "stationproject",
   "stationheld",
   "collected",

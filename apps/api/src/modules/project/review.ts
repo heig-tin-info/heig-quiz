@@ -258,16 +258,17 @@ async function dispatchFinal(app: FastifyInstance, octokit: Octokit, projectId: 
  * collection commits to (`collectionBranch`, ADR-130 §3). At the same
  * instant a collected receipt is the later (ADR-130 §6): a collection counts
  * at exactly the deadline, on time, and stands for the workspace's state
- * then, which a push received at that instant cannot be newer than.
+ * then, which a push received at that instant cannot be newer than. `collected`
+ * says it was such a commit (a `hybrid` collection reads it, ADR-149 §2).
  */
 export async function lastStudentPush(
   db: Db | Tx,
   githubRepoId: number,
   branches: string[] | null,
   before: Date,
-): Promise<{ sha: string; branch: string } | null> {
+): Promise<{ sha: string; branch: string; collected: boolean } | null> {
   const [row] = await db
-    .select({ sha: pushReceipts.headSha, branch: pushReceipts.branch })
+    .select({ sha: pushReceipts.headSha, branch: pushReceipts.branch, collected: pushReceipts.collected })
     .from(pushReceipts)
     .where(
       and(

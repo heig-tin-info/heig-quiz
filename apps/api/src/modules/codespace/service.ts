@@ -65,6 +65,7 @@ import {
 import {
   isOnlineMode,
   portalDeadline,
+  portalMode,
   projectIsLive,
   projectIsVisible,
   deviceLevelClients,
@@ -73,6 +74,7 @@ import {
   signHs256,
   distributionReviewRefusal,
   staffReviewRefusal,
+  takesWorkspaceUpdate,
   workModeChoices,
   workspaceStartRefusal,
 } from "@quiz/domain";
@@ -319,16 +321,17 @@ export async function holderGrant(
  * The body the portal expects for `projectId`, or null when there is
  * nothing to send: no such project, a project in the students' own tools,
  * or one whose distribution repository is not built yet (the publication
- * sends it again). `online_seb` is sent like `online`, with no Browser
+ * sends it again). `hybrid` is sent AS `online`, the portal's lab mode
+ * (`portalMode`, ADR-149 §3). `online_seb` is sent like `online`, with no Browser
  * Exam Key: the Config Key alone (D21, M6-07; a BEK list waits for proof B
  * step 7, 06 §6.3). The workspace is seeded
  * from the distribution repository, never the source (N-SEC-20). A private
  * one seeds through the portal's `quiz` forge: Quiz grants it a read token
  * on that repository for an `online_seb` project (ADR-078, M6-10). Its
  * `deadlineAt` is `portalDeadline`'s: none for an `online` project under
- * the `commit` strategy, whose start route decides student by student
+ * the `commit` strategy (`hybrid` alike), whose start route decides student by student
  * (#958; ADR-078 as amended 2026-10-29). It carries the teacher's update of
- * an `online` project ({@link workspaceUpdateOf}, ADR-132 §11), which the end
+ * an `online` or `hybrid` project ({@link workspaceUpdateOf}, ADR-132 §11), which the end
  * of every sync pass sends again. Its `image` is {@link projectImageOf}'s.
  * (While the portal has no image route, no image is ever admitted, so it
  * stays null.)
@@ -339,8 +342,10 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     .from(projects)
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
     .where(eq(projects.id, projectId));
-  if (!row || !isOnlineMode(row.project.workMode) || row.project.distributionFullName === null) return null;
+  if (!row) return null;
   const { project } = row;
+  const mode = project.workMode;
+  if (!isOnlineMode(mode) || project.distributionFullName === null) return null;
   const held = await holderGrant(db, row.courseId, project.createdBy);
   if (held === null) return null;
   const { holder, grant } = held;
@@ -350,7 +355,7 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     name: project.name,
     classroomId: project.classroomId,
     classroomName: row.classroomName,
-    mode: project.workMode,
+    mode: portalMode(mode),
     image: await projectImageOf(db, project),
     sourceRepo: { fullName: project.distributionFullName, defaultBranch: project.branches[0] ?? "main" },
     browserExamKeys: [],
@@ -363,16 +368,17 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
 }
 
 /**
- * The update an `online` project's workspaces offer to merge (ADR-132 §11):
- * the heads its latest sync handed out, on the handed-out branches, with
- * that sync's message — on a project its students can read only, as the
- * message itself (`requestSync`). `online_seb` waits for its own delivery
- * (§11), `free` has no workspace.
+ * The update an `online` or `hybrid` project's workspaces offer to merge
+ * (ADR-132 §11, ADR-149 §4; `takesWorkspaceUpdate`): the heads its latest
+ * sync handed out, on the handed-out branches, with that sync's message —
+ * on a project its students can read only, as the message itself
+ * (`requestSync`). `online_seb` waits for its own delivery (§11), `free`
+ * has no workspace.
  */
 export function workspaceUpdateOf(
   project: Pick<typeof projects.$inferSelect, "workMode" | "state" | "branches" | "syncHeads" | "syncMessage" | "syncMessageAt">,
 ): CodespaceWorkspaceUpdate | null {
-  if (project.workMode !== "online" || !projectIsVisible(project.state) || project.syncHeads === null) return null;
+  if (!takesWorkspaceUpdate(project.workMode) || !projectIsVisible(project.state) || project.syncHeads === null) return null;
   // A branch the contract refuses (GitHub's default taken as it is, `développement`)
   // carries no update, rather than failing every assignment sync of the project.
   const heads = project.branches.flatMap((branch) => {

@@ -20,7 +20,7 @@ const workspace = (over: Partial<Workspace> = {}): Workspace => ({
   mode: "free",
   devices: "any",
   kioskOffered: false,
-  allowed: ["free", "online", "online_seb"],
+  allowed: ["free", "hybrid", "online", "online_seb"],
   refusal: null,
   syncedAt: null,
   syncError: null,
@@ -84,6 +84,23 @@ describe("the project's workspace section", () => {
     await userEvent.click(within(group).getByText("Online workspace"));
     await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ mode: "online" }));
     expect(await screen.findByText(/^Workspace updated/)).toBeInTheDocument();
+    expect(await screen.findByText("No student has opened a workspace yet.")).toBeInTheDocument();
+  });
+
+  it("offers Either between own tools and the workspace: no device level, the image kept, the sessions shown (ADR-149)", async () => {
+    const { calls } = mockFetch({
+      [WS]: ok(workspace()),
+      "PUT /app/api/projects/p1/workspace/mode": ok(workspace({ mode: "hybrid", syncedAt: new Date().toISOString() })),
+      [SESSIONS]: ok({ reachable: true, sessions: [] }),
+      "GET /app/api/projects/p1": ok({}),
+    });
+    render();
+    const group = await screen.findByRole("radiogroup", { name: "Where students work" });
+    expect(within(group).getAllByRole("radio").map((r) => r.closest("label")?.textContent)).toEqual(["Own tools", "Either", "Online workspace"]);
+    await userEvent.click(within(group).getByText("Either"));
+    await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ mode: "hybrid" }));
+    expect(await screen.findByText(/unless the last push came from their machine/)).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Allowed devices" })).toBeNull();
     expect(await screen.findByText("No student has opened a workspace yet.")).toBeInTheDocument();
   });
 
@@ -160,7 +177,7 @@ describe("the project's device level", () => {
     kiosk: /^Kiosk station only/,
   };
   const at = (level: DeviceLevel, over: Partial<Workspace> = {}) =>
-    workspace({ ...workSettingOf(workSettingFor(true, level)), kioskOffered: true, ...over });
+    workspace({ ...workSettingOf(workSettingFor("online", level)), kioskOffered: true, ...over });
 
   it.each(DEVICE_LEVEL_IDS)("to %s, writes the setting the domain maps the level to", async (to) => {
     const from: DeviceLevel = to === "seb" ? "kiosk" : "seb";
@@ -174,7 +191,7 @@ describe("the project's device level", () => {
     const devices = await screen.findByRole("group", { name: "Allowed devices" });
     expect(within(devices).getByRole("radio", { name: NAMES[from] })).toBeChecked();
     await userEvent.click(within(devices).getByRole("radio", { name: NAMES[to] }));
-    await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual(workSettingFor(true, to)));
+    await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual(workSettingFor("online", to)));
     expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1);
   });
 

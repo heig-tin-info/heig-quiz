@@ -5,6 +5,7 @@ import {
   collectionKeptPaths,
   collectionRef,
   collectionTooLate,
+  collectsWorkspace,
   composeCollectionTree,
   indexInfo,
   keptEntriesMatch,
@@ -24,6 +25,23 @@ describe("collectionRef", () => {
     expect(collectionRef("0b8e2f0a-6c1e-4c55-9a43-2f1e0c9d8a11", new Date("2026-11-16T13:40:00Z"))).toBe(
       "refs/quiz/collect/0b8e2f0a-6c1e-4c55-9a43-2f1e0c9d8a11-1794836400",
     );
+  });
+});
+
+describe("collectsWorkspace (ADR-130 §2 as amended by ADR-149 §2)", () => {
+  const RELAYED = { relayed: true };
+  const LOCAL = { relayed: false };
+
+  it("always collects where only the workspace writes", () => {
+    for (const mode of ["online", "online_seb"] as const) {
+      for (const last of [null, RELAYED, LOCAL]) expect(collectsWorkspace(mode, last)).toBe(true);
+    }
+  });
+
+  it("lets the last writer win in hybrid: the workspace's push or none collects, a local push does not", () => {
+    expect(collectsWorkspace("hybrid", null)).toBe(true);
+    expect(collectsWorkspace("hybrid", RELAYED)).toBe(true);
+    expect(collectsWorkspace("hybrid", LOCAL)).toBe(false);
   });
 });
 

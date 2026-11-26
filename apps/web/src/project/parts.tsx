@@ -322,11 +322,12 @@ export function SyncButton({
  * The online workspace's collection at the deadline, as a tag (ADR-130 §7):
  * `collected`, or `not collected` for any outcome that handed nothing in
  * while there was something to, an unconfirmed order included (its sentence
- * says so); nothing for a repository never collected, or whose workspace
- * matched the last push.
+ * says so); nothing for a repository never collected, whose workspace
+ * matched the last push, or whose last push in a `hybrid` project came from
+ * the student's machine (ADR-149 §2: the push is the work, nothing is missing).
  */
 function collectionTag(collection: ProjectRepoView["collection"]): { key: keyof Dict; tone: Tone; collected: boolean } | null {
-  if (collection === null || collection.outcome === "unchanged") return null;
+  if (collection === null || collection.outcome === "unchanged" || collection.outcome === "last_push_local") return null;
   return collection.outcome === "collected"
     ? { key: "project.collection.collected", tone: "zinc", collected: true }
     : { key: "project.collection.notCollected", tone: "amber", collected: false };
@@ -353,6 +354,7 @@ const COLLECTION_SAID: Record<NonNullable<ProjectRepoCollection["outcome"]> | "p
   too_large: "project.collection.too_large",
   too_late: "project.collection.too_late",
   failed: "project.collection.failed",
+  last_push_local: "project.collection.last_push_local",
 };
 
 /** What the collection was, in words, for the repository's page: when, or why not, and the files it could not read. */

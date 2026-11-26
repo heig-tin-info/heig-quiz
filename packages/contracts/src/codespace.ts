@@ -29,8 +29,9 @@ import { BranchName, ProtectedPath, RepositoryFullName, Sha1 } from "./gitNames.
 import { SyncMessage } from "./message.js";
 
 /**
- * Work mode of a project; `online_seb` is supervised: it opens only from
- * the trusted clients of its device level (ADR-089).
+ * Work mode of a project; `hybrid` leaves the choice between the students'
+ * own tools and the workspace (ADR-149); `online_seb` is supervised: it
+ * opens only from the trusted clients of its device level (ADR-089).
  * The lists are `@quiz/domain`'s (`workMode.ts`), re-exported here.
  */
 export { DISTRIBUTION_REVIEW_REFUSALS, GIT_TOKEN_REFUSALS, STAFF_REVIEW_REFUSALS, WORK_MODE_REFUSALS, WORK_MODES, WORKSPACE_START_REFUSALS };
@@ -148,7 +149,12 @@ export const CodespaceAssignmentSync = z.object({
   name: z.string().min(1),
   classroomId: z.string().min(1),
   classroomName: z.string(),
-  mode: WorkMode.exclude(["free"]),
+  /**
+   * The portal's two modes: a `hybrid` project is sent as `online`, the
+   * portal's lab mode (`portalMode`, ADR-149 §3) — the portal parses this
+   * very schema, so it never meets a value it does not know.
+   */
+  mode: WorkMode.exclude(["free", "hybrid"]),
   /**
    * The course image the project runs, pinned by digest (ADR-146 §4, §6);
    * null = the portal's default (the current `quiz-base`), resolved at each
@@ -962,6 +968,7 @@ export type WorkModeRefusal = z.infer<typeof WorkModeRefusal>;
  */
 export const ProjectWorkModeBody = z.discriminatedUnion("mode", [
   z.strictObject({ mode: z.literal("free") }),
+  z.strictObject({ mode: z.literal("hybrid") }),
   z.strictObject({ mode: z.literal("online") }),
   z.strictObject({ mode: z.literal("online_seb"), devices: SupervisedDeviceLevel }),
 ]);

@@ -11,7 +11,15 @@ import {
   type ProjectWorkspaceSessions,
   type ProjectWorkspaceSyncAccepted,
 } from "@quiz/contracts";
-import { acceptsKiosk, workSettingFor, workSettingOf, type DeviceLevel, type WorkSetting } from "@quiz/domain";
+import {
+  acceptsKiosk,
+  WORK_PLACES,
+  workPlaceOf,
+  workSettingFor,
+  workSettingOf,
+  type DeviceLevel,
+  type WorkSetting,
+} from "@quiz/domain";
 
 import { api, isNotFound } from "../api";
 import { useClassroom } from "../course/parts";
@@ -63,13 +71,11 @@ export function useWorkspace(projectId: string) {
 const PROJECT_DESC = (level: DeviceLevel): keyof Dict =>
   level === "any" || level === "seb" ? `project.devices.${level}.desc` : `eval.devices.${level}.desc`;
 
-/** The two places of the Segmented: the students' own tools, or the online workspace (at a device level). */
-type Place = "own" | "online";
-
 /**
  * Where the students work (ADR-047 as amended 2026-10-07, M6-06; ADR-089,
- * amendment of 2026-11-15, "One control"): a setting of the project, in the
- * page's Settings tab. A Segmented **Own tools | Online workspace**, and
+ * amendment of 2026-11-15, "One control"; ADR-149 §1): a setting of the
+ * project, in the page's Settings tab. A Segmented **Own tools | Either |
+ * Online workspace** — Either is `hybrid`, which has no device level —, and
  * under Online the exam's **Allowed devices**: Any is `online`, the three
  * others `online_seb` at that level (`workSettingFor`, the one mapping).
  * The station levels are offered only where the platform offers them to
@@ -77,7 +83,7 @@ type Place = "own" | "online";
  * has the workspace grant, until a workspace was opened — the server says
  * which modes the caller may set, and why not the others: `allowed`,
  * `refusal`. Nothing at all when the feature is off (the route is then a 404).
- * Online, the workspace's image follows ({@link ImageSetting}).
+ * Wherever a workspace runs, its image follows ({@link ImageSetting}).
  */
 export function WorkModeSetting({
   projectId,
@@ -129,11 +135,12 @@ export function WorkModeSetting({
   const changeable = !archived && ws.allowed.length > 1;
   // What the screen shows: the pending choice while it is written, else the stored one.
   const shown: WorkSetting = setMode.isPending && setMode.variables ? workSettingOf(setMode.variables) : ws;
-  const place: Place = shown.mode === "free" ? "own" : "online";
-  const online = ws.allowed.some((m) => m !== "free");
-  const options = (["own", "online"] as const)
-    .filter((p) => !changeable || (p === "own" ? ws.allowed.includes("free") : online))
-    .map((value) => ({ value, label: t(`project.workspace.place.${value}`) }));
+  const place = workPlaceOf(shown.mode);
+  // A place is offered while one of its modes is the caller's to set.
+  const options = WORK_PLACES.filter((p) => !changeable || ws.allowed.some((m) => workPlaceOf(m) === p)).map((value) => ({
+    value,
+    label: t(`project.workspace.place.${value}`),
+  }));
   // A level is a choice of the workspace's two modes: open only while both are the caller's to set.
   const levelsOpen = changeable && ws.allowed.includes("online") && ws.allowed.includes("online_seb");
   const pick = (next: ProjectWorkModeBody) => setMode.mutate(next);
@@ -147,7 +154,7 @@ export function WorkModeSetting({
         title={<span id="project-work-mode">{t("project.workspace.mode")}</span>}
         desc={
           <>
-            {t(shown.mode === "free" ? "project.workspace.mode.desc.free" : "project.workspace.mode.desc.online")}
+            {t(`project.workspace.mode.desc.${place === "own" ? "free" : place}`)}
             {shown.mode === "online_seb" ? <span className="block">{t("project.workspace.mode.desc.supervised")}</span> : null}
             {ws.refusal && !archived ? (
               <span className="mt-1 block text-fg-faint" data-testid="workspace-refusal">
@@ -163,8 +170,8 @@ export function WorkModeSetting({
           value={place}
           disabled={!changeable || setMode.isPending}
           wrap
-          // Online from own tools starts at Any (`online`); the level is chosen below.
-          onChange={(p) => pick(workSettingFor(p === "online", "any"))}
+          // Online from another place starts at Any (`online`); the level is chosen below.
+          onChange={(p) => pick(workSettingFor(p, "any"))}
           options={options}
         />
       </SettingRow>
@@ -173,11 +180,11 @@ export function WorkModeSetting({
           level={shown.devices}
           kioskOffered={ws.kioskOffered}
           disabled={!levelsOpen || setMode.isPending}
-          onPick={(level) => pick(workSettingFor(true, level))}
+          onPick={(level) => pick(workSettingFor("online", level))}
           descOf={PROJECT_DESC}
         />
       ) : null}
-      {place === "online" ? <ImageSetting classroomId={classroomId} current={ws.image} archived={archived} setImage={setImage} /> : null}
+      {place !== "own" ? <ImageSetting classroomId={classroomId} current={ws.image} archived={archived} setImage={setImage} /> : null}
       {quota ? (
         <p className="-mt-1 flex items-start gap-1.5 pb-3 text-[13px] text-warning" data-testid="workspace-quota">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" aria-hidden />

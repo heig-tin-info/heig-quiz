@@ -16,7 +16,7 @@ import { ProjectDetail, ProjectSummary, StudentClassroomPage, StudentHome, Stude
 import { GRADING_WORKFLOW_PATH, collectionRef } from "@quiz/domain";
 
 import { loadConfig } from "../../config.js";
-import { auditLog, codespaceCollections, codespaceLaunches, enrollments, projectGroups, projectRepos, pushReceipts, teacherGrants, webhookDeliveries } from "../../db/schema.js";
+import { auditLog, codespaceCollections, codespaceLaunches, codespaceRelays, enrollments, projectGroups, projectRepos, pushReceipts, teacherGrants, webhookDeliveries } from "../../db/schema.js";
 import { json, orgsRoute, signedDelivery, type Route } from "../../github/testing.js";
 import { PROJECT_DEADLINE_QUEUE, type JobQueue } from "../../jobs.js";
 import { sessionOf } from "../../test/http.js";
@@ -61,8 +61,8 @@ beforeEach(() => {
   portal.calls.length = 0;
 });
 
-/** A student who accepted and launched the workspace of a fresh `online` project, its handout in `main`. */
-async function launched(strategy: "lock" | "commit" = "lock", others: { id: string }[] = [], body: Record<string, unknown> = {}) {
+/** A student who accepted and launched the workspace of a fresh `online` project (or of `mode`), its handout in `main`. */
+async function launched(strategy: "lock" | "commit" = "lock", others: { id: string }[] = [], body: Record<string, unknown> = {}, mode = "online") {
   const student = await newStudent();
   const room = await connectedClassroom(owner, [student, ...others], { prefix: "corg", files: { "README.md": "# Lab", "main.c": "int main(){return 1;}\n", [GRADING_WORKFLOW_PATH]: "grade: v1" } });
   const created = await call("POST", `/app/api/classrooms/${room.classroomId}/projects`, owner.headers, {
@@ -76,7 +76,7 @@ async function launched(strategy: "lock" | "commit" = "lock", others: { id: stri
   expect(created.statusCode, created.body).toBe(201);
   const project = ProjectSummary.parse(created.json());
   expect((await call("POST", `/app/api/projects/${project.id}/publish`, owner.headers)).statusCode).toBe(200);
-  expect((await call("PUT", `/app/api/projects/${project.id}/workspace/mode`, owner.headers, workModeBody("online"))).statusCode).toBe(200);
+  expect((await call("PUT", `/app/api/projects/${project.id}/workspace/mode`, owner.headers, workModeBody(mode))).statusCode).toBe(200);
   expect((await call("POST", `/app/api/student/projects/${project.id}/accept`, student.headers)).statusCode).toBe(200);
   expect((await call("POST", workspaceStartPath(project.id), student.headers)).statusCode).toBe(200);
   const [repo] = await server.app.db.select().from(projectRepos).where(and(eq(projectRepos.projectId, project.id), eq(projectRepos.userId, student.id)));
@@ -408,6 +408,36 @@ describe("what the collection refuses, and what a crash leaves", () => {
     expect(await rowsOf(f)).toMatchObject([{ outcome: "failed", reason: "check_refused" }]);
     expect(world.apiCommits.length).toBe(signed);
     expect(world.read(f.fullName, "main", GRADING_WORKFLOW_PATH)).toBe("grade: v2");
+  });
+
+  it("at the students' choice, lets the last writer win: a push from the student's machine is not collected over (ADR-149 §2)", async () => {
+    const db = server.app.db;
+    const local = await launched("lock", [], {}, "hybrid");
+    const localSha = "a1".repeat(20);
+    await db.insert(pushReceipts).values({ id: randomUUID(), githubRepoId: local.repo.githubRepoId!, branch: "main", headSha: localSha, receivedAt: at(DEADLINE, -60_000), isBot: false });
+    // An older push through the relay changes nothing: the last one decides.
+    const older = "b2".repeat(20);
+    await db.insert(codespaceRelays).values({ githubRepoId: local.repo.githubRepoId!, sha: older, ref: "refs/heads/main", userId: local.student.id, declaredAt: at(DEADLINE, -7_200_000) });
+    await db.insert(pushReceipts).values({ id: randomUUID(), githubRepoId: local.repo.githubRepoId!, branch: "main", headSha: older, receivedAt: at(DEADLINE, -7_200_000), isBot: false });
+
+    const relayed = await launched("lock", [], {}, "hybrid");
+    const relayedSha = "c3".repeat(20);
+    await db.insert(codespaceRelays).values({ githubRepoId: relayed.repo.githubRepoId!, sha: relayedSha, ref: "refs/heads/main", userId: relayed.student.id, declaredAt: at(DEADLINE, -60_000) });
+    await db.insert(pushReceipts).values({ id: randomUUID(), githubRepoId: relayed.repo.githubRepoId!, branch: "main", headSha: relayedSha, receivedAt: at(DEADLINE, -60_000), isBot: false });
+
+    const silent = await launched("lock", [], {}, "hybrid");
+    portal.collect = () => ({ outcome: "unchanged", snapshotAt: DEADLINE, unreadable: 0 });
+    await deadlineAt(at(DEADLINE, 20_000));
+
+    expect(await rowsOf(local)).toMatchObject([{ outcome: "last_push_local", reason: null, sha: null }]);
+    expect(await rowsOf(relayed)).toMatchObject([{ outcome: "unchanged" }]);
+    expect(await rowsOf(silent)).toMatchObject([{ outcome: "unchanged" }]);
+    // Ordered for the relayed and the silent one only; the skip is audited with the push it stood on.
+    expect(collectionOrders().map((c) => (c.body as { repository: string }).repository).sort()).toEqual([relayed.fullName, silent.fullName].sort());
+    const [audit] = await db.select().from(auditLog).where(and(eq(auditLog.action, "project_repo.workspace_collected"), eq(auditLog.subjectId, local.repo.id)));
+    expect(audit!.payload).toMatchObject({ outcome: "last_push_local", branch: "main", sha: localSha });
+    // The job locked them all as before.
+    for (const f of [local, relayed, silent]) expect((await repoRow(f)).lockedAt).not.toBeNull();
   });
 
   it("collects nothing when the last push went to a branch not handed out", async () => {

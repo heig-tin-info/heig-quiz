@@ -651,6 +651,19 @@ const scenes = [
   // ADR-119 §9: the Settings tab with the work mode, its control aligned right like the other options'.
   { name: "project-settings-workspace", role: "teacher", path: "/projects/pj-published?projects=1&codespace=1&tab=settings", settle: 2500 },
   { name: "project-workspace-assistant", role: "teacher", path: "/projects/pj-draft?projects=1&codespace=1&assistant=1" },
+  // ADR-149 (`?hybrid=1`): Own tools | Either | Online workspace — Either picked on a draft (no device level, the
+  // image kept), and the published project at Either, frozen by a launch, with its open workspaces.
+  {
+    name: "project-workspace-either",
+    role: "teacher",
+    path: "/projects/pj-draft?projects=1&codespace=1",
+    act: async (p) => {
+      await p.getByRole("button", { name: /^(advanced options|options avancées)/i }).first().click();
+      await p.getByText(/^(either|au choix)$/i).first().click();
+      await p.waitForTimeout(500);
+    },
+  },
+  { name: "project-settings-workspace-either", role: "teacher", path: "/projects/pj-published?projects=1&codespace=1&hybrid=1&tab=settings", settle: 2500 },
   // ADR-147: an owner's Open in workspace beside the distribution's link, its tooltip shown.
   {
     name: "project-distribution-workspace",
@@ -1385,6 +1398,8 @@ const scenes = [
   // ADR-089 (M6-11e, `?pjkiosk=1`): Kiosk only (no `.seb`, sent to a station) and SEB or kiosk (both said).
   { name: "student-project-workspace-kiosk", role: "student", path: `/projects/${SPROJ.invited}?projects=1&codespace=1&pjkiosk=1` },
   { name: "student-project-workspace-either", role: "student", path: `/projects/${SPROJ.open}?projects=1&codespace=1&pjkiosk=1` },
+  // ADR-149 (`?hybrid=1`): at the students' choice, GitHub is the page's accent, the workspace its fallback.
+  { name: "student-project-workspace-hybrid", role: "student", path: `/projects/${SPROJ.open}?projects=1&codespace=1&hybrid=1` },
   // ADR-089 §3: the station page of a project, the mock's stand-in in the frame.
   { name: "station-project", role: "student", path: `/projects/${SPROJ.invited}/station?projects=1&codespace=1&stationproject=1`, settle: 2500, fold: true },
   { name: "station-project-leave", role: "student", path: `/projects/${SPROJ.invited}/station?projects=1&codespace=1&stationproject=1`, settle: 2500, fold: true, act: (p) => p.getByRole("button", { name: "Leave this station" }).dispatchEvent("click") },

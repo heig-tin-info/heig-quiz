@@ -246,6 +246,8 @@ describe("assignment sync", () => {
   it("parses a sync and refuses mode free and an unsafe id", () => {
     expect(CodespaceAssignmentSync.safeParse(sync).success).toBe(true);
     expect(CodespaceAssignmentSync.safeParse({ ...sync, mode: "free" }).success).toBe(false);
+    // The portal knows two modes: a hybrid project is sent as online (ADR-149 §3).
+    expect(CodespaceAssignmentSync.safeParse({ ...sync, mode: "hybrid" }).success).toBe(false);
     expect(CodespaceAssignmentSync.safeParse({ ...sync, id: "a/b" }).success).toBe(false);
   });
 
@@ -285,8 +287,9 @@ describe("signing", () => {
 });
 
 describe("Quiz's own workspace routes (M6-06)", () => {
-  it("takes one of the three modes, and nothing else", () => {
+  it("takes one of the four modes, and nothing else", () => {
     expect(ProjectWorkModeBody.safeParse({ mode: "online" }).success).toBe(true);
+    expect(ProjectWorkModeBody.safeParse({ mode: "hybrid" }).success).toBe(true);
     expect(ProjectWorkModeBody.safeParse({ mode: "exam" }).success).toBe(false);
     expect(ProjectWorkModeBody.safeParse({ mode: "free", extra: 1 }).success).toBe(false);
   });
@@ -301,6 +304,7 @@ describe("Quiz's own workspace routes (M6-06)", () => {
       { mode: "online", devices: "seb" },
       { mode: "online", devices: "any" },
       { mode: "free", devices: "kiosk" },
+      { mode: "hybrid", devices: "seb" },
     ]) {
       expect(ProjectWorkModeBody.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
     }

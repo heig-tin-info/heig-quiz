@@ -5,6 +5,7 @@
  * are checked by its contract (`@quiz/contracts`), not here.
  */
 import { WORKFLOWS_DIR } from "./protectedFiles.js";
+import type { OnlineModeName } from "./workMode.js";
 
 /**
  * The paths a collection takes from the branch's head instead of the
@@ -166,6 +167,29 @@ export const COLLECTION_ORDER_WINDOW_MS = 120_000;
 export const collectionTooLate = (deadline: Date, now: Date): boolean =>
   now.getTime() - deadline.getTime() > COLLECTION_ORDER_WINDOW_MS;
 
+/**
+ * The student's last push by the deadline, as the collection weighs it
+ * (ADR-149 §2): `relayed` when it came from the online workspace — its head
+ * one the portal declared before relaying it (`codespace_relays`), or the
+ * commit an earlier collection signed.
+ */
+export interface CollectionLastPush {
+  relayed: boolean;
+}
+
+/**
+ * Whether the deadline collects a repository's workspace (ADR-130 §2 as
+ * amended by ADR-149 §2), once the repository is otherwise due (a workspace
+ * launched, the deadline applied, no lock): always in `online` and
+ * `online_seb`, where only the workspace writes; in `hybrid`, the last
+ * writer wins — collected when the student's last push came from the
+ * workspace or there was none, never over a push from their own machine
+ * (`last_push_local`).
+ */
+export function collectsWorkspace(mode: OnlineModeName, last: CollectionLastPush | null): boolean {
+  return mode !== "hybrid" || last === null || last.relayed;
+}
+
 /** What Quiz records of a collection (ADR-130 §7): the portal's answers, and Quiz's own. */
 export const COLLECTION_OUTCOMES = [
   "collected",
@@ -175,6 +199,7 @@ export const COLLECTION_OUTCOMES = [
   "too_large",
   "too_late",
   "failed",
+  "last_push_local",
 ] as const;
 export type CollectionOutcomeName = (typeof COLLECTION_OUTCOMES)[number];
 

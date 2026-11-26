@@ -41,7 +41,8 @@ interface MockWorkspace {
 }
 
 const WORKSPACES = new Map<string, MockWorkspace>([
-  ["pj-published", { mode: "online", devices: "any", launched: true, syncedAt: iso(-2 * H), syncError: null }],
+  // `?hybrid=1` (ADR-149): at the students' choice instead.
+  ["pj-published", { mode: flags.hybrid ? "hybrid" : "online", devices: "any", launched: true, syncedAt: iso(-2 * H), syncError: null }],
   // D21 (M6-07): a draft under Safe Exam Browser, synced like an online project.
   // `?pjkiosk=1` (ADR-089): at Kiosk only instead.
   [

@@ -11,6 +11,8 @@ the spec challenge and the code. Delivered in this order, tracked in
 (`changes/project-update-graded-commit.md`, `changes/project-regrade-machine.md`,
 `changes/project-sync-preview.md`); B for `online`
 (`changes/project-update-workspace.md`), `online_seb` remains (§11).
+Extended 2026-11-26 by [ADR-149](ADR-149-mode-de-travail-au-choix.md) §4:
+B applies to a `hybrid` project too, beside its pull request.
 
 Scope: a project graded by criteria whose snapshot is schema version 3
 (ADR-119): which commit its graded run reads, which distribution files that

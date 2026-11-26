@@ -147,12 +147,15 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
   // opens the repositories (ADR-145). Until then, once accepted, the page's
   // action is the workspace's, never GitHub's; afterwards, as online.
   const noGithub = inSeb || (project.workspace?.mode === "online_seb" && (project.repo?.invitation ?? null) === null);
+  // ADR-149 §6: at the students' choice, their repository on GitHub is the page's
+  // one action once accepted; the workspace is the fallback for whoever has no tools.
+  const hybrid = project.workspace?.mode === "hybrid";
 
   const facts = factsOfProject(project);
   const kind = projectActionKind(facts, now);
   const accepted = kind === "open";
   const projectAction = useProjectAction(facts, { now, primary: true, readOnly });
-  const action = noGithub && accepted ? null : projectAction;
+  const action = noGithub && accepted ? null : hybrid && accepted && projectAction ? { ...projectAction, primary: true } : projectAction;
   const live = project.repo && !project.repo.deleted ? project.repo : null;
   const coursesRoot = useRootCrumb("studentCourses");
 
@@ -227,7 +230,7 @@ function ProjectBody({ project, navigate }: { project: StudentProject; navigate:
         <WorkspaceSection
           project={project}
           live={live !== null}
-          primary={(accepted || inSeb) && !readOnly}
+          primary={(accepted || inSeb) && !readOnly && !hybrid}
           inSeb={inSeb}
           readOnly={readOnly}
         />
@@ -341,7 +344,9 @@ function WorkspaceRefusal() {
  * The online workspace (ADR-047, M6-06): *Open workspace* ({@link
  * OpenWorkspaceButton}) once the student's repository exists; the page's
  * accent when the repository is ready and nothing else is asked of the
- * student. Under Safe Exam Browser (D21, M6-07), it opens from the
+ * student — never at the students' choice (`hybrid`, ADR-149 §6), where it
+ * is the fallback for whoever has no tools, and says what the deadline
+ * collects. Under Safe Exam Browser (D21, M6-07), it opens from the
  * project's own `seb` session only; from the portal, the action is the
  * project's `.seb`, through the steps of {@link SebLaunchModal}.
  */
@@ -360,7 +365,9 @@ function WorkspaceSection({
 }) {
   const t = useT();
   const [launching, setLaunching] = useState(false);
-  const online = project.workspace?.mode === "online";
+  const mode = project.workspace?.mode;
+  const hybrid = mode === "hybrid";
+  const online = mode === "online" || hybrid;
   // ADR-089: at Kiosk only there is no `.seb` to offer; the student is sent to a station.
   const devices = project.workspace?.devices ?? "any";
   const variant = primary ? "primary" : "secondary";
@@ -371,7 +378,7 @@ function WorkspaceSection({
       <Lock /> {t("sproj.workspace.openInSeb")}
     </Button>
   );
-  const where = inSeb ? "sproj.workspace.inSeb" : (`sproj.workspace.${devices}` as const);
+  const where = inSeb ? "sproj.workspace.inSeb" : hybrid ? "sproj.workspace.hybrid" : (`sproj.workspace.${devices}` as const);
   // ADR-130 §7: inside SEB or at a station the repository card is not shown, so the collection is said here.
   const collected = inSeb && project.repo?.collected === true;
   return (
@@ -380,6 +387,7 @@ function WorkspaceSection({
       <Card className="flex flex-wrap items-center justify-between gap-3 p-5 text-sm">
         <div className="space-y-2">
           <p className="text-fg-muted">{t(where)}</p>
+          {hybrid ? <p className="text-fg-muted">{t("sproj.workspace.hybrid.collect")}</p> : null}
           {collected ? <p className="text-fg-muted">{t("sproj.collected")}</p> : null}
         </div>
         {action}

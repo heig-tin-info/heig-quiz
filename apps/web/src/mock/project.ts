@@ -1100,6 +1100,8 @@ function mockCollection(p: MockProject, r: MockRepo): ProjectRepoView["collectio
     { outcome: "too_late", reason: null, deadlineAt, at, unreadable: null, sha: null },
     { outcome: null, reason: null, deadlineAt, at, unreadable: null, sha: null },
     { outcome: "no_snapshot", reason: null, deadlineAt, at, unreadable: null, sha: null },
+    // ADR-149 §2: at the students' choice, a last push from the student's machine is not collected over.
+    { outcome: "last_push_local", reason: null, deadlineAt, at, unreadable: null, sha: null },
   ];
   return states[p.repos.indexOf(r) % states.length]!;
 }

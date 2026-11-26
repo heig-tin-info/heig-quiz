@@ -9,6 +9,11 @@
  *
  * The rules it holds, in order:
  *
+ *  - in a `hybrid` project the last writer wins (ADR-149 §2,
+ *    `collectsWorkspace`): a student whose last push by the deadline came
+ *    from their own machine is not collected (`last_push_local`, nothing
+ *    ordered); one whose last push came through the relay, or who never
+ *    pushed, is;
  *  - an order leaves only within `COLLECTION_ORDER_WINDOW_MS` of the
  *    effective deadline, judged on Quiz's clock right before it is sent,
  *    which also dates its token (§5): later, `too_late`;
@@ -37,14 +42,18 @@ import {
   collectionKeptPaths,
   collectionRef,
   collectionTooLate,
+  collectsWorkspace,
   effectiveDeadline,
+  isOnlineMode,
+  ONLINE_MODES,
   zonedIso,
   type CollectionFailureReason,
 } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
-import { codespaceCollections, codespaceLaunches, projectRepos, projects } from "../../db/schema.js";
+import type { Db } from "../../db/client.js";
+import { codespaceCollections, codespaceLaunches, codespaceRelays, projectRepos, projects } from "../../db/schema.js";
 import { branchHead, githubStatus, ownerRepo } from "../../github/app.js";
 import { collectionLanded, deleteCollectionRef, keptEntriesHold, pushedCommitIs } from "../../github/collection.js";
 import { commitOnBranch } from "../../github/commit.js";
@@ -69,13 +78,14 @@ export const COLLECTION_CONCURRENCY = 16;
 const MOVE_TRIES = 3;
 
 /**
- * Due for collection: an individual repository of an online project, its
- * deadline applied, its student launched a workspace, no lock held, not
+ * Due for collection: an individual repository of a project in the portal
+ * (`hybrid` included, whose last push then decides: `collectsWorkspace`),
+ * its deadline applied, its student launched a workspace, no lock held, not
  * archived, none recorded for its effective deadline. Over a
  * `project_repos` row joined to its project.
  */
 export const COLLECTION_DUE = and(
-  inArray(projects.workMode, ["online", "online_seb"]),
+  inArray(projects.workMode, [...ONLINE_MODES]),
   isNull(projectRepos.groupId),
   isNotNull(projectRepos.deadlineAppliedAt),
   isNull(projectRepos.lockedAt),
@@ -83,6 +93,20 @@ export const COLLECTION_DUE = and(
   sql`EXISTS (SELECT 1 FROM ${codespaceLaunches} WHERE ${codespaceLaunches.projectId} = ${projects.id} AND ${codespaceLaunches.userId} = ${projectRepos.userId})`,
   sql`NOT EXISTS (SELECT 1 FROM ${codespaceCollections} WHERE ${codespaceCollections.repoId} = ${projectRepos.id} AND ${codespaceCollections.deadlineAt} = ${EFFECTIVE_DEADLINE})`,
 )!;
+
+/**
+ * Whether a student push came from the online workspace (ADR-149 §2): its
+ * head one the portal declared before relaying it (`codespace_relays`, one
+ * primary-key lookup), or the commit an earlier collection signed.
+ */
+async function relayedPush(db: Db, githubRepoId: number, last: { sha: string; collected: boolean }): Promise<boolean> {
+  if (last.collected) return true;
+  const [row] = await db
+    .select({ sha: codespaceRelays.sha })
+    .from(codespaceRelays)
+    .where(and(eq(codespaceRelays.githubRepoId, githubRepoId), eq(codespaceRelays.sha, last.sha)));
+  return row !== undefined;
+}
 
 /** What the portal's answer records when it is not `pushed`: its outcome, a failure with its reason. Exhaustive by type. */
 function portalSettlement(answer: Exclude<CodespaceCollectionResult, { outcome: "pushed" }>): CollectionSettlement {
@@ -129,13 +153,19 @@ async function collectRepository(app: FastifyInstance, config: AppConfig, octoki
   const [row] = await repoWithProject(db).where(and(eq(projectRepos.id, repoId), LIVE, COLLECTION_DUE));
   if (!row) return null;
   const { repo, project } = row;
+  const mode = project.workMode;
+  // COLLECTION_DUE holds the portal's modes only: the guard narrows the type.
+  if (!isOnlineMode(mode)) return null;
   const deadline = effectiveDeadline(repo, project);
   const claim = await claimCollection(db, repo.id, deadline, app.clock.now());
   if (claim === null) return null;
   const settle = settler(app, repo, project, claim, deadline);
 
-  if (collectionTooLate(deadline, app.clock.now())) return settle({ outcome: "too_late" });
   const last = await lastStudentPush(db, repo.githubRepoId!, null, deadline);
+  if (!collectsWorkspace(mode, last && { relayed: await relayedPush(db, repo.githubRepoId!, last) })) {
+    return settle({ outcome: "last_push_local" }, last?.branch ?? null, last?.sha ?? null);
+  }
+  if (collectionTooLate(deadline, app.clock.now())) return settle({ outcome: "too_late" });
   const branch = collectionBranch(project.branches, last?.branch ?? null);
   if (branch === null) return settle({ outcome: "branch_not_handed_out" });
   await recordCollectionCommit(db, claim, branch, null);
