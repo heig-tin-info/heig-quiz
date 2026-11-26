@@ -32,6 +32,7 @@ const mcq = (id: string, prompt: string, choices: string[]) => ({
 
 export const makePaper = (over: Partial<PaperItems> = {}): PaperItems => ({
   student: { userId: USER, displayName: "Nadia Roux" },
+  variant: 1,
   view: {
     conditions: { announced: [], imposed: [] },
     documents: [],

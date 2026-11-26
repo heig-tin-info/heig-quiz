@@ -412,8 +412,8 @@ export function ResultsView({
                 userId={paperFor.userId}
                 name={paperFor.displayName}
                 onClose={() => setPaperFor(null)}
-                onStart={(date) =>
-                  navigate({ view: "paperEntry", evaluationId, user: paperFor.userId, date })
+                onStart={(date, variant) =>
+                  navigate({ view: "paperEntry", evaluationId, user: paperFor.userId, date, variant })
                 }
               />
             ) : null}

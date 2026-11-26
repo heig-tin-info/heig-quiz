@@ -20,8 +20,13 @@ import type { AttemptView, PaperItems } from "@quiz/contracts";
 import { useLocalPlayerSession } from "../attempt/useLocalPlayerSession";
 import type { PlayerSession } from "../student/Player";
 
-/** The draft's key: one per evaluation and student, in this tab only. */
-export const paperDraftKey = (evaluationId: string, userId: string) => `quiz.paper.${evaluationId}.${userId}`;
+/**
+ * The draft's key: one per evaluation, student and paper variant (ADR-148),
+ * in this tab only — a choice is named by its place on the paper, which
+ * another variant shuffles.
+ */
+export const paperDraftKey = (evaluationId: string, userId: string, variant: number) =>
+  `quiz.paper.${evaluationId}.${userId}.${variant}`;
 
 /** The draft of a previous load of this tab, or nothing. Storage may refuse: then there is none. */
 function readDraft(key: string): Record<string, unknown> {
@@ -45,9 +50,9 @@ function writeDraft(key: string, answers: Record<string, unknown>): void {
 }
 
 /** Forgets the draft: the copy was handed in. */
-export function clearPaperDraft(evaluationId: string, userId: string): void {
+export function clearPaperDraft(evaluationId: string, userId: string, variant: number): void {
   try {
-    window.sessionStorage.removeItem(paperDraftKey(evaluationId, userId));
+    window.sessionStorage.removeItem(paperDraftKey(evaluationId, userId, variant));
   } catch {
     // Nothing stored, nothing to forget.
   }
@@ -82,7 +87,7 @@ export function usePaperSession({
   /** Hands the copy in: the page posts it and says what came of it. */
   onSubmit: (answers: Record<string, unknown>) => Promise<void>;
 }): PlayerSession {
-  const key = paperDraftKey(evaluationId, userId);
+  const key = paperDraftKey(evaluationId, userId, paper.variant);
   // ONCE per mount (the page keys it on the student): a refetch of the paper
   // (a reconnect re-reads every query) never reloads the player under the
   // answers being typed.

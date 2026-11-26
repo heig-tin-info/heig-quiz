@@ -375,8 +375,8 @@ export const resultsCopyKey = (evaluationId: string, attemptId: string) =>
  * entry, never refreshed by a hint — a re-read would hand the player a new
  * view under the answers being typed.
  */
-export const paperItemsKey = (evaluationId: string, userId: string) =>
-  ["paper", evaluationId, "items", userId] as const;
+export const paperItemsKey = (evaluationId: string, userId: string, variant: number | null) =>
+  ["paper", evaluationId, "items", userId, variant] as const;
 /** A paper attempt's sheet: its exam date and scan. */
 export const paperSheetKey = (evaluationId: string, attemptId: string) =>
   ["paper", evaluationId, "sheet", attemptId] as const;

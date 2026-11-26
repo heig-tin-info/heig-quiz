@@ -527,7 +527,9 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
               userId={paperFor.userId}
               name={paperFor.name}
               onClose={() => setPaperFor(null)}
-              onStart={(date) => navigate({ view: "paperEntry", evaluationId: id, user: paperFor.userId, date })}
+              onStart={(date, variant) =>
+                navigate({ view: "paperEntry", evaluationId: id, user: paperFor.userId, date, variant })
+              }
             />
           ) : null}
           {assigning ? (

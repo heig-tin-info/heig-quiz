@@ -283,6 +283,13 @@ export type AuditAction =
   | "evaluation.answer_accepted"
   | "evaluation.items_versions"
   | "evaluation.pause"
+  /**
+   * ADR-148: the number of paper variants set (`payload.from`, `payload.to`),
+   * or every variant drawn again (`evaluation.paper_redraw`, `payload.count`);
+   * subject the evaluation. Never a seed.
+   */
+  | "evaluation.paper_variants"
+  | "evaluation.paper_redraw"
   | "evaluation.resume"
   | "evaluation.start"
   | "evaluation.state"
@@ -494,8 +501,9 @@ export type AuditAction =
   /**
    * ADR-125 §9, §12: a staff member handed in a student's paper copy,
    * subject the paper attempt; `payload.evaluationId`, `userId` (the
-   * student), `examDate`, and `supersededAttemptId` when it replaced an
-   * attempt — which then counts nowhere.
+   * student), `examDate`, `variant` (its number, ADR-148), and
+   * `supersededAttemptId` when it replaced an attempt — which then counts
+   * nowhere.
    */
   | "paper.enter"
   /** ADR-125 §15: the scan of a paper copy attached or replaced, subject the attempt; `evaluationId`, `mime`, `bytes`. */

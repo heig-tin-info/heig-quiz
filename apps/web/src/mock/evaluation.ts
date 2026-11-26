@@ -28,6 +28,9 @@ import { countsAsCompleted, providedDocumentsAllowedFor,
   type IntroScope,
   type ItemCounting,
   evaluationHoldsStudentWork,
+  paperVariantsLocked,
+  variantCountRefusal,
+  variesOnPaper,
 } from "@quiz/domain";
 import type { BlocksAnswer, BlocksConfig } from "@quiz/qt-blocks/client";
 import { blocksServer } from "@quiz/qt-blocks/server";
@@ -484,6 +487,8 @@ export interface MockEvaluation {
   originRevision: number | null;
   /** ADR-144 §7: the ids of its course's documents it provides, in their order. */
   documents: string[];
+  /** ADR-148: how many paper variants; none set reads 1. */
+  paperVariants?: number;
   items: MockItem[];
   rows: MockRowState[];
   present: number;
@@ -1162,12 +1167,22 @@ export const PRINTABLE_TYPES = new Set(["mcq", "short", "cloze", "code", "circui
 const exportsOf = (e: MockEvaluation): EvaluationExports => {
   if (e.mode === "poll") {
     const poll = { reason: "poll" as const, types: [] };
-    return { document: poll, handout: poll, paper: "paper_mode" };
+    return { document: poll, handout: poll, paper: "paper_mode", variants: mockVariants(e) };
   }
   const types = [...new Set(e.items.map((i) => i.type).filter((type) => !PRINTABLE_TYPES.has(type)))];
   const handout = types.length === 0 ? null : { reason: "type" as const, types };
-  return { document: null, handout, paper: mockPaperRefusal(e, handout)?.code ?? null };
+  return { document: null, handout, paper: mockPaperRefusal(e, handout)?.code ?? null, variants: mockVariants(e) };
 };
+
+/** Like the server's `paperVariantsState` (ADR-148): the count, whether papers can differ, whether they are fixed. */
+export const mockVariants = (e: MockEvaluation): EvaluationExports["variants"] => ({
+  count: e.paperVariants ?? 1,
+  varies: variesOnPaper(
+    { shuffleItems: e.settings["shuffleItems"] === true, shuffleChoices: e.settings["shuffleChoices"] === true },
+    e.items.some((item) => itemQuestion(item)?.randomizable === true),
+  ),
+  locked: paperVariantsLocked(e.state),
+});
 
 /** Like the server's `paperRefusal` (ADR-125 §11): its code, and the hand-out's refusal for the 409's body. */
 export function mockPaperRefusal(
@@ -1378,6 +1393,23 @@ on("POST", "/app/api/classrooms/:id/evaluations", (m, body) => {
   return toEvaluation(e);
 });
 on("GET", "/app/api/evaluations/:id", (m) => evaluationDetail(evaluationOr404(m.groups!.id!)));
+
+// ADR-148: the paper's variants, their count and Redraw, held by the server's rules.
+on("PUT", "/app/api/evaluations/:id/paper-variants", (m, body) => {
+  const e = evaluationOr404(m.groups!.id!);
+  const state = mockVariants(e);
+  const to = Number(body.count);
+  const refusal = variantCountRefusal(state.count, to, { varies: state.varies, locked: state.locked });
+  if (refusal === "variants_identical") throw new MockPayload(422, { error: refusal, message: "nothing varies" });
+  if (refusal) throw new MockPayload(409, { error: refusal, message: "the variants are fixed since the exam opened" });
+  e.paperVariants = to;
+  return evaluationDetail(e);
+});
+on("POST", "/app/api/evaluations/:id/paper-variants/redraw", (m) => {
+  const e = evaluationOr404(m.groups!.id!);
+  if (mockVariants(e).locked) throw new MockPayload(409, { error: "variants_locked", message: "the variants are fixed since the exam opened" });
+  return evaluationDetail(e);
+});
 
 // ADR-122, ADR-142: practice after the due date, its own writer, editable at any state.
 on("PUT", "/app/api/evaluations/:id/after-due", (m, body) => {

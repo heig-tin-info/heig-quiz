@@ -38,7 +38,7 @@ describe("the export sheet", () => {
 
   it("greys a refused document out with its reason, and keeps the other", async () => {
     mockFetch({
-      [DETAIL]: ok(makeEvaluationDetail({ exports: { document: null, handout: { reason: "type", types: ["code", "blocks"] }, paper: "paper_not_started" as const } })),
+      [DETAIL]: ok(makeEvaluationDetail({ exports: { document: null, handout: { reason: "type", types: ["code", "blocks"] }, paper: "paper_not_started" as const, variants: { count: 1, varies: true, locked: false } } })),
     });
     render();
     const handout = await screen.findByRole("region", { name: "Hand-out" });
@@ -49,7 +49,7 @@ describe("the export sheet", () => {
 
   it("says why a poll is refused", async () => {
     const refusal = { reason: "poll" as const, types: [] };
-    mockFetch({ [DETAIL]: ok(makeEvaluationDetail({ exports: { document: refusal, handout: refusal, paper: "paper_not_started" as const } })) });
+    mockFetch({ [DETAIL]: ok(makeEvaluationDetail({ exports: { document: refusal, handout: refusal, paper: "paper_not_started" as const, variants: { count: 1, varies: true, locked: false } } })) });
     render();
     await screen.findByRole("region", { name: "Hand-out" });
     expect(screen.getAllByText("A poll is not printed.")).toHaveLength(2);
@@ -85,5 +85,86 @@ describe("the export sheet", () => {
     mockFetch({ [DETAIL]: fail(500, { error: "internal_error" }) });
     render();
     expect(await screen.findByText("Could not load the exports.")).toBeInTheDocument();
+  });
+
+  describe("the paper variants (ADR-148)", () => {
+    const withVariants = (variants: { count: number; varies: boolean; locked: boolean }) =>
+      makeEvaluationDetail({ exports: { document: null, handout: null, paper: "paper_not_started", variants } });
+
+    it("is a stepper and a Redraw where papers can differ, absent where none can", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch({
+        [DETAIL]: ok(withVariants({ count: 1, varies: true, locked: false })),
+        [`PUT /app/api/evaluations/${EVALUATION_ID}/paper-variants`]: ok(withVariants({ count: 2, varies: true, locked: false })),
+      });
+      render();
+      const variants = await screen.findByRole("region", { name: "Variants" });
+      expect(within(variants).getByRole("button", { name: "One variant fewer" })).toBeDisabled();
+      await user.click(within(variants).getByRole("button", { name: "One variant more" }));
+      await waitFor(() => expect(calls.find((c) => c.method === "PUT")?.body).toEqual({ count: 2 }));
+      expect(await within(variants).findByText("2")).toBeInTheDocument();
+    });
+
+    it("shows no count where nothing varies", async () => {
+      mockFetch({ [DETAIL]: ok(withVariants({ count: 1, varies: false, locked: false })) });
+      render();
+      await screen.findByRole("region", { name: "Hand-out" });
+      expect(screen.queryByRole("region", { name: "Variants" })).toBeNull();
+    });
+
+    it("offers no more variants where nothing varies, fewer only", async () => {
+      mockFetch({ [DETAIL]: ok(withVariants({ count: 2, varies: false, locked: false })) });
+      render();
+      const variants = await screen.findByRole("region", { name: "Variants" });
+      expect(within(variants).getByRole("button", { name: "One variant more" })).toBeDisabled();
+      expect(within(variants).getByRole("button", { name: "One variant fewer" })).toBeEnabled();
+    });
+
+    it("holds Redraw and fewer variants once locked, and says why; one more stays", async () => {
+      mockFetch({ [DETAIL]: ok(withVariants({ count: 3, varies: true, locked: true })) });
+      render();
+      const variants = await screen.findByRole("region", { name: "Variants" });
+      expect(within(variants).getByText("Fixed since the exam opened")).toBeInTheDocument();
+      expect(within(variants).getByRole("button", { name: "Redraw" })).toBeDisabled();
+      expect(within(variants).queryByRole("button", { name: "One variant fewer" })).toBeDisabled();
+      expect(within(variants).getByRole("button", { name: "One variant more" })).toBeEnabled();
+    });
+
+    it("confirms a Redraw: papers already printed become void", async () => {
+      const user = userEvent.setup();
+      const { calls } = mockFetch({
+        [DETAIL]: ok(withVariants({ count: 2, varies: true, locked: false })),
+        [`POST /app/api/evaluations/${EVALUATION_ID}/paper-variants/redraw`]: ok(withVariants({ count: 2, varies: true, locked: false })),
+      });
+      render();
+      const variants = await screen.findByRole("region", { name: "Variants" });
+      await user.click(within(variants).getByRole("button", { name: "Redraw" }));
+      const dialog = await screen.findByRole("dialog", { name: "Redraw every variant?" });
+      expect(within(dialog).getByText("Papers already printed no longer match and become void.")).toBeInTheDocument();
+      await user.click(within(dialog).getByRole("button", { name: "Redraw" }));
+      await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+    });
+
+    it("downloads every variant in one PDF, or one variant in every format", async () => {
+      const user = userEvent.setup();
+      mockFetch({ [DETAIL]: ok(withVariants({ count: 3, varies: true, locked: false })), ...publicConfig(true) });
+      render();
+      const handout = await screen.findByRole("region", { name: "Hand-out" });
+      // Every variant: a PDF only.
+      await within(handout).findByRole("button", { name: "PDF" });
+      expect(within(handout).queryAllByRole("link")).toEqual([]);
+      const choice = screen.getByLabelText("Variant");
+      expect(within(choice).getAllByRole("option").map((o) => o.textContent)).toEqual([
+        "All variants",
+        "Variant A",
+        "Variant B",
+        "Variant C",
+      ]);
+      await user.selectOptions(choice, "2");
+      expect(within(handout).getAllByRole("link").map((a) => a.getAttribute("href"))).toEqual([
+        `/app/api/evaluations/${EVALUATION_ID}/handout.md?variant=2`,
+        `/app/api/evaluations/${EVALUATION_ID}/handout.json?variant=2`,
+      ]);
+    });
   });
 });

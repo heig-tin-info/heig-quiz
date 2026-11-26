@@ -19,9 +19,11 @@ import { KeyRound, PenLine, UserX } from "lucide-react";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 
 import type { PaperItems } from "@quiz/contracts";
+import { variantLetter } from "@quiz/domain";
 
 import { currentItem } from "../attempt/playerReducer";
 import { useConfirm } from "../confirm";
+import { useEvaluation } from "../evaluation/api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { QuestionReviewHost } from "../questionTypes";
@@ -36,7 +38,9 @@ export function PaperEntryPage({ evaluationId, navigate }: { evaluationId: strin
   const t = useT();
   const [user] = useSearchParam("user", "");
   const [date] = useSearchParam("date", "");
-  const paper = usePaperItems(evaluationId, user);
+  // ADR-148: the variant printed on the copy, named by the dialog; none where the paper has one.
+  const [variant] = useSearchParam("variant", "");
+  const paper = usePaperItems(evaluationId, user, /^\d+$/.test(variant) ? Number(variant) : null);
 
   // Back where the copy was asked for: the live grid while the exam runs, the results after.
   const live = paper.data && ["running", "paused"].includes(paper.data.view.evaluation.state);
@@ -45,7 +49,7 @@ export function PaperEntryPage({ evaluationId, navigate }: { evaluationId: strin
   if (paper.data) {
     return (
       <PaperWalk
-        key={user}
+        key={`${user}:${paper.data.variant}`}
         evaluationId={evaluationId}
         paper={paper.data}
         examDate={date || paper.data.examDate}
@@ -112,15 +116,18 @@ function PaperWalk({
   const confirm = useConfirm();
   const enter = useEnterPaper(evaluationId);
   const { userId, displayName: name } = paper.student;
+  const variant = paper.variant;
+  // The variant is named where the paper has several (ADR-148).
+  const several = (useEvaluation(evaluationId).data?.exports.variants.count ?? 1) > 1;
   const enterAsync = enter.mutateAsync;
   const handIn = useCallback(
     async (answers: Record<string, unknown>) => {
-      const created = await enterAsync({ userId, examDate, answers });
-      clearPaperDraft(evaluationId, userId);
+      const created = await enterAsync({ userId, examDate, variant, answers });
+      clearPaperDraft(evaluationId, userId, variant);
       toast(t("paper.done", { name }), "success");
       onDone(created.attemptId);
     },
-    [enterAsync, userId, examDate, evaluationId, toast, t, name, onDone],
+    [enterAsync, userId, examDate, variant, evaluationId, toast, t, name, onDone],
   );
   const session = usePaperSession({ evaluationId, userId, paper, onSubmit: handIn });
   const initial = useMemo(() => paperView(paper, {}), [paper]);
@@ -142,7 +149,12 @@ function PaperWalk({
   const refusal = paperRefusalOf(enter.error);
 
   return (
-    <ModeBanner icon={<PenLine />} message={t("paper.banner", { name })}>
+    <ModeBanner
+      icon={<PenLine />}
+      message={
+        several ? t("paper.bannerVariant", { name, letter: variantLetter(variant) }) : t("paper.banner", { name })
+      }
+    >
       <PlayerView
         initial={initial}
         session={session}

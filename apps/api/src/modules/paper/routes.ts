@@ -49,7 +49,7 @@ export async function paperPlugin(
     "/app/api/evaluations/:id/paper/items",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, query: PaperItemsQuery, load: staffEvaluation }, ({ now, query, scope }) =>
-      service.paperItems(app.db, scope.evaluation, query.user, now),
+      service.paperItems(app.db, scope.evaluation, query, now),
     ),
   );
 
@@ -66,6 +66,7 @@ export async function paperPlugin(
           evaluationId: scope.evaluation.id,
           userId: body.userId,
           examDate: body.examDate,
+          variant: inserted.variant,
           ...(supersededAttemptId === null ? {} : { supersededAttemptId }),
         });
         const created: PaperAttemptCreated = { attemptId: inserted.attempt.id, supersededAttemptId };

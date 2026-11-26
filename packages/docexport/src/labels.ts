@@ -24,6 +24,10 @@ export interface Labels {
   points: string;
   /** The unit after a number of points: `2 pt`. */
   pointsShort: string;
+  /** A paper variant's name before its letter, `Variant C` (ADR-148). */
+  variant: string;
+  /** Before a page number in a footer, `p. 2/4`. */
+  pageShort: string;
   /** The points of an answer nothing has graded yet. */
   notGraded: string;
   noAnswer: string;
@@ -163,6 +167,8 @@ export const EN_LABELS: Labels = {
   yourAnswer: "Your answer",
   points: "Points",
   pointsShort: "pt",
+  variant: "Variant",
+  pageShort: "p.",
   notGraded: "not graded",
   noAnswer: "No answer.",
   name: "Name",
@@ -273,6 +279,8 @@ export const FR_LABELS: Labels = {
   yourAnswer: "Votre réponse",
   points: "Points",
   pointsShort: "pt",
+  variant: "Variante",
+  pageShort: "p.",
   notGraded: "pas encore noté",
   noAnswer: "Pas de réponse.",
   name: "Nom",
@@ -388,6 +396,8 @@ export const DE_LABELS: Labels = {
   yourAnswer: "Ihre Antwort",
   points: "Punkte",
   pointsShort: "Pkt.",
+  variant: "Variante",
+  pageShort: "S.",
   notGraded: "noch nicht korrigiert",
   noAnswer: "Keine Antwort.",
   name: "Name",
@@ -503,6 +513,8 @@ export const IT_LABELS: Labels = {
   yourAnswer: "La sua risposta",
   points: "Punti",
   pointsShort: "pt",
+  variant: "Variante",
+  pageShort: "p.",
   notGraded: "in attesa di correzione",
   noAnswer: "Nessuna risposta.",
   name: "Cognome",

@@ -50,6 +50,8 @@ const REFUSALS = {
   not_printable: [409],
   // §9: the student is a claimed, non-staff seat of the classroom.
   paper_no_seat: [422, "this person holds no claimed student seat in the classroom"],
+  // ADR-148: the copy names the variant printed on it, one the paper has.
+  paper_variant: [422, "name the paper variant printed on the copy, one this evaluation has"],
   // Two copies of one student handed in at the same instant: the second is refused.
   paper_conflict: [409, "another paper copy of this student was just handed in"],
   // §15: the bytes are neither a PDF, a PNG nor a JPEG.
@@ -97,6 +99,24 @@ async function studentSeat(db: Db | Tx, record: EvaluationRecord, userId: string
 }
 
 /**
+ * The variant a copy is typed from (ADR-148), its seed and values: the one
+ * named, else 1 — refused (`422 paper_variant`) without a name where the
+ * paper has several, and for a variant it does not have (the evaluation
+ * module's `variant_unknown`).
+ */
+async function copyVariant(db: Db, record: EvaluationRecord, items: readonly JoinedItem[], named: number | undefined, now: Date) {
+  let paper: Awaited<ReturnType<typeof evaluation.paperVariant>>;
+  try {
+    paper = await evaluation.paperVariant(db, record, items, now, named ?? 1);
+  } catch (error) {
+    if (error instanceof evaluation.EvaluationError && error.code === "variant_unknown") throw new PaperError("paper_variant");
+    throw error;
+  }
+  if (named === undefined && paper.ref.of > 1) throw new PaperError("paper_variant");
+  return paper;
+}
+
+/**
  * The entry page's paper (ADR-125 §8, §9): the evaluation exactly as the
  * hand-out printed it — the student views of the paper variant (ADR-148),
  * built by the one builder of an attempt's view — with the whole key of
@@ -107,15 +127,16 @@ async function studentSeat(db: Db | Tx, record: EvaluationRecord, userId: string
 export async function paperItems(
   db: Db,
   record: EvaluationRecord,
-  userId: string,
+  query: { user: string; variant?: number | undefined },
   now: Date,
 ): Promise<PaperItems> {
   const items = await eligibleItems(db, record);
-  const student = await studentSeat(db, record, userId);
-  const variant = await evaluation.paperVariant(db, record, items, now);
-  const current = await live.attemptOf(db, record.id, userId);
+  const student = await studentSeat(db, record, query.user);
+  const { ref, attempt: variant } = await copyVariant(db, record, items, query.variant, now);
+  const current = await live.attemptOf(db, record.id, query.user);
   return {
     student,
+    variant: ref.number,
     view: await live.previewView(db, record, now, variant, items),
     solutions: live.paperKey(record, items, variant),
     replaces: current && { attemptId: current.id, state: current.state, origin: current.origin },
@@ -134,11 +155,11 @@ export async function enterPaperCopy(
   body: PaperAttemptBody,
   by: string,
   now: Date,
-): Promise<live.InsertedPaperAttempt> {
+): Promise<live.InsertedPaperAttempt & { variant: number }> {
   const { db } = app;
   const items = await eligibleItems(db, record);
   await studentSeat(db, record, body.userId);
-  const variant = await evaluation.paperVariant(db, record, items, now);
+  const { ref, attempt: variant } = await copyVariant(db, record, items, body.variant, now);
   // Before any write: one refused answer refuses the copy.
   const answers = live.paperAnswers(record, items, variant, body.answers, body.coordinates);
   let inserted: live.InsertedPaperAttempt;
@@ -152,14 +173,14 @@ export async function enterPaperCopy(
       if (moved) throw new PaperError(moved.code);
       await studentSeat(tx, record, body.userId, true);
       const rows = await live.insertPaperAttempt(tx, { evaluation: record, userId: body.userId, variant, answers, now });
-      await tx.insert(paperSheets).values({ attemptId: rows.attempt.id, examDate: body.examDate, enteredBy: by });
+      await tx.insert(paperSheets).values({ attemptId: rows.attempt.id, examDate: body.examDate, variant: ref.number, enteredBy: by });
       return rows;
     });
   } catch (error) {
     throw conflictOf(error);
   }
   await live.announcePaperAttempt(app, record, inserted, now);
-  return inserted;
+  return { ...inserted, variant: ref.number };
 }
 
 /**
@@ -187,6 +208,7 @@ function sheetOut(row: typeof paperSheets.$inferSelect): PaperSheet {
   return {
     attemptId: row.attemptId,
     examDate: row.examDate,
+    variant: row.variant,
     scan: scanned ? { mime: row.scanMime!, bytes: row.scanBytes!, uploadedAt: iso(row.scanUploadedAt!) } : null,
   };
 }

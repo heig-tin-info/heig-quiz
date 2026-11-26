@@ -15,11 +15,15 @@ import { z } from "zod";
 import { PAPER_SCAN_MIMES } from "@quiz/domain";
 
 import { AnswerCoordinates } from "./common.js";
-import { PAPER_ENTRY_REFUSALS } from "./exports.js";
+import { PAPER_ENTRY_REFUSALS, PaperVariantNumber, VariantParam } from "./exports.js";
 import { AttemptOrigin, AttemptState, AttemptView } from "./live.js";
 
-/** `?user=` of the entry page's read: the student whose copy is typed in. */
-export const PaperItemsQuery = z.object({ user: z.uuid() });
+/**
+ * `?user=&variant=` of the entry page's read: the student whose copy is typed
+ * in, and the variant printed on it (ADR-148): required when the paper has
+ * more than one (`422 paper_variant`), 1 otherwise.
+ */
+export const PaperItemsQuery = z.object({ user: z.uuid(), variant: VariantParam.optional() });
 export type PaperItemsQuery = z.infer<typeof PaperItemsQuery>;
 
 /** `POST /evaluations/:id/paper`: one student's whole copy. */
@@ -28,6 +32,8 @@ export const PaperAttemptBody = z.object({
   userId: z.uuid(),
   /** The day the paper was sat, as written on it. Recorded apart: the hand-in time is the server's. */
   examDate: z.iso.date(),
+  /** The variant printed on the copy (ADR-148): required when the paper has more than one (`422 paper_variant`). */
+  variant: PaperVariantNumber.optional(),
   /**
    * Item id → the answer as the player holds it, in the coordinates of the
    * paper's view; an item left out was left blank. Each one goes through the
@@ -52,11 +58,19 @@ export type PaperAttemptCreated = z.infer<typeof PaperAttemptCreated>;
 /**
  * The refusals of the submission and of the entry page's read, by code: the
  * evaluation's (`PAPER_ENTRY_REFUSALS`, `409`), then `422 paper_no_seat`
- * (not a claimed student seat of the classroom), `409 paper_conflict`
+ * (not a claimed student seat of the classroom), `422 paper_variant` (no
+ * variant named where the paper has several, or one it does not have,
+ * ADR-148), `409 paper_conflict`
  * (another copy of the same student was handed in at the same instant) and
  * `422 answer_invalid` (a malformed answer, the student save's refusal).
  */
-export const PAPER_REFUSALS = [...PAPER_ENTRY_REFUSALS, "paper_no_seat", "paper_conflict", "answer_invalid"] as const;
+export const PAPER_REFUSALS = [
+  ...PAPER_ENTRY_REFUSALS,
+  "paper_no_seat",
+  "paper_variant",
+  "paper_conflict",
+  "answer_invalid",
+] as const;
 export type PaperRefusal = (typeof PAPER_REFUSALS)[number];
 
 /** `GET /evaluations/:id/paper/items?user=`: the entry page's paper. Staff only. */
@@ -68,6 +82,8 @@ export const PaperItems = z.object({
    * id a placeholder: no attempt exists before the submission.
    */
   view: AttemptView,
+  /** The number of the variant the copy is typed from (ADR-148). */
+  variant: PaperVariantNumber,
   /** Item id → the whole key, in the coordinates of `view`: what the teacher checks the copy against. */
   solutions: z.record(z.uuid(), z.unknown()),
   /** The student's attempt that the copy will replace (ADR-125 §12), or null. */
@@ -87,6 +103,8 @@ export type PaperScanMime = z.infer<typeof PaperScanMime>;
 export const PaperSheet = z.object({
   attemptId: z.uuid(),
   examDate: z.iso.date(),
+  /** The number of the variant the copy was typed from (ADR-148). */
+  variant: PaperVariantNumber,
   scan: z
     .object({
       mime: PaperScanMime,

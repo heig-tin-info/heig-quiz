@@ -463,6 +463,34 @@ describe("the blank print of a past series (ADR-122 §9)", () => {
     expect(await variantSeed(seed.evaluationId)).toEqual(expect.any(Number));
   });
 
+  it("prints variant 1 with no variant named, whatever the count (ADR-148)", async () => {
+    const db = server.app.db;
+    const seed = await pastSeries();
+    const raised = await server.app.inject({
+      method: "PUT",
+      url: `/app/api/evaluations/${seed.evaluationId}/paper-variants`,
+      headers: teacher.headers,
+      payload: { count: 3 },
+    });
+    expect(raised.statusCode, raised.body).toBe(200);
+    const found = await handout(db, await reload(db, seed.evaluationId), { now: server.clock.now() });
+    expect(found.record.variant).toBeNull();
+    // Variant 1's paper: the staff's variant A, without its label.
+    const staff = HandoutRecord.parse((await get(`/app/api/evaluations/${seed.evaluationId}/handout.json?variant=1`, teacher.headers)).json());
+    expect(found.record.items).toEqual(staff.items);
+    for (const lang of LOCALES) {
+      const tree = handoutTree(found, lang);
+      expect(tree.blocks.some((b) => b.kind === "booklet")).toBe(false);
+      expect(typstOf(tree)).not.toContain(LABELS[lang].variant);
+    }
+    if (pdfTools) {
+      nextHour();
+      const printed = await get(printUrl(seed.evaluationId), student.headers);
+      expect(printed.statusCode).toBe(200);
+      expect(await pdfText(printed.rawPayload)).not.toMatch(/Variant/);
+    }
+  });
+
   it("holds no secret, no answer and no seed in its tree and its Typst source", async () => {
     const seed = await pastSeries();
     const found = await handout(server.app.db, await reload(server.app.db, seed.evaluationId), { now: server.clock.now() });

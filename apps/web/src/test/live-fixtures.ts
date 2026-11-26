@@ -208,7 +208,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
     roster: { enrolled: 24, unlinked: 2, conflicts: 0 },
     templateRevision: null,
     courseId: "c1",
-    exports: { document: null, handout: null, paper: "paper_not_started" },
+    exports: { document: null, handout: null, paper: "paper_not_started", variants: { count: 1, varies: true, locked: false } },
     documents: [],
     ...overrides,
   };

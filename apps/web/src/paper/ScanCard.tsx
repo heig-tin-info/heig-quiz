@@ -2,13 +2,15 @@
  * The scan of a paper copy (ADR-125 §15, F-PAPER-04): attached right after
  * the hand-in or later, replaced by a new upload, opened as a download.
  * Staff only, like everything under `paper/`. A secondary surface: the
- * screen it sits on has its own primary action.
+ * screen it sits on has its own primary action. Its heading names the paper
+ * variant the copy was typed from, where the paper has several (ADR-148).
  */
 import { FileUp, Paperclip } from "lucide-react";
 import { useRef } from "react";
 
-import { PAPER_SCAN_MIMES } from "@quiz/domain";
+import { PAPER_SCAN_MIMES, variantLetter } from "@quiz/domain";
 
+import { useEvaluation } from "../evaluation/api";
 import { formatBytes, useI18n, useT } from "../i18n";
 import { useToast } from "../notify";
 import { Button, Card, Skeleton, QueryError } from "../ui";
@@ -22,6 +24,7 @@ export function ScanCard({ evaluationId, attemptId }: { evaluationId: string; at
   const { locale } = useI18n();
   const toast = useToast();
   const sheet = usePaperSheet(evaluationId, attemptId);
+  const variants = useEvaluation(evaluationId).data?.exports.variants.count ?? 1;
   const upload = useUploadScan(evaluationId, attemptId);
   const input = useRef<HTMLInputElement>(null);
   const scan = sheet.data?.scan ?? null;
@@ -37,7 +40,15 @@ export function ScanCard({ evaluationId, attemptId }: { evaluationId: string; at
   return (
     <Card className="space-y-3 px-5 py-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">{t("paper.scan.title")}</h2>
+        <h2 className="text-sm font-semibold">
+          {t("paper.scan.title")}
+          {/* ADR-148: the variant the copy was typed from, where the paper has several. */}
+          {sheet.data && variants > 1 ? (
+            <span className="ml-2 font-normal text-fg-muted">
+              {t("paper.variantLetter", { letter: variantLetter(sheet.data.variant) })}
+            </span>
+          ) : null}
+        </h2>
         {scan ? (
           <a
             className="inline-flex items-center gap-1.5 text-[13px] text-fg-muted underline-offset-2 hover:underline"

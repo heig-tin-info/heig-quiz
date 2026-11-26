@@ -1156,6 +1156,13 @@
       "when": 1795714756495,
       "tag": "0164_paper_variants",
       "breakpoints": true
+    },
+    {
+      "idx": 165,
+      "version": "7",
+      "when": 1795719933116,
+      "tag": "0165_paper_sheet_variant",
+      "breakpoints": true
     }
   ]
 }

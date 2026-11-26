@@ -68,6 +68,7 @@ import { first } from "../../db/query.js";
 import { conceptsOf } from "../concept/service.js";
 import { poolRolesOf } from "../pool/service.js";
 import { exportsOf, printRefusal } from "./print.js";
+import { paperVariantsState } from "./variants.js";
 import { providedDocumentsOf } from "./providedDocuments.js";
 import type { EvaluationHome, EvaluationRecord, ItemRecord, DbOrTx } from "./shared.js";
 import type { Caller } from "../guards.js";
@@ -891,7 +892,7 @@ export async function evaluationDetail(
     roster: await rosterOf(db, row, enrolled),
     templateRevision: (await templateRevisionsOf(db, [row])).get(row.id) ?? null,
     courseId,
-    exports: exportsOf(row, joined),
+    exports: exportsOf(row, joined, await paperVariantsState(db, row, joined)),
     documents: await providedDocumentsOf(db, row.id),
   };
 }

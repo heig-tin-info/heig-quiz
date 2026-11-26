@@ -9,13 +9,13 @@
  * never reach a student: the `[[`, each name as a reference, every
  * expression, the condition and the table's own vocabulary.
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { ParametersDraft } from "@quiz/contracts";
 import { formatValue, type Values } from "@quiz/domain/parameters";
 
 import type { Db } from "../db/client.js";
-import { evaluations, questions } from "../db/schema.js";
+import { evaluations, paperVariants, questions } from "../db/schema.js";
 import { joinedItems } from "../modules/evaluation/service.js";
 import * as live from "../modules/live/service.js";
 import * as poolService from "../modules/pool/service.js";
@@ -116,14 +116,15 @@ export async function publishParameterized(
 
 /**
  * Sets, before an evaluation's first print, the seed of its paper variant
- * (through `paper_seed`, which variant 1 takes, ADR-148) — a large one, as a
- * drawn seed is — under which each parameterized short and cloze key is a
+ * `variant` (variant 1 through `paper_seed`, which it takes when created;
+ * another one, made by raising the count, directly, its values cleared,
+ * ADR-148) — a large one, as a drawn seed is — under which each parameterized short and cloze key is a
  * number no statement of the paper prints: not an integer (a question's
  * number), not a gravity, not a value of another item, an mcq's choices
  * included. `showsKey` then finds a key in a document only if it leaked.
  * Answers the keys' values, in the items' order.
  */
-export async function legibleSeed(db: Db, evaluationId: string, now: Date): Promise<Values[]> {
+export async function legibleSeed(db: Db, evaluationId: string, now: Date, variant = 1): Promise<Values[]> {
   const [evaluation] = await db.select().from(evaluations).where(eq(evaluations.id, evaluationId));
   const keyed = (await joinedItems(db, evaluationId)).filter((j) => j.version.variables !== null && j.question.type !== "mcq");
   const legible = (printed: string) => (values: Values) =>
@@ -133,7 +134,14 @@ export async function legibleSeed(db: Db, evaluationId: string, now: Date): Prom
     const printed = JSON.stringify(view.items.map((i) => i.student));
     const keys = keyed.map((j) => poolService.instanceOf(j.question.type, j.version, { seed, itemId: j.item.id }).values!);
     if (keys.every(legible(printed))) {
-      await db.update(evaluations).set({ paperSeed: seed }).where(eq(evaluations.id, evaluationId));
+      // Variant 1 takes `paper_seed` when it is created; another one exists already (ADR-148).
+      if (variant === 1) await db.update(evaluations).set({ paperSeed: seed }).where(eq(evaluations.id, evaluationId));
+      else {
+        await db
+          .update(paperVariants)
+          .set({ seed, instances: {} })
+          .where(and(eq(paperVariants.evaluationId, evaluationId), eq(paperVariants.number, variant)));
+      }
       return keys;
     }
   }

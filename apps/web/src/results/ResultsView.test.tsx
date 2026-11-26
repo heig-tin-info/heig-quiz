@@ -263,6 +263,7 @@ describe("ResultsView", () => {
       [`GET /app/api/evaluations/e1/attempts/${zoe.attemptId}/paper`]: ok({
         attemptId: zoe.attemptId,
         examDate: "2026-11-02",
+        variant: 1,
         scan: null,
       }),
     });
@@ -275,7 +276,7 @@ describe("ResultsView", () => {
   it("opens Enter a paper copy from a student's row menu (ADR-125)", async () => {
     mockFetch({
       [`GET ${VIEW}`]: ok(makeResultsView()),
-      "GET /app/api/evaluations/e1": ok(makeEvaluationDetail({ exports: { document: null, handout: null, paper: null } })),
+      "GET /app/api/evaluations/e1": ok(makeEvaluationDetail({ exports: { document: null, handout: null, paper: null, variants: { count: 1, varies: true, locked: false } } })),
     });
     renderWithProviders(<ResultsView evaluationId="e1" navigate={vi.fn()} />);
     await userEvent.click(await screen.findByRole("button", { name: "Actions for Adam Perret" }));

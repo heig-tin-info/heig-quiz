@@ -21,7 +21,7 @@ import { renderTypst } from "@quiz/docexport/typst";
 import { splitFrontMatter } from "@quiz/docrender/frontMatter";
 import { LOCALES } from "@quiz/domain";
 
-import { evaluationItems, evaluations, paperVariants, questions } from "../../db/schema.js";
+import { auditLog, evaluationItems, evaluations, paperVariants, questions } from "../../db/schema.js";
 import { sessionOf, type TestServer, testServer } from "../../test/http.js";
 import { reload, seedLive } from "../../test/live.js";
 import { fallOf, legibleSeed, markersIn, publishParameterized, showsKey, VARIABLES } from "../../test/parameterized.js";
@@ -30,7 +30,7 @@ import * as live from "../live/service.js";
 import { typeOf } from "../pool/config.js";
 import * as poolService from "../pool/service.js";
 import { handout, handoutTree } from "./document.js";
-import { addItems, joinedItems, latestPublished, patchItem, settingsOf, updateVersions } from "./service.js";
+import { addItems, applyState, joinedItems, latestPublished, patchItem, settingsOf, updateVersions } from "./service.js";
 
 /** One question of each printable type, every secret a marker the search finds. */
 const QUESTIONS = {
@@ -167,7 +167,7 @@ describe("the statement with key (F-EXP-04)", () => {
     expect(res.headers["cache-control"]).toBe("no-store");
     const { frontMatter, body } = splitFrontMatter(res.body);
     expect(frontMatter).toMatchObject({
-      export: { kind: "evaluation-document", format: "md", version: 2 },
+      export: { kind: "evaluation-document", format: "md", version: 3 },
       source: { evaluationId: evaluation.id },
       attempts: [],
     });
@@ -215,7 +215,9 @@ describe("the statement with key (F-EXP-04)", () => {
     expect(record.items.map((i) => [i.id, i.position, i.statement])).toEqual(handout.items.map((i) => [i.id, i.position, i.statement]));
     expect(record.items.map((i) => i.explanation)).toEqual(record.items.map((i) => explanationOf(i.type)));
     expect(record.items.map((i) => i.internalName)).toEqual(record.items.map((i) => nameOf(i.type)));
-    expect(record.version).toBe(2);
+    expect(record.version).toBe(3);
+    // One variant: named, A of 1, and printed under no label.
+    expect(record.variant).toEqual({ number: 1, letter: "A", of: 1 });
     expect(res.body).not.toMatch(/seed/i);
     expect(showsSeed(res.body, (await storedSeed(evaluation.id))!)).toBe(false);
   });
@@ -277,7 +279,7 @@ describe("the hand-out (ADR-125)", () => {
     expect(record.items).toHaveLength(5);
     // A printable evaluation offers both on its detail.
     const detail = EvaluationDetail.parse((await get(`/app/api/evaluations/${evaluation.id}`, teacher.headers)).json());
-    expect(detail.exports).toEqual({ document: null, handout: null, paper: "paper_not_started" });
+    expect(detail.exports).toEqual({ document: null, handout: null, paper: "paper_not_started", variants: expect.anything() });
     expect(findStudentLeaks(record, { forbiddenKeys: live.FORBIDDEN_STUDENT_KEYS, secrets: SECRETS })).toEqual([]);
     expect(showsSeed(res.body, (await storedSeed(evaluation.id))!)).toBe(false);
   });
@@ -365,7 +367,7 @@ describe("a parameterized evaluation on paper (ADR-148)", () => {
     const db = server.app.db;
     const evaluation = await parameterizedExam();
     const detail = EvaluationDetail.parse((await get(`/app/api/evaluations/${evaluation.id}`, teacher.headers)).json());
-    expect(detail.exports).toEqual({ document: null, handout: null, paper: "paper_not_started" });
+    expect(detail.exports).toEqual({ document: null, handout: null, paper: "paper_not_started", variants: expect.anything() });
 
     const first = HandoutRecord.parse((await get(url(evaluation.id, "handout.json"), teacher.headers)).json());
     const stored = (await storedVariant(evaluation.id))!;
@@ -543,7 +545,7 @@ describe("an evaluation that does not print (ADR-125 §5)", () => {
     expect(handout.statusCode).toBe(200);
     expect(handout.body).toContain("CODE_PROMPT");
     const detail = EvaluationDetail.parse((await get(`/app/api/evaluations/${evaluation.id}`, teacher.headers)).json());
-    expect(detail.exports).toEqual({ document: null, handout: null, paper: "paper_not_started" });
+    expect(detail.exports).toEqual({ document: null, handout: null, paper: "paper_not_started", variants: expect.anything() });
   });
 
   it("refuses both documents for a type with no paper form, naming it", async () => {
@@ -565,7 +567,7 @@ describe("an evaluation that does not print (ADR-125 §5)", () => {
     }
     const detail = EvaluationDetail.parse((await get(`/app/api/evaluations/${evaluation.id}`, teacher.headers)).json());
     const refusal = { reason: "type", types: ["codeimage"] };
-    expect(detail.exports).toEqual({ document: refusal, handout: refusal, paper: "paper_not_started" });
+    expect(detail.exports).toMatchObject({ document: refusal, handout: refusal, paper: "paper_not_started" });
   });
 
   it("refuses a poll both, whatever its questions", async () => {
@@ -575,6 +577,188 @@ describe("an evaluation that does not print (ADR-125 §5)", () => {
       const res = await get(url(evaluation.id, file), teacher.headers);
       expect(res.statusCode).toBe(409);
       expect(res.json()).toMatchObject({ error: "not_printable", reason: "poll", types: [] });
+    }
+  });
+});
+
+/*
+ * Paper variants (ADR-148): N papers, each its own draw, stored and stable,
+ * each key agreeing with its own hand-out; the combined PDF labels every
+ * page; the count and Redraw, audited without a seed, refused once a printed
+ * stack may be out; and the leak tests of a parameterized hand-out, run on
+ * a variant other than the first.
+ */
+describe("paper variants (ADR-148)", () => {
+  const setCount = (id: string, count: number) =>
+    server.app.inject({ method: "PUT", url: url(id, "paper-variants"), headers: teacher.headers, payload: { count } });
+  const redraw = (id: string) =>
+    server.app.inject({ method: "POST", url: url(id, "paper-variants/redraw"), headers: teacher.headers, payload: {} });
+  const variantsOf = async (id: string) =>
+    EvaluationDetail.parse((await get(`/app/api/evaluations/${id}`, teacher.headers)).json()).exports.variants;
+  const rows = (id: string) =>
+    server.app.db.select().from(paperVariants).where(eq(paperVariants.evaluationId, id)).orderBy(paperVariants.number);
+  const handoutOf = async (id: string, variant: number) =>
+    HandoutRecord.parse((await get(url(id, `handout.json?variant=${variant}`), teacher.headers)).json());
+  const keyOf = async (id: string, variant: number) =>
+    EvaluationDocumentRecord.parse((await get(url(id, `document.json?variant=${variant}`), teacher.headers)).json());
+  /** The printable types, shuffled, and a parameterized short and cloze. */
+  const variedExam = () =>
+    exam(async (poolId) => [
+      await publishParameterized(server.app.db, { poolId, teacherId: teacher.id, type: "short", name: "PARAM_short" }),
+      await publishParameterized(server.app.db, { poolId, teacherId: teacher.id, type: "cloze", name: "PARAM_cloze" }),
+    ]);
+  const auditOf = (id: string) =>
+    server.app.db.select().from(auditLog).where(eq(auditLog.subjectId, id));
+
+  it("makes N variants that differ, each stable, each key agreeing with its own hand-out only", async () => {
+    const evaluation = await variedExam();
+    expect(await variantsOf(evaluation.id)).toEqual({ count: 1, varies: true, locked: false });
+    const res = await setCount(evaluation.id, 3);
+    expect(res.statusCode, res.body).toBe(200);
+    expect(EvaluationDetail.parse(res.json()).exports.variants).toEqual({ count: 3, varies: true, locked: false });
+
+    const papers = [];
+    for (const number of [1, 2, 3]) {
+      const paper = await handoutOf(evaluation.id, number);
+      expect(paper.variant).toEqual({ number, letter: "ABC"[number - 1], of: 3 });
+      expect((await handoutOf(evaluation.id, number)).items).toEqual(paper.items);
+      papers.push(paper);
+    }
+    // Three draws: no two papers alike (their order, their choices or their values).
+    expect(new Set(papers.map((p) => JSON.stringify(p.items))).size).toBe(3);
+    for (const [at, paper] of papers.entries()) {
+      const key = await keyOf(evaluation.id, at + 1);
+      expect(key.variant).toEqual(paper.variant);
+      expect(key.items.map((i) => [i.id, i.statement])).toEqual(paper.items.map((i) => [i.id, i.statement]));
+      const other = papers[(at + 1) % 3]!;
+      expect(key.items.map((i) => [i.id, i.statement])).not.toEqual(other.items.map((i) => [i.id, i.statement]));
+    }
+    // Each its own seed, stored; none in any document.
+    const stored = await rows(evaluation.id);
+    expect(stored.map((r) => r.number)).toEqual([1, 2, 3]);
+    expect(new Set(stored.map((r) => r.seed)).size).toBe(3);
+    for (const number of [1, 2, 3]) {
+      for (const file of [`handout.json?variant=${number}`, `document.md?variant=${number}`]) {
+        const body = (await get(url(evaluation.id, file), teacher.headers)).body;
+        for (const { seed } of stored) expect(showsSeed(withoutRandomHex(body), seed)).toBe(false);
+      }
+    }
+    expect((await get(url(evaluation.id, "handout.json?variant=4"), teacher.headers)).json()).toMatchObject({ error: "variant_unknown" });
+    expect((await get(url(evaluation.id, "handout.md?variant=all"), teacher.headers)).statusCode).toBe(400);
+    // Audited without a seed.
+    const audit = (await auditOf(evaluation.id)).filter((r) => r.action === "evaluation.paper_variants");
+    expect(audit.map((r) => r.payload)).toEqual([{ from: 1, to: 3 }]);
+  });
+
+  it.skipIf(!pdfTools)("labels every page of the combined PDF with its variant and its own count; one variant, no label", async () => {
+    const evaluation = await variedExam();
+    const single = await pdfText((await get(url(evaluation.id, "handout.pdf"), teacher.headers)).rawPayload);
+    expect(single).not.toMatch(/Variant/);
+    expect((await setCount(evaluation.id, 3)).statusCode).toBe(200);
+    for (const document of ["handout", "document"]) {
+      const res = await get(url(evaluation.id, `${document}.pdf?variant=all`), teacher.headers);
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["content-disposition"]).toMatch(/-all\.pdf"$/);
+      const pages = (await pdfText(res.rawPayload)).split("\f").filter((page) => page.trim() !== "");
+      const labels = pages.map((page) => /Variant ([A-Z]) · p\. (\d+)\/(\d+)/.exec(page)?.slice(1) ?? null);
+      // Every printed page labelled; the blank versos that put each variant on a recto are empty.
+      expect(labels.every((label) => label !== null)).toBe(true);
+      expect([...new Set(labels.map((label) => label![0]))]).toEqual(["A", "B", "C"]);
+      for (const [letter, n, total] of labels as string[][]) {
+        expect(Number(n)).toBeLessThanOrEqual(Number(total));
+        expect(labels.filter((label) => label![0] === letter)).toHaveLength(Number(total));
+      }
+      // One variant alone: its letter on its pages, in the requester's language.
+      const one = await get(url(evaluation.id, `${document}.pdf?variant=2`), { ...teacher.headers, "accept-language": "fr-CH" });
+      expect(one.headers["content-disposition"]).toMatch(/-B\.pdf"$/);
+      expect(await pdfText(one.rawPayload)).toMatch(/Variante B · p\. 1\/\d/);
+    }
+  });
+
+  it("redraws every variant: new seeds, values cleared, the rollback seed following variant 1", async () => {
+    const db = server.app.db;
+    const evaluation = await variedExam();
+    // Nothing printed yet: nothing to draw again, nothing audited.
+    expect((await redraw(evaluation.id)).statusCode).toBe(200);
+    expect((await auditOf(evaluation.id)).filter((r) => r.action === "evaluation.paper_redraw")).toEqual([]);
+    expect((await setCount(evaluation.id, 2)).statusCode).toBe(200);
+    for (const number of [1, 2]) await handoutOf(evaluation.id, number);
+    const before = await rows(evaluation.id);
+    expect(before.every((r) => Object.keys(r.instances).length === 2)).toBe(true);
+    const res = await redraw(evaluation.id);
+    expect(res.statusCode, res.body).toBe(200);
+    const after = await rows(evaluation.id);
+    expect(after.map((r) => r.instances)).toEqual([{}, {}]);
+    for (const [at, row] of after.entries()) expect(row.seed).not.toBe(before[at]!.seed);
+    expect((await reload(db, evaluation.id)).paperSeed).toBe(after[0]!.seed);
+    expect((await auditOf(evaluation.id)).filter((r) => r.action === "evaluation.paper_redraw").map((r) => r.payload)).toEqual([{ count: 2 }]);
+  });
+
+  it("fixes the variants from the lobby on, raising still allowed; a draft moved back is free again", async () => {
+    const db = server.app.db;
+    const evaluation = await variedExam();
+    expect((await setCount(evaluation.id, 3)).statusCode).toBe(200);
+    await applyState(db, await reload(db, evaluation.id), "lobby", server.clock.now());
+    expect(await variantsOf(evaluation.id)).toEqual({ count: 3, varies: true, locked: true });
+    for (const res of [await setCount(evaluation.id, 2), await redraw(evaluation.id)]) {
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toMatchObject({ error: "variants_locked" });
+    }
+    expect((await setCount(evaluation.id, 4)).statusCode).toBe(200);
+    expect((await rows(evaluation.id)).map((r) => r.number)).toEqual([1, 2, 3, 4]);
+    // Closed with no attempt, then moved back to draft: the questions may change again, and so may the variants.
+    await db.update(evaluations).set({ state: "closed" }).where(eq(evaluations.id, evaluation.id));
+    expect(await variantsOf(evaluation.id)).toMatchObject({ locked: true });
+    await applyState(db, await reload(db, evaluation.id), "draft", server.clock.now());
+    expect(await variantsOf(evaluation.id)).toMatchObject({ count: 4, locked: false });
+    expect((await setCount(evaluation.id, 2)).statusCode).toBe(200);
+    expect((await redraw(evaluation.id)).statusCode).toBe(200);
+  });
+
+  it("offers one variant only where nothing varies", async () => {
+    const db = server.app.db;
+    const evaluation = await exam();
+    await db
+      .update(evaluations)
+      .set({ settings: { ...settingsOf(evaluation), shuffleItems: false, shuffleChoices: false } })
+      .where(eq(evaluations.id, evaluation.id));
+    expect(await variantsOf(evaluation.id)).toEqual({ count: 1, varies: false, locked: false });
+    const res = await setCount(evaluation.id, 2);
+    expect(res.statusCode).toBe(422);
+    expect(res.json()).toMatchObject({ error: "variants_identical" });
+    expect((await setCount(evaluation.id, 1)).statusCode).toBe(200);
+    expect(await rows(evaluation.id)).toEqual([]);
+  });
+
+  it("holds no template, no drawn key, no seed of any variant and no values map in any form of variant B's hand-out", async () => {
+    const db = server.app.db;
+    const evaluation = await variedExam();
+    expect((await setCount(evaluation.id, 3)).statusCode).toBe(200);
+    const keys = await legibleSeed(db, evaluation.id, server.clock.now(), 2);
+    const res = await get(url(evaluation.id, "handout.json?variant=2"), teacher.headers);
+    const record = HandoutRecord.parse(res.json());
+    const stored = await rows(evaluation.id);
+    const items = await joinedItems(db, evaluation.id);
+    // The keys searched are variant B's own.
+    const drawn = items.filter((j) => j.version.variables !== null).map((j) => stored[1]!.instances[j.item.id]!.values);
+    expect(drawn).toEqual(keys);
+    const forbidden = [...live.FORBIDDEN_STUDENT_KEYS, "versionId", "instances", "variables", "fallback", "condition"];
+    expect(findStudentLeaks(record, { forbiddenKeys: forbidden, secrets: SECRETS })).toEqual([]);
+    const found = await handout(db, await reload(db, evaluation.id), { now: server.clock.now(), variant: 2 });
+    const forms = [res.body, withoutRandomHex((await get(url(evaluation.id, "handout.md?variant=2"), teacher.headers)).body)];
+    for (const lang of LOCALES) {
+      const tree = handoutTree(found, lang);
+      expect(findStudentLeaks(tree, { forbiddenKeys: forbidden, secrets: SECRETS })).toEqual([]);
+      forms.push(JSON.stringify(tree), markdownBody(tree), renderTypst(tree).source);
+    }
+    if (pdfTools) forms.push(await pdfText((await get(url(evaluation.id, "handout.pdf?variant=2"), teacher.headers)).rawPayload));
+    for (const text of forms) {
+      expect(markersIn(text)).toEqual([]);
+      expect(text).not.toContain("The fall lasts");
+      for (const values of keys) expect(showsKey(text, values)).toBe(false);
+      for (const { seed } of stored) expect(showsSeed(text, seed)).toBe(false);
+      for (const entry of items) expect(text).not.toContain(entry.version.id);
+      for (const row of VARIABLES.rows) expect(text).not.toContain(`"${row.name}":`);
     }
   });
 });

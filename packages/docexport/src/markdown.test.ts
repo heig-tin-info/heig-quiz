@@ -3,6 +3,7 @@ import { parse } from "yaml";
 
 import {
   answerZone,
+  booklet,
   choices,
   code,
   drawing,
@@ -203,5 +204,11 @@ describe("labels", () => {
   it("writes points with two decimals at most, and an answer only when there is one", () => {
     expect([number(2), number(1.256), number(1 / 3)]).toEqual(["2", "1.26", "0.33"]);
     expect(noAnswerOr(EN_LABELS, false, separator)).toBe(separator);
+  });
+
+  it("writes a booklet's label once, above its blocks (ADR-148)", () => {
+    expect(body([booklet("C", "Variant C", [heading(2, "Question 1"), markdown("Text.")])])).toBe(
+      "*Variant C*\n\n## Question 1\n\nText.\n",
+    );
   });
 });
