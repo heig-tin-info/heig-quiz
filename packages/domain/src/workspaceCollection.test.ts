@@ -5,7 +5,9 @@ import {
   collectionKeptPaths,
   collectionRef,
   collectionTooLate,
+  collectsWorkspace,
   composeCollectionTree,
+  headWriter,
   indexInfo,
   keptEntriesMatch,
   overlayTree,
@@ -24,6 +26,36 @@ describe("collectionRef", () => {
     expect(collectionRef("0b8e2f0a-6c1e-4c55-9a43-2f1e0c9d8a11", new Date("2026-11-16T13:40:00Z"))).toBe(
       "refs/quiz/collect/0b8e2f0a-6c1e-4c55-9a43-2f1e0c9d8a11-1794836400",
     );
+  });
+});
+
+describe("headWriter (ADR-149 §2)", () => {
+  const none = { collected: false, bot: false, relayed: false, web: false };
+  it("reads a collection's commit as the workspace's, a bot's or the web's as neutral, a relayed head as the workspace's, the rest as a machine's", () => {
+    expect(headWriter({ ...none, collected: true, bot: true })).toBe("workspace");
+    // An App's own commit the portal declared is still the App's (ADR-078 §6).
+    expect(headWriter({ ...none, bot: true, relayed: true })).toBe("neutral");
+    expect(headWriter({ ...none, relayed: true })).toBe("workspace");
+    expect(headWriter({ ...none, web: true })).toBe("neutral");
+    expect(headWriter(none)).toBe("machine");
+  });
+});
+
+describe("collectsWorkspace (ADR-130 §2 as amended by ADR-149 §2)", () => {
+  it("always collects where only the workspace writes", () => {
+    for (const mode of ["online", "online_seb"] as const) {
+      for (const writers of [[], ["machine"], ["neutral", "machine"]] as const) expect(collectsWorkspace(mode, writers)).toBe(true);
+    }
+  });
+
+  it("lets the last writer win in hybrid: neutral heads skipped, the first other decides, none collects", () => {
+    expect(collectsWorkspace("hybrid", [])).toBe(true);
+    expect(collectsWorkspace("hybrid", ["neutral", "neutral"])).toBe(true);
+    expect(collectsWorkspace("hybrid", ["workspace", "machine"])).toBe(true);
+    expect(collectsWorkspace("hybrid", ["machine", "workspace"])).toBe(false);
+    // A pull request merged on GitHub over a push from a machine: the machine's push decides.
+    expect(collectsWorkspace("hybrid", ["neutral", "machine", "workspace"])).toBe(false);
+    expect(collectsWorkspace("hybrid", ["neutral", "workspace", "machine"])).toBe(true);
   });
 });
 

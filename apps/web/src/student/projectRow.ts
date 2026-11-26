@@ -90,12 +90,14 @@ export function projectActionKind(facts: ProjectFacts, now: number): ProjectActi
  *     the card, as from the page; the repository stays a quiet icon;
  *   - `page`: under supervision (Safe Exam Browser, a kiosk station) — the
  *     project's page holds the steps, and never leads to GitHub (ADR-047 §2);
- * null otherwise: the card's own action stands.
+ * null otherwise: the card's own action stands — at the students' choice
+ * (`hybrid`, ADR-149 §6) too, where GitHub is the way and the workspace the
+ * page's fallback.
  */
 export type CardWorkspaceAction = "launch" | "page";
 
 export function cardWorkspaceAction(card: Pick<StudentProjectCard, "workspace" | "repoUrl" | "status" | "invitation">): CardWorkspaceAction | null {
-  if (card.workspace === null || card.repoUrl === null) return null;
+  if (card.workspace === null || card.repoUrl === null || card.workspace.mode === "hybrid") return null;
   // Once the course owner opened the repositories (ADR-145), an invitation is the student's: GitHub, as online.
   if (card.workspace.mode === "online_seb") return card.invitation === null ? "page" : null;
   return card.status === "in_progress" ? "launch" : null;

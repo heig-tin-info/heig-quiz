@@ -155,8 +155,10 @@ export const projects = pgTable(
     protectedFiles: text("protected_files").array().notNull(),
     /**
      * Where the students work (ADR-047, F-PROJ-19 as amended 2026-10-07):
-     * `free` in their own tools, `online` in the portal's workspace,
-     * `online_seb` there under Safe Exam Browser (M6-07). Set by an owner
+     * `free` in their own tools, `hybrid` in either at their choice
+     * (ADR-149), `online` in the portal's workspace, `online_seb` there
+     * under Safe Exam Browser (M6-07). No check on the values: a mode added
+     * to `WORK_MODES` needs no migration. Set by an owner
      * with the grant (`setWorkMode`); frozen once a workspace was launched.
      * It decides the invitation's permission (`collaboratorPermission`).
      */

@@ -207,4 +207,8 @@ describe("the workspace's action on a card (ADR-047, ADR-089)", () => {
     expect(cardWorkspaceAction(card({ status: "locked", ...REPO, workspace: online }))).toBeNull();
     expect(cardWorkspaceAction(card({ status: "deadline_passed", ...REPO, workspace: online }))).toBeNull();
   });
+
+  it("keeps GitHub on the card at the students' choice: the workspace is the page's fallback (ADR-149 §6)", () => {
+    expect(cardWorkspaceAction(card({ status: "in_progress", ...REPO, workspace: { mode: "hybrid", devices: "any" } }))).toBeNull();
+  });
 });

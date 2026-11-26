@@ -34,6 +34,9 @@ of the write grant, no rule changed,
 Amended 2026-11-26 by [ADR-147](ADR-147-depot-de-distribution-dans-l-espace-de-travail.md)
 (an owner's read grant on the distribution in every mode, §2 check 3,
 §9, §12): [§15](#15-amendment-2026-11-26-the-distributions-review-adr-147).
+Extended 2026-11-26 by [ADR-149](ADR-149-mode-de-travail-au-choix.md) §2:
+a `hybrid` project's workspace relays as an `online` one's, and §11 applies
+to it too; no rule changed.
 
 Scope: how the online workspace portal (`apps/codespace`, on the engine VM)
 reaches a student's GitHub repository — seeding a workspace from it and

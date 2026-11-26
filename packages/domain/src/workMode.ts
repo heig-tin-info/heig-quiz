@@ -12,9 +12,17 @@ import type { TrustedClient } from "./evaluationConfig.js";
 import { isLiveIndividualRepo, isLiveRepo, type RepoLifeLike } from "./groupRepo.js";
 import { effectiveDeadline, writableUnderCommit, type DeadlineStrategyName } from "./projectRuns.js";
 
-/** Where the students work: their own tools, the portal's workspace, the workspace under Safe Exam Browser. */
-export const WORK_MODES = ["free", "online", "online_seb"] as const;
+/**
+ * Where the students work: their own tools, their own tools or the portal's
+ * workspace at their choice (`hybrid`, ADR-149), the portal's workspace, the
+ * workspace under Safe Exam Browser. In the order the staff's screen offers
+ * them.
+ */
+export const WORK_MODES = ["free", "hybrid", "online", "online_seb"] as const;
 export type WorkModeName = (typeof WORK_MODES)[number];
+
+/** A mode that runs inside the online workspace portal ({@link isOnlineMode}). */
+export type OnlineModeName = Exclude<WorkModeName, "free">;
 
 /** Why the caller may not set a project's mode: the code of the refusal. */
 export const WORK_MODE_REFUSALS = [
@@ -36,15 +44,48 @@ export type WorkspaceStartRefusalCode = (typeof WORKSPACE_START_REFUSALS)[number
 /**
  * A mode that runs inside the online workspace portal: what is sent to it
  * (`codespace.sync`), `online_seb` with its Browser Exam Keys — none means
- * the Config Key alone (D21, M6-07).
+ * the Config Key alone (D21, M6-07). `hybrid` too (ADR-149): its students
+ * may start the workspace and push through the relay.
  */
-export function isOnlineMode(mode: WorkModeName): mode is Exclude<WorkModeName, "free"> {
+export function isOnlineMode(mode: WorkModeName): mode is OnlineModeName {
   return mode !== "free";
+}
+
+/** The modes that run inside the portal, in {@link WORK_MODES}' order: those the deadline's collection considers (ADR-130). */
+export const ONLINE_MODES: readonly OnlineModeName[] = WORK_MODES.filter(isOnlineMode);
+
+/**
+ * The mode the portal is told (`CodespaceAssignmentSync.mode`, ADR-149 §3):
+ * `hybrid` is the portal's lab mode, as `online` is — the portal knows no
+ * third mode, so none of its code changes for it.
+ */
+export function portalMode(mode: OnlineModeName): "online" | "online_seb" {
+  return mode === "online_seb" ? "online_seb" : "online";
+}
+
+/**
+ * THE portal's lab mode: a workspace without supervision, `online` and
+ * `hybrid` (ADR-149 §3). Its workspaces follow the repository's writability
+ * under `commit` (ADR-078 §11) and offer the teacher's update to merge
+ * (ADR-132 §11; `hybrid` beside the pull request its students also get,
+ * ADR-149 §4). `online_seb` is the exam mode, `free` has no workspace.
+ */
+export function isLabMode(mode: WorkModeName): boolean {
+  return isOnlineMode(mode) && portalMode(mode) === "online";
+}
+
+/**
+ * Whether the deadline weighs who wrote last before it collects a
+ * workspace (ADR-149 §2): `hybrid`, the one mode with two write paths.
+ */
+export function weighsLastWriter(mode: WorkModeName): boolean {
+  return mode === "hybrid";
 }
 
 /**
  * THE GitHub permission an invitation carries (ADR-047 §2 as amended by
- * ADR-145): `push` in the students' own tools (unchanged), `pull` in the
+ * ADR-145 and ADR-149): `push` in the students' own tools (unchanged) and
+ * at their choice between them and the workspace (`hybrid`), `pull` in the
  * online workspace — only the portal writes —, and under Safe Exam Browser
  * nothing (null) unless `opened`: the course owner opened the repositories,
  * the project and its classroom are not archived, and the repository is one
@@ -54,7 +95,7 @@ export function isOnlineMode(mode: WorkModeName): mode is Exclude<WorkModeName, 
  * opening's job — asks this.
  */
 export function collaboratorPermission(mode: WorkModeName, opened = false): "push" | "pull" | null {
-  if (mode === "free") return "push";
+  if (mode === "free" || mode === "hybrid") return "push";
   if (mode === "online") return "pull";
   return opened ? "pull" : null;
 }
@@ -62,7 +103,7 @@ export function collaboratorPermission(mode: WorkModeName, opened = false): "pus
 /**
  * A project's work setting as stored (ADR-089, amendment of 2026-11-15,
  * point 2): its mode and its device level. `devices` is `any` exactly when
- * the mode is unsupervised (`free`, `online`); `online_seb` holds one of
+ * the mode is unsupervised (`free`, `hybrid`, `online`); `online_seb` holds one of
  * the three supervised levels. The body's schema refuses another pair, the
  * column's check backs it up.
  */
@@ -77,15 +118,32 @@ export type WorkSettingBody =
   | { mode: "online_seb"; devices: SupervisedDeviceLevel };
 
 /**
+ * The three places a project's screen offers for the four modes (ADR-149
+ * §1): the students' own tools, their choice between them and the
+ * workspace, the workspace at a device level.
+ */
+export type WorkPlace = "own" | "hybrid" | "online";
+
+/** The place a mode is shown as: the workspace at any device level is `online`. */
+export function workPlaceOf(mode: WorkModeName): WorkPlace {
+  return mode === "free" ? "own" : mode === "hybrid" ? "hybrid" : "online";
+}
+
+/** The places, in {@link WORK_MODES}' order. */
+export const WORK_PLACES: readonly WorkPlace[] = [...new Set(WORK_MODES.map(workPlaceOf))];
+
+/**
  * THE mapping between what a project's screen shows and the mode's write
- * (ADR-089, amendment point 2, "One column, one mapping"): out of the
- * workspace, the students' own tools; in it, a device level — `any` is
+ * (ADR-089, amendment point 2, "One column, one mapping"; ADR-149 §1): out
+ * of the workspace, the students' own tools; at their choice, `hybrid`,
+ * which has no level; in the workspace, a device level — `any` is
  * `online`, the three others `online_seb` with that level. Back,
  * {@link workSettingOf}: the stored `devices` is the level, `any` outside
  * `online_seb`.
  */
-export function workSettingFor(online: boolean, level: DeviceLevel): WorkSettingBody {
-  if (!online) return { mode: "free" };
+export function workSettingFor(place: WorkPlace, level: DeviceLevel): WorkSettingBody {
+  if (place === "own") return { mode: "free" };
+  if (place === "hybrid") return { mode: "hybrid" };
   return level === "any" ? { mode: "online" } : { mode: "online_seb", devices: level };
 }
 
@@ -121,7 +179,7 @@ export interface WorkModeFacts {
  *   3. once a workspace was launched, the pair is frozen for good — the
  *      mode and the level alike (`409 work_mode_frozen`, ADR-047 §3 as
  *      amended, ADR-089 amendment point 2): a student's repository was
- *      handed out under it;
+ *      handed out under it — `hybrid` alike (ADR-149 §5);
  *   4. a group project stays in the students' own tools (`409
  *      work_mode_group`, F-PROJ-06);
  *   5. a change TO a level that accepts a kiosk station while the platform
@@ -198,11 +256,12 @@ export interface WorkspaceRepo {
 /**
  * Whether a project's workspaces follow the repository's writability rather
  * than the deadline (#958, product owner 2026-10-29: "if they can push with
- * git, they can push by the other means too"): an `online` project under the
- * `commit` strategy. An exam under Safe Exam Browser keeps its deadline.
+ * git, they can push by the other means too"): an `online` or `hybrid`
+ * project (ADR-149 §2) under the `commit` strategy. An exam under Safe Exam
+ * Browser keeps its deadline.
  */
 function followsWritability(project: Pick<WorkspaceProject, "workMode" | "deadlineStrategy">): boolean {
-  return project.workMode === "online" && project.deadlineStrategy === "commit";
+  return isLabMode(project.workMode) && project.deadlineStrategy === "commit";
 }
 
 /**
@@ -384,8 +443,8 @@ export function distributionReviewRefusal(facts: DistributionReviewFacts): Distr
  * Why Quiz refuses the portal a GitHub token or a relay declaration
  * (ADR-078 §2): `not_found` (404: no launch of that user on that project,
  * or a repository the grant never covers), `not_online` (409), `closed`
- * (409: past the effective deadline plus the grace — unless an `online`
- * workspace follows a writable repository —, archived, staff-locked).
+ * (409: past the effective deadline plus the grace — unless an `online` or
+ * `hybrid` workspace follows a writable repository —, archived, staff-locked).
  */
 export const GIT_TOKEN_REFUSALS = ["not_found", "not_online", "closed"] as const;
 export type GitTokenRefusalCode = (typeof GIT_TOKEN_REFUSALS)[number];
@@ -436,7 +495,7 @@ const sameRepository = (stored: string | null, asked: string): boolean =>
  *      grace (§7, confirmed by the product owner on 2026-10-07), and no
  *      staff lock (`closed`). The start route does not read the staff lock
  *      (ADR-047): a locked repository still opens a workspace, whose
- *      pushes stay pending. An `online` project under the `commit`
+ *      pushes stay pending. An `online` or `hybrid` project under the `commit`
  *      strategy has no such bound while GitHub keeps the repository
  *      writable ({@link workspaceClosesAt}): it stays open while the
  *      classroom is not archived, and its write grant runs to the token's

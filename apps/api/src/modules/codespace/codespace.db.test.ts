@@ -208,7 +208,7 @@ describe("the work mode (ADR-047 as amended 2026-10-07)", () => {
 
     const set = await setMode(lab.id, "online");
     expect(set.statusCode, set.body).toBe(200);
-    expect(ProjectWorkspace.parse(set.json())).toMatchObject({ mode: "online", allowed: ["free", "online", "online_seb"], refusal: null });
+    expect(ProjectWorkspace.parse(set.json())).toMatchObject({ mode: "online", allowed: ["free", "hybrid", "online", "online_seb"], refusal: null });
     // Going back to free needs no grant, but still an owner.
     const back = ProjectWorkspace.parse((await call("GET", `/app/api/projects/${lab.id}/workspace`, ungranted.headers)).json());
     expect(back).toMatchObject({ allowed: ["free", "online"], refusal: "codespace_not_granted" });
@@ -226,7 +226,7 @@ describe("the work mode (ADR-047 as amended 2026-10-07)", () => {
 
     // No `teacher_grants` row for the administrator, and no Super Powers: the role alone.
     const read = ProjectWorkspace.parse((await call("GET", `/app/api/projects/${lab.id}/workspace`, admin.headers)).json());
-    expect(read).toMatchObject({ allowed: ["free", "online", "online_seb"], refusal: null });
+    expect(read).toMatchObject({ allowed: ["free", "hybrid", "online", "online_seb"], refusal: null });
     const online = await setMode(lab.id, "online", admin);
     expect(online.statusCode, online.body).toBe(200);
     // The administrator created the project and holds an owner seat: their quota, the default one.
@@ -244,13 +244,37 @@ describe("the work mode (ADR-047 as amended 2026-10-07)", () => {
   it("keeps a group project in the students' own tools, both ways", async () => {
     const room = await connected([]);
     const group = await project(room, "Group lab", { publish: false, body: { groupMode: true } });
-    const refused = await setMode(group.id, "online");
-    expect([refused.statusCode, refused.json().error]).toEqual([409, "work_mode_group"]);
+    for (const mode of ["online", "hybrid"]) {
+      const refused = await setMode(group.id, mode);
+      expect([refused.statusCode, refused.json().error], mode).toEqual([409, "work_mode_group"]);
+    }
 
     const solo = await project(room, "Solo lab", { publish: false });
     expect((await setMode(solo.id, "online")).statusCode).toBe(200);
     const patch = await call("PATCH", `/app/api/projects/${solo.id}`, owner.headers, { groupMode: true });
     expect([patch.statusCode, patch.json().error]).toEqual([409, "work_mode_group"]);
+  });
+
+  it("at the students' choice (ADR-149): invites with push, tells the portal online, opens the workspace, freezes once launched", async () => {
+    const student = await newStudent();
+    const room = await connected([student]);
+    const lab = await project(room, "Either lab");
+    portal.calls.length = 0;
+    const set = await setMode(lab.id, "hybrid");
+    expect(set.statusCode, set.body).toBe(200);
+    expect(ProjectWorkspace.parse(set.json())).toMatchObject({ mode: "hybrid", devices: "any", refusal: null });
+    // The portal knows two modes: a hybrid project is its lab mode, `online` (ADR-149 §3).
+    expect(CodespaceAssignmentSync.parse(portal.calls.at(-1)!.body)).toMatchObject({ id: lab.id, mode: "online" });
+    await accept(lab.id, student);
+    const repo = await repoOf(lab.id, student.id);
+    expect(world.collaborators.get(repo.fullName!)?.get(student.login)).toBe("push");
+    await launchUrl(lab.id, student.headers);
+    const frozen = await setMode(lab.id, "free");
+    expect([frozen.statusCode, frozen.json().error]).toEqual([409, "work_mode_frozen"]);
+    expect(ProjectWorkspace.parse((await call("GET", `/app/api/projects/${lab.id}/workspace`, owner.headers)).json())).toMatchObject({
+      allowed: ["hybrid"],
+      refusal: "work_mode_frozen",
+    });
   });
 
   it("invites with pull online and nobody under Safe Exam Browser (ADR-047 §2)", async () => {
@@ -368,6 +392,22 @@ describe("the sync (codespace.sync)", () => {
     expect(CodespaceAssignmentSync.parse(portal.calls.at(-1)!.body).workspaceUpdate).toEqual({ heads: [{ branch: "main", sha: distHead }], message: null });
   });
 
+  it("carries the teacher's update at the end of a hybrid project's sync pass too, its repositories updated as in free (ADR-149 §4)", async () => {
+    const student = await newStudent();
+    const room = await connected([student]);
+    const lab = await project(room, "Either updated lab");
+    expect((await setMode(lab.id, "hybrid")).statusCode).toBe(200);
+    await accept(lab.id, student);
+    world.commit(`${room.org}/starter`, "main", { "README.md": "# Lab, fixed" });
+    portal.calls.length = 0;
+    expect((await call("POST", `/app/api/projects/${lab.id}/sync`, owner.headers, {})).statusCode).toBe(202);
+    const distHead = world.git(lab.distribution!.fullName, "rev-parse", "main").trim();
+    expect(world.git((await repoOf(lab.id, student.id)).fullName!, "rev-parse", "sync/main").trim()).toBe(distHead);
+    const puts = portal.calls.filter((c) => c.method === "PUT");
+    expect(puts).toHaveLength(1);
+    expect(CodespaceAssignmentSync.parse(puts[0]!.body)).toMatchObject({ mode: "online", workspaceUpdate: { heads: [{ branch: "main", sha: distHead }] } });
+  });
+
   it("offers no update under free (no PUT at all), on a draft, under online_seb, or for a branch no longer handed out (ADR-132 §11)", async () => {
     const room = await connected([]);
     const free = await project(room, "Free lab");
@@ -388,6 +428,8 @@ describe("the sync (codespace.sync)", () => {
     expect(workspaceUpdateOf(online)).toEqual({ heads: [{ branch: "main", sha }], message: null });
     expect(workspaceUpdateOf({ ...online, state: "draft" })).toBeNull();
     expect(workspaceUpdateOf({ ...online, workMode: "online_seb" })).toBeNull();
+    // At the students' choice, the workspaces take it beside the pull request (ADR-149 §4).
+    expect(workspaceUpdateOf({ ...online, workMode: "hybrid" })).toEqual({ heads: [{ branch: "main", sha }], message: null });
     expect(workspaceUpdateOf({ ...online, workMode: "free" })).toBeNull();
     expect(workspaceUpdateOf({ ...online, syncHeads: null })).toBeNull();
     expect(workspaceUpdateOf({ ...online, branches: ["dev"] })).toBeNull();

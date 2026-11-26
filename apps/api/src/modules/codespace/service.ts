@@ -30,7 +30,7 @@
 import { randomUUID } from "node:crypto";
 
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, notExists, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -63,8 +63,10 @@ import {
   type TeacherCodespaceGrant,
 } from "@quiz/contracts";
 import {
+  isLabMode,
   isOnlineMode,
   portalDeadline,
+  portalMode,
   projectIsLive,
   projectIsVisible,
   deviceLevelClients,
@@ -81,9 +83,11 @@ import { audit, SYSTEM_ACTOR, type AuditActor } from "../../audit.js";
 import { kioskProjectsOn, type AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
 import {
+  botCommits,
   classrooms,
   codespaceLaunches,
   codespaceProjects,
+  codespaceRelays,
   codespaceReviews,
   courseStaff,
   courseWorkspaceImages,
@@ -91,6 +95,7 @@ import {
   githubAccounts,
   projectRepos,
   projects,
+  pushReceipts,
   teacherGrants,
   users,
 } from "../../db/schema.js";
@@ -319,16 +324,17 @@ export async function holderGrant(
  * The body the portal expects for `projectId`, or null when there is
  * nothing to send: no such project, a project in the students' own tools,
  * or one whose distribution repository is not built yet (the publication
- * sends it again). `online_seb` is sent like `online`, with no Browser
+ * sends it again). `hybrid` is sent AS `online`, the portal's lab mode
+ * (`portalMode`, ADR-149 §3). `online_seb` is sent like `online`, with no Browser
  * Exam Key: the Config Key alone (D21, M6-07; a BEK list waits for proof B
  * step 7, 06 §6.3). The workspace is seeded
  * from the distribution repository, never the source (N-SEC-20). A private
  * one seeds through the portal's `quiz` forge: Quiz grants it a read token
  * on that repository for an `online_seb` project (ADR-078, M6-10). Its
  * `deadlineAt` is `portalDeadline`'s: none for an `online` project under
- * the `commit` strategy, whose start route decides student by student
+ * the `commit` strategy (`hybrid` alike), whose start route decides student by student
  * (#958; ADR-078 as amended 2026-10-29). It carries the teacher's update of
- * an `online` project ({@link workspaceUpdateOf}, ADR-132 §11), which the end
+ * an `online` or `hybrid` project ({@link workspaceUpdateOf}, ADR-132 §11), which the end
  * of every sync pass sends again. Its `image` is {@link projectImageOf}'s.
  * (While the portal has no image route, no image is ever admitted, so it
  * stays null.)
@@ -339,8 +345,10 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     .from(projects)
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
     .where(eq(projects.id, projectId));
-  if (!row || !isOnlineMode(row.project.workMode) || row.project.distributionFullName === null) return null;
+  if (!row) return null;
   const { project } = row;
+  const mode = project.workMode;
+  if (!isOnlineMode(mode) || project.distributionFullName === null) return null;
   const held = await holderGrant(db, row.courseId, project.createdBy);
   if (held === null) return null;
   const { holder, grant } = held;
@@ -350,7 +358,7 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     name: project.name,
     classroomId: project.classroomId,
     classroomName: row.classroomName,
-    mode: project.workMode,
+    mode: portalMode(mode),
     image: await projectImageOf(db, project),
     sourceRepo: { fullName: project.distributionFullName, defaultBranch: project.branches[0] ?? "main" },
     browserExamKeys: [],
@@ -363,16 +371,17 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
 }
 
 /**
- * The update an `online` project's workspaces offer to merge (ADR-132 §11):
- * the heads its latest sync handed out, on the handed-out branches, with
- * that sync's message — on a project its students can read only, as the
- * message itself (`requestSync`). `online_seb` waits for its own delivery
- * (§11), `free` has no workspace.
+ * The update an `online` or `hybrid` project's workspaces offer to merge
+ * (ADR-132 §11, ADR-149 §4; `isLabMode`): the heads its latest
+ * sync handed out, on the handed-out branches, with that sync's message —
+ * on a project its students can read only, as the message itself
+ * (`requestSync`). `online_seb` waits for its own delivery (§11), `free`
+ * has no workspace.
  */
 export function workspaceUpdateOf(
   project: Pick<typeof projects.$inferSelect, "workMode" | "state" | "branches" | "syncHeads" | "syncMessage" | "syncMessageAt">,
 ): CodespaceWorkspaceUpdate | null {
-  if (project.workMode !== "online" || !projectIsVisible(project.state) || project.syncHeads === null) return null;
+  if (!isLabMode(project.workMode) || !projectIsVisible(project.state) || project.syncHeads === null) return null;
   // A branch the contract refuses (GitHub's default taken as it is, `développement`)
   // carries no update, rather than failing every assignment sync of the project.
   const heads = project.branches.flatMap((branch) => {
@@ -385,6 +394,38 @@ export function workspaceUpdateOf(
       ? null
       : { text: project.syncMessage, at: project.syncMessageAt.toISOString() };
   return { heads, message };
+}
+
+/**
+ * Whether a repository's head `sha` came from the online workspace, THE one
+ * read of it (ADR-078 §6, ADR-130 §6): `collection` when the deadline job
+ * recorded it as a collection (its receipt, written before the ref moved),
+ * `relayed` when the portal declared it before relaying it (a row of
+ * `codespace_relays`) and it is none of the App's own commits
+ * (`bot_commits`: a restore, a sync or a deadline commit is never the
+ * student's, declared or not); null otherwise. Primary-key lookups
+ * (N-SEC-17), the `github` and `project` modules' tables read by join. The
+ * intake names a push's author by it (`pushAuthor`), the deadline's
+ * collection weighs the last writer by it (ADR-149 §2).
+ */
+export async function workspaceHead(db: Db | Tx, githubRepoId: number, sha: string): Promise<"collection" | "relayed" | null> {
+  const [collection] = await db
+    .select({ id: pushReceipts.id })
+    .from(pushReceipts)
+    .where(and(eq(pushReceipts.githubRepoId, githubRepoId), eq(pushReceipts.headSha, sha), eq(pushReceipts.collected, true)))
+    .limit(1);
+  if (collection) return "collection";
+  const ownCommit = db
+    .select({ sha: botCommits.sha })
+    .from(botCommits)
+    .innerJoin(projectRepos, eq(projectRepos.id, botCommits.repoId))
+    .where(and(eq(projectRepos.githubRepoId, githubRepoId), eq(botCommits.sha, sha)));
+  const [declared] = await db
+    .select({ sha: codespaceRelays.sha })
+    .from(codespaceRelays)
+    .where(and(eq(codespaceRelays.githubRepoId, githubRepoId), eq(codespaceRelays.sha, sha), notExists(ownCommit)))
+    .limit(1);
+  return declared ? "relayed" : null;
 }
 
 /** Writes the outcome of a sync attempt on the project's portal row. */

@@ -39,10 +39,11 @@ import { attemptVerdict, nextAskAt, REDELIVERY_WINDOW_MS, type CommitAuthor } fr
 
 import type { AppConfig } from "../../config.js";
 import type { Db, Tx } from "../../db/client.js";
-import { botCommits, codespaceRelays, githubAccounts, projectRepos, pushReceipts, webhookDeliveries, webhookDeliveryScan, webhookRedeliveryAsks } from "../../db/schema.js";
+import { githubAccounts, pushReceipts, webhookDeliveries, webhookDeliveryScan, webhookRedeliveryAsks } from "../../db/schema.js";
 import { githubApp, githubStatus, hookDeliveriesPage, isZeroSha, rateLimitReset, redeliverHookDelivery, type HookDelivery, type HookDeliveryPage } from "../../github/app.js";
 import { GITHUB_WEBHOOK_QUEUE } from "../../jobs.js";
 import { redactTokens } from "../../redact.js";
+import { workspaceHead } from "../codespace/service.js";
 
 // ---------------------------------------------------------------- the registry
 
@@ -129,15 +130,12 @@ export function pushedBy(config: AppConfig, login: string | undefined): "app" | 
 
 /**
  * Who pushed a PUSH (ADR-078 §6): {@link pushedBy} of its sender, except
- * that a push of Quiz's App is the student's — a person's — when the online
- * workspace portal declared its head before relaying it (a row of
- * `codespace_relays` for that repository and `after`), and that head is
- * none of the App's own commits (`bot_commits`): a restore, a sync or a
- * deadline commit is never the student's, declared or not. Any other push
- * of the App stays the App's. One primary-key lookup (N-SEC-17), reading
- * the `codespace` and `project` modules' tables by join. A push of the App
- * whose head the deadline job recorded as a collection (`collected`, ADR-130
- * §6) is `collection`: the student's work, made by the platform.
+ * that a push of Quiz's App is the student's — a person's — when its head
+ * came from the online workspace (`workspaceHead` of the `codespace`
+ * module: declared by the portal before it relayed it, and none of the
+ * App's own commits). Any other push of the App stays the App's. A push of
+ * the App whose head the deadline job recorded as a collection (ADR-130 §6)
+ * is `collection`: the student's work, made by the platform.
  */
 export async function pushAuthor(
   db: Db | Tx,
@@ -146,24 +144,8 @@ export async function pushAuthor(
 ): Promise<"app" | "workflow" | "person" | "collection"> {
   const by = pushedBy(config, push.senderLogin);
   if (by !== "app") return by;
-  // The deadline job's collection (ADR-130 §6): its receipt, written before the ref moved, says so.
-  const [collection] = await db
-    .select({ id: pushReceipts.id })
-    .from(pushReceipts)
-    .where(and(eq(pushReceipts.githubRepoId, push.githubRepoId), eq(pushReceipts.headSha, push.after), eq(pushReceipts.collected, true)))
-    .limit(1);
-  if (collection) return "collection";
-  const ownCommit = db
-    .select({ sha: botCommits.sha })
-    .from(botCommits)
-    .innerJoin(projectRepos, eq(projectRepos.id, botCommits.repoId))
-    .where(and(eq(projectRepos.githubRepoId, push.githubRepoId), eq(botCommits.sha, push.after)));
-  const [declared] = await db
-    .select({ sha: codespaceRelays.sha })
-    .from(codespaceRelays)
-    .where(and(eq(codespaceRelays.githubRepoId, push.githubRepoId), eq(codespaceRelays.sha, push.after), notExists(ownCommit)))
-    .limit(1);
-  return declared ? "person" : "app";
+  const from = await workspaceHead(db, push.githubRepoId, push.after);
+  return from === "collection" ? "collection" : from === "relayed" ? "person" : "app";
 }
 
 /**

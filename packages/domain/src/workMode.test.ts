@@ -4,13 +4,18 @@ import {
   collaboratorPermission,
   gitTokenRefusal,
   isOnlineMode,
+  isLabMode,
   kioskProjectPairable,
+  portalMode,
   quotaHolder,
   portalDeadline,
+  weighsLastWriter,
+  WORK_PLACES,
   distributionReviewRefusal,
   staffReviewRefusal,
   workModeChoices,
   workModeRefusal,
+  workPlaceOf,
   workSettingFor,
   workSettingOf,
   workspaceClosed,
@@ -27,17 +32,33 @@ import { DEVICE_LEVEL_IDS } from "./deviceLevels.js";
 const OWNER: WorkModeFacts = { owner: true, granted: true, launched: false, groupMode: false, kioskOffered: true };
 
 describe("collaboratorPermission (ADR-047 §2)", () => {
-  it("pushes in the student's own tools, pulls online, invites nobody under SEB", () => {
+  it("pushes in the student's own tools and at their choice, pulls online, invites nobody under SEB", () => {
     expect(collaboratorPermission("free")).toBe("push");
+    expect(collaboratorPermission("hybrid")).toBe("push");
     expect(collaboratorPermission("online")).toBe("pull");
     expect(collaboratorPermission("online_seb")).toBeNull();
-    expect([isOnlineMode("free"), isOnlineMode("online"), isOnlineMode("online_seb")]).toEqual([false, true, true]);
+    expect([isOnlineMode("free"), isOnlineMode("hybrid"), isOnlineMode("online"), isOnlineMode("online_seb")]).toEqual([false, true, true, true]);
+  });
+});
+
+describe("what the portal is told and offers (ADR-149 §3, §4)", () => {
+  it("tells the portal a hybrid project is online: its lab mode", () => {
+    expect(portalMode("hybrid")).toBe("online");
+    expect(portalMode("online")).toBe("online");
+    expect(portalMode("online_seb")).toBe("online_seb");
+  });
+
+  it("has one lab mode predicate, online and hybrid, and weighs the last writer in hybrid only", () => {
+    const modes = ["free", "hybrid", "online", "online_seb"] as const;
+    expect(modes.map(isLabMode)).toEqual([false, true, true, false]);
+    expect(modes.map(weighsLastWriter)).toEqual([false, true, false, false]);
   });
 });
 
 /** A stored setting: a mode, and its level (`any` unless given). */
 const S = (mode: WorkSetting["mode"], devices: WorkSetting["devices"] = "any"): WorkSetting => ({ mode, devices });
 const FREE = S("free");
+const HYBRID = S("hybrid");
 const ONLINE = S("online");
 const SEB = S("online_seb", "seb");
 const EITHER = S("online_seb", "either");
@@ -46,6 +67,9 @@ const KIOSK = S("online_seb", "kiosk");
 describe("workModeRefusal", () => {
   it("lets an owner with the grant choose any mode", () => {
     expect(workModeRefusal(OWNER, FREE, ONLINE)).toBeNull();
+    expect(workModeRefusal(OWNER, FREE, HYBRID)).toBeNull();
+    expect(workModeRefusal(OWNER, ONLINE, HYBRID)).toBeNull();
+    expect(workModeRefusal(OWNER, HYBRID, FREE)).toBeNull();
     expect(workModeRefusal(OWNER, ONLINE, SEB)).toBeNull();
     expect(workModeRefusal(OWNER, ONLINE, FREE)).toBeNull();
   });
@@ -60,6 +84,8 @@ describe("workModeRefusal", () => {
     const ungranted = { ...OWNER, granted: false };
     expect(workModeRefusal(ungranted, FREE, ONLINE)).toBe("codespace_not_granted");
     expect(workModeRefusal(ungranted, FREE, SEB)).toBe("codespace_not_granted");
+    expect(workModeRefusal(ungranted, FREE, HYBRID)).toBe("codespace_not_granted");
+    expect(workModeRefusal(ungranted, HYBRID, FREE)).toBeNull();
     expect(workModeRefusal(ungranted, ONLINE, FREE)).toBeNull();
   });
 
@@ -69,15 +95,19 @@ describe("workModeRefusal", () => {
     expect(workModeRefusal(launched, ONLINE, SEB)).toBe("work_mode_frozen");
     expect(workModeRefusal(launched, SEB, EITHER)).toBe("work_mode_frozen");
     expect(workModeRefusal(launched, KIOSK, SEB)).toBe("work_mode_frozen");
+    // Hybrid freezes like online (ADR-149 §5): a switch after a launch is a later step.
+    expect(workModeRefusal(launched, ONLINE, HYBRID)).toBe("work_mode_frozen");
+    expect(workModeRefusal(launched, HYBRID, FREE)).toBe("work_mode_frozen");
   });
 
   it("keeps a group project in the students' own tools", () => {
     expect(workModeRefusal({ ...OWNER, groupMode: true }, FREE, ONLINE)).toBe("work_mode_group");
+    expect(workModeRefusal({ ...OWNER, groupMode: true }, FREE, HYBRID)).toBe("work_mode_group");
   });
 
   it("never refuses the pair the project already has, a station level with the flag off included", () => {
     const nobody = { owner: false, granted: false, launched: true, groupMode: true, kioskOffered: false };
-    for (const setting of [FREE, ONLINE, SEB, EITHER, KIOSK]) expect(workModeRefusal(nobody, setting, { ...setting })).toBeNull();
+    for (const setting of [FREE, HYBRID, ONLINE, SEB, EITHER, KIOSK]) expect(workModeRefusal(nobody, setting, { ...setting })).toBeNull();
   });
 
   it("refuses a change TO a station level while kiosk stations are not offered; leaving one passes (ADR-089 point 1)", () => {
@@ -96,25 +126,33 @@ describe("workModeRefusal", () => {
 
 describe("workModeChoices", () => {
   it("judges each mode as it would be written: online_seb keeps the level in force, else SEB", () => {
-    expect(workModeChoices(OWNER, FREE)).toEqual({ allowed: ["free", "online", "online_seb"], refusal: null });
+    expect(workModeChoices(OWNER, FREE)).toEqual({ allowed: ["free", "hybrid", "online", "online_seb"], refusal: null });
     // A Kiosk only project with the flag off: its own pair passes, SEB from it passes too.
-    expect(workModeChoices({ ...OWNER, kioskOffered: false }, KIOSK)).toEqual({ allowed: ["free", "online", "online_seb"], refusal: null });
+    expect(workModeChoices({ ...OWNER, kioskOffered: false }, KIOSK)).toEqual({ allowed: ["free", "hybrid", "online", "online_seb"], refusal: null });
+    expect(workModeChoices({ ...OWNER, launched: true }, HYBRID)).toEqual({ allowed: ["hybrid"], refusal: "work_mode_frozen" });
     expect(workModeChoices({ ...OWNER, launched: true }, EITHER)).toEqual({ allowed: ["online_seb"], refusal: "work_mode_frozen" });
   });
 });
 
 describe("the mapping between the setting and the screen (ADR-089 point 2)", () => {
-  it("is own tools, or a level in the workspace: any is online, the others online_seb", () => {
-    expect(workSettingFor(false, "kiosk")).toEqual({ mode: "free" });
-    expect(workSettingFor(true, "any")).toEqual({ mode: "online" });
+  it("is own tools, the students' choice, or a level in the workspace: any is online, the others online_seb", () => {
+    expect(workSettingFor("own", "kiosk")).toEqual({ mode: "free" });
+    expect(workSettingFor("hybrid", "seb")).toEqual({ mode: "hybrid" });
+    expect(workSettingFor("online", "any")).toEqual({ mode: "online" });
     for (const level of ["seb", "either", "kiosk"] as const) {
-      expect(workSettingFor(true, level)).toEqual({ mode: "online_seb", devices: level });
+      expect(workSettingFor("online", level)).toEqual({ mode: "online_seb", devices: level });
     }
   });
 
   it("reads back every choice of the screen as the stored setting: the level is the stored devices", () => {
-    for (const level of DEVICE_LEVEL_IDS) expect(workSettingOf(workSettingFor(true, level))).toEqual(level === "any" ? ONLINE : S("online_seb", level));
-    for (const level of DEVICE_LEVEL_IDS) expect(workSettingOf(workSettingFor(false, level))).toEqual(FREE);
+    for (const level of DEVICE_LEVEL_IDS) expect(workSettingOf(workSettingFor("online", level))).toEqual(level === "any" ? ONLINE : S("online_seb", level));
+    for (const level of DEVICE_LEVEL_IDS) expect(workSettingOf(workSettingFor("own", level))).toEqual(FREE);
+    for (const level of DEVICE_LEVEL_IDS) expect(workSettingOf(workSettingFor("hybrid", level))).toEqual(HYBRID);
+  });
+
+  it("shows each mode at its place, three places for four modes", () => {
+    expect(WORK_PLACES).toEqual(["own", "hybrid", "online"]);
+    expect(["free", "hybrid", "online", "online_seb"].map((m) => workPlaceOf(m as WorkSetting["mode"]))).toEqual(["own", "hybrid", "online", "online"]);
   });
 });
 
@@ -213,9 +251,19 @@ describe("workspaceStartRefusal (ADR-047 §6)", () => {
     expect(workspaceStartRefusal(facts({ repo: applied }), LATE)).toBe("closed");
   });
 
+  it("opens a hybrid project's workspace, past the deadline under commit while the repository is writable (ADR-149 §2)", () => {
+    const hybrid = { ...base, workMode: "hybrid" } as const;
+    expect(workspaceStartRefusal(facts({ project: hybrid }), NOW)).toBeNull();
+    expect(workspaceStartRefusal(facts({ project: hybrid }), DEADLINE)).toBe("closed");
+    const applied = { ...repo, deadlineAppliedAt: DEADLINE };
+    const LATE = new Date(DEADLINE.getTime() + 86_400_000);
+    expect(workspaceStartRefusal(facts({ project: { ...hybrid, deadlineStrategy: "commit" }, repo: applied }), LATE)).toBeNull();
+  });
+
   it("gives the portal no deadline for an online project under commit: Quiz's start route decides (portalDeadline)", () => {
     const commit = { ...base, workMode: "online", deadlineStrategy: "commit" } as const;
     expect(portalDeadline(commit)).toBeNull();
+    expect(portalDeadline({ ...commit, workMode: "hybrid" })).toBeNull();
     expect(portalDeadline({ ...commit, workMode: "online_seb" })).toEqual(DEADLINE);
     expect(portalDeadline(facts().project)).toEqual(DEADLINE);
   });
@@ -278,6 +326,12 @@ describe("gitTokenRefusal (ADR-078 §2)", () => {
     expect(workspaceClosed({ classroomArchived: false }, GRACE_END, NOW)).toBe(false);
     expect(workspaceClosed({ classroomArchived: true }, GRACE_END, NOW)).toBe(true);
     expect(workspaceClosed({ classroomArchived: false }, GRACE_END, GRACE_END)).toBe(true);
+  });
+
+  it("grants a hybrid project's student write on their repository, the distribution never (ADR-149)", () => {
+    const hybrid = (over: Partial<GitTokenFacts> = {}) => facts({ project: { ...facts().project, workMode: "hybrid" }, ...over });
+    expect(gitTokenRefusal(hybrid(), NOW)).toEqual({ permission: "write", githubRepoId: 101, useUntil: GRACE_END });
+    expect(gitTokenRefusal(hybrid({ repository: "org/lab-squashed" }), NOW)).toBe("not_found");
   });
 
   it("refuses a project back in the students' own tools", () => {

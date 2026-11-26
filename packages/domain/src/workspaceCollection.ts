@@ -5,6 +5,7 @@
  * are checked by its contract (`@quiz/contracts`), not here.
  */
 import { WORKFLOWS_DIR } from "./protectedFiles.js";
+import { weighsLastWriter, type WorkModeName } from "./workMode.js";
 
 /**
  * The paths a collection takes from the branch's head instead of the
@@ -166,6 +167,47 @@ export const COLLECTION_ORDER_WINDOW_MS = 120_000;
 export const collectionTooLate = (deadline: Date, now: Date): boolean =>
   now.getTime() - deadline.getTime() > COLLECTION_ORDER_WINDOW_MS;
 
+/**
+ * Who wrote a head of the student's repository, as the collection weighs it
+ * (ADR-149 §2): the `workspace` (relayed by the portal, or an earlier
+ * collection's commit), a person from a `machine`, or nobody who counts —
+ * `neutral`: the App or a workflow, or GitHub's web interface (an edit, a
+ * pull request merged there, the teacher's sync among them).
+ */
+export type HeadWriter = "workspace" | "machine" | "neutral";
+
+/** What is known of a head: a collection's commit, the App's or a bot's, declared by the portal, made on GitHub's web interface. */
+export interface HeadFacts {
+  collected: boolean;
+  bot: boolean;
+  relayed: boolean;
+  web: boolean;
+}
+
+/** Who wrote a head ({@link HeadWriter}): a collection's commit first, then a bot's, then the portal's declaration, then the web. */
+export function headWriter(facts: HeadFacts): HeadWriter {
+  if (facts.collected) return "workspace";
+  if (facts.bot) return "neutral";
+  if (facts.relayed) return "workspace";
+  return facts.web ? "neutral" : "machine";
+}
+
+/**
+ * Whether the deadline collects a repository's workspace (ADR-130 §2 as
+ * amended by ADR-149 §2), once the repository is otherwise due (a workspace
+ * launched, the deadline applied, no lock), given the writers of its heads
+ * newest first — the branch's head now, then every push received: always
+ * where only the workspace writes (`online`, `online_seb`); in `hybrid`
+ * the last writer wins — the neutral heads skipped, the first other one
+ * decides: the workspace's collects, a machine's does not
+ * (`last_push_local`); none left (no push at all) collects.
+ */
+export function collectsWorkspace(mode: WorkModeName, writers: Iterable<HeadWriter>): boolean {
+  if (!weighsLastWriter(mode)) return true;
+  for (const writer of writers) if (writer !== "neutral") return writer === "workspace";
+  return true;
+}
+
 /** What Quiz records of a collection (ADR-130 §7): the portal's answers, and Quiz's own. */
 export const COLLECTION_OUTCOMES = [
   "collected",
@@ -175,6 +217,7 @@ export const COLLECTION_OUTCOMES = [
   "too_large",
   "too_late",
   "failed",
+  "last_push_local",
 ] as const;
 export type CollectionOutcomeName = (typeof COLLECTION_OUTCOMES)[number];
 
