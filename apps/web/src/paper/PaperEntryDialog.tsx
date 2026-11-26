@@ -8,12 +8,17 @@
  *
  * It reads the paper the page will type in, so a refusal of the server (an
  * exam that does not print, a seat that is not a student's) is said here,
- * before anything is typed.
+ * before anything is typed. Where the paper has several variants (ADR-148)
+ * it first asks which one the copy is, by the letter in its page footer:
+ * the page renders that variant's paper.
  */
 import { useState } from "react";
 
+import { variantLetter } from "@quiz/domain";
+
+import { useEvaluation } from "../evaluation/api";
 import { useT } from "../i18n";
-import { Alert, FormDialog, FormError, Field, Spinner } from "../ui";
+import { Alert, FormDialog, FormError, Field, Select, Spinner } from "../ui";
 import { paperRefusalOf, REFUSAL_KEYS, usePaperItems } from "./api";
 
 export function PaperEntryDialog({
@@ -28,11 +33,15 @@ export function PaperEntryDialog({
   /** The row's student, as the screen names them. */
   name: string;
   onClose: () => void;
-  /** Opens the entry page for that student, with the exam date chosen. */
-  onStart: (examDate: string) => void;
+  /** Opens the entry page for that student, with the exam date and the copy's variant chosen. */
+  onStart: (examDate: string, variant: number) => void;
 }) {
   const t = useT();
-  const paper = usePaperItems(evaluationId, userId);
+  const count = useEvaluation(evaluationId).data?.exports.variants.count ?? null;
+  const several = count !== null && count > 1;
+  const [variant, setVariant] = useState<number | null>(null);
+  // One variant: its paper at once. Several: once the copy's is named.
+  const paper = usePaperItems(evaluationId, userId, several ? variant : null, count !== null && (!several || variant !== null));
   const [date, setDate] = useState<string | null>(null);
   const examDate = date ?? paper.data?.examDate ?? "";
   const refusal = paperRefusalOf(paper.error);
@@ -42,7 +51,7 @@ export function PaperEntryDialog({
       onClose={onClose}
       submitLabel={t("paper.enter.start")}
       canSubmit={paper.data !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(examDate)}
-      onSubmit={() => onStart(examDate)}
+      onSubmit={() => onStart(examDate, variant ?? 1)}
       error={
         <FormError
           error={paper.error}
@@ -51,6 +60,25 @@ export function PaperEntryDialog({
       }
     >
       <p className="text-sm text-fg-muted">{t("paper.enter.desc")}</p>
+      {several ? (
+        <Select
+          label={t("paper.variant")}
+          help={t("paper.variant.help")}
+          width="w-52"
+          value={variant ?? ""}
+          required
+          onChange={(e) => setVariant(e.target.value === "" ? null : Number(e.target.value))}
+        >
+          <option value="" disabled>
+            {t("paper.variant.pick")}
+          </option>
+          {Array.from({ length: count }, (_, i) => (
+            <option key={i} value={i + 1}>
+              {t("paper.variant.one", { letter: variantLetter(i + 1) })}
+            </option>
+          ))}
+        </Select>
+      ) : null}
       {paper.isPending && paper.fetchStatus !== "idle" ? (
         <Spinner label={t("paper.loading")} className="py-4" />
       ) : paper.data ? (

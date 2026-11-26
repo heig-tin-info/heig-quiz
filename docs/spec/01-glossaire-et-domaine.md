@@ -287,6 +287,7 @@ allievo, professore, insegnante, feedback, sottomettere, and
 | Paper copy (an exam answered by hand, typed in by the staff, ADR-125) | paper copy; badge *Paper* | copie papier; badge *Papier* | Papierexemplar; badge *Papier* | copia cartacea; badge *Carta* | — |
 | Hand-out (the printed evaluation, blank, for a paper sitting) | hand-out | énoncé à distribuer | Aufgabenblatt | enunciato da distribuire | — |
 | Variant (one draw of a printed paper — its question order, choice order and drawn values, kept; ADR-148. Not an *instance*, an evaluation made from a template, nor a question's *version*) | variant | variante | Variante | variante | version |
+| Redraw (every paper variant drawn again, before the exam opens; ADR-148) | redraw | tirer à nouveau | neu ziehen | nuova estrazione | — |
 | Frozen (score, list) | frozen | figé | eingefroren | congelato | gelé, verrouillé |
 | Locked (repository, question) | locked | verrouillé | gesperrt | bloccato | figé, gelé |
 | Dashboard (live) | dashboard | tableau de bord | Dashboard | dashboard | — |

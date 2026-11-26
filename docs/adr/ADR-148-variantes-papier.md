@@ -4,8 +4,9 @@
 
 Accepted (2026-11-26, the product owner's decisions 1 to 8, which reverse
 ADR-125 §5's refusal of a parameterized question on paper, and the
-anonymity limit under Consequences). Its first step
-delivers variant 1 only; the rest is under "Not in this record's first step".
+anonymity limit under Consequences). Its first step delivered variant 1
+only; its second (the owner's decisions of the same day, 9 to 14) delivers N
+variants, their page label, Redraw and the variant of a paper copy.
 
 Scope: what a printed paper of an evaluation is drawn from — the hand-out,
 the staff statement with key, the student's blank print of a past series,
@@ -15,9 +16,11 @@ Relations: amends [ADR-125](ADR-125-copies-papier-pdf-typst.md) §5 (the
 `parameterized` refusal disappears), §8 (the paper's seed moves into variant
 1; the statement with key of a printed evaluation follows the paper's order)
 §9 (a paper attempt carries the variant's values) and §17 (those values
-tell a paper copy apart on the anonymised table: an accepted limit), and
-[ADR-121](ADR-121-fabrique-d-exports.md) §8 step 3 (a parameterized question
-is no longer refused). Depends on [ADR-056](ADR-056-questions-parametrees.md)
+tell a paper copy apart on the anonymised table: an accepted limit), §6 (a
+zone's manifest entry names its booklet), §9 and §11 (a paper copy names its
+variant, `422 paper_variant`), and [ADR-121](ADR-121-fabrique-d-exports.md)
+§1 (a `booklet` block; the records name their variant) and §8 step 3 (a
+parameterized question is no longer refused). Depends on [ADR-056](ADR-056-questions-parametrees.md)
 §4, §5, §7 and §9 (a variant is a third place drawn values are stored, beside
 `attempts.instances` and the drill), D19 and
 [ADR-097](ADR-097-reponse-transmise-et-reponse-stockee.md). F-EXP-04,
@@ -60,9 +63,10 @@ different papers in one room, so that neighbours do not share their numbers.
    statement: the seed is a value found there — one an older server wrote
    during the deploy — else a new one, which is written back where the
    column is null, so the previous image still prints the same order after
-   a rollback ([deployment](../development/deployment.md) §5). The contract
-   migration removes three things together: the column, that write-back and
-   that `coalesce` read.
+   a rollback ([deployment](../development/deployment.md) §5); Redraw moves
+   it to variant 1's new seed (decision 11). The contract migration removes
+   four things together: the column, the write-back of the creation, that of
+   Redraw, and the `coalesce` read.
 
 3. **What a variant freezes: the values only.** The item and choice orders
    are recomputed from the seed (D19, ADR-097), never stored. At each print
@@ -129,20 +133,69 @@ different papers in one room, so that neighbours do not share their numbers.
 8. **Never copied.** A duplicate, a template and an instance made from it
    copy no variant, as they copied no paper seed.
 
-### Not in this record's first step
+9. **N variants, A to Z** (product owner, 2026-11-26). An evaluation's paper
+   has 1 to 26 variants: the number of its `paper_variants` rows, 1 while
+   none was printed. The letter derives from the number (`variantLetter`,
+   `@quiz/domain`), never from the seed. The count is set in the Export
+   sheet beside the downloads (`PUT /evaluations/:id/paper-variants`): a
+   missing variant is made with a seed of its own from the CSPRNG, the
+   highest numbers are removed. More than one is offered, and accepted, only
+   when two papers can differ — shuffled items, shuffled choices, or a
+   parameterized question (`variesOnPaper`; `422 variants_identical`):
+   identical papers under other letters would lie. The sheet reads
+   `EvaluationDetail.exports.variants` (count, whether something varies, why
+   the variants are held), never a seed.
 
-The owner's plan for the next step, recorded here so that the first step
-closes no door; none of it is built yet:
+10. **The page label.** When the paper has more than one variant, every page
+    of a staff hand-out or key names its variant and counts its own pages,
+    "Variant C · p. 2/4", in the requester's language (`LABELS.variant`,
+    `LABELS.pageShort`). The tree marks it with a `booklet` block (amends
+    ADR-121 §1): its blocks form a paper of their own, starting on a recto
+    (a blank verso, with no header nor footer, pads the one before), its
+    pages counted apart, its label in every footer — one general mechanism,
+    used by both documents. The footer sits in the 20 mm margin, above the
+    outer 10 mm ADR-125 §6 keeps for palier B. A zone's manifest entry names
+    its booklet (amends ADR-125 §6), so the zone ids, the same in every
+    variant, stay apart. The JSON and Markdown of a document hold one
+    variant (`?variant=k`, 1 by default); the PDF one, or `all`: each
+    variant a booklet of one file. A record names its variant, `{ number,
+    letter, of }` (the key's `version` 3, the hand-out's 2). With one
+    variant, nothing is labelled. The student's blank print (decision 7)
+    is variant 1 with no label and no variant named (`variant: null`); the
+    label never reaches the anonymised grading table (ADR-125 §17).
 
-- N variants, A to Z (up to 26), set in the Export sheet; N > 1 offered only
-  when something varies (shuffled items or choices, or a parameterized
-  question).
-- A label "Variant C · p. 2/4" on every page, derived from the number, never
-  from the seed; never on the anonymised grading table (F-GRADE-03).
-- **Redraw**, and lowering N, refused once the evaluation has opened or a
-  paper copy is entered on it.
-- The zone manifest's entry carries the variant (palier B).
-- The variant chosen when a paper copy is entered.
+11. **Redraw** gives every variant a new seed and clears its stored values,
+    so the next print draws them again; `evaluations.paper_seed` follows
+    variant 1's new seed (the rollback write-back of decision 2). Redraw and
+    fewer variants are refused once the evaluation has opened (`startedAt`)
+    or a paper copy was entered on it (`409 variants_locked`, its `reason`,
+    `paperVariantsLock`) — variant 1 included: the server cannot know a
+    stack was printed. More variants stay allowed: a new one changes no
+    paper already out. The two writes serialize on the evaluation's row.
+    Both are audited (`evaluation.paper_variants` with `from` and `to`,
+    `evaluation.paper_redraw` with `count`), never with a seed.
+
+12. **The variant of a paper copy.** A copy is typed from the variant printed
+    on it: `PaperAttemptBody.variant` and the entry page's `?variant=`,
+    required when the paper has several (`422 paper_variant`, amends
+    ADR-125 §9, §11). The entry dialog asks for it first, by the letter of
+    the page footer; the page renders that variant's paper and key, and the
+    attempt takes that variant's seed and stored values. `paper_sheets`
+    records it (`variant`, 1 for every copy entered before, migration
+    `0165_paper_sheet_variant`), owned by the `paper` module; the staff copy
+    and the entry page may name it, the anonymised table never.
+
+13. **The size of every variant at once** stays within ADR-125 §2's bounds,
+    unraised: measured on a nine-item exam (the five text types, a circuit,
+    a logic circuit, two parameterized questions), 26 variants compile in
+    under a second, 130 pages and 0.8 MB for the hand-out, 1.3 MB for the
+    key. A combined PDF the bounds still refuse answers the existing
+    refusal, and the sheet tells the teacher to download variant by
+    variant.
+
+14. **Not here, later**: a correction grid per variant, nominative copies
+    (one paper per student), and palier B's page QR code, which will carry
+    the variant beside the page.
 
 ## Consequences
 
@@ -152,8 +205,10 @@ closes no door; none of it is built yet:
 - The staff key of a printed evaluation now reads in the paper's order, so a
   teacher grading paper copies by hand follows the paper; a script that read
   the record's order as the base order must read `position`.
-- One table more, one row per printed evaluation; the column it replaces
-  waits for its contract migration.
+- One table more, a row per variant of a printed evaluation; the column it
+  replaces waits for its contract migration.
+- Neighbours in a room can hold different papers; a key, a paper entry and
+  a reprint follow one variant, named by its letter on every page.
 - A teacher who edits a question after printing and before the opening must
   print again: the platform holds the new draw, the paper holds the old one.
 - **Anonymity, an accepted limit** (product owner, 2026-11-26; amends
@@ -162,7 +217,7 @@ closes no door; none of it is built yet:
   parameterized answer cannot be graded without them, and they are the
   numbers printed on the hand-out the grader holds: a paper copy can be told
   apart on the anonymised table (F-GRADE-03), and several paper copies show
-  the same numbers. Anonymise guards against a bias, not a secret, and the
+  the same numbers when they are of one variant. Anonymise guards against a bias, not a secret, and the
   teacher who grades is the one who entered the copy. No value is hidden and
   the entry is not refused on a parameterized evaluation; the "Paper" badge
   stays off that table as before.

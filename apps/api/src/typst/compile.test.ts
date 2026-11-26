@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
   answerZone,
+  booklet,
   choices,
   drawing,
   heading,
@@ -239,6 +240,7 @@ describe.skipIf(skip)(`a compile, with ${BIN} (${probe.version ?? "missing"})`, 
       expect(zone).toEqual({
         id: expect.any(String),
         kind: expect.any(String),
+        booklet: null,
         page: 1,
         x: expect.any(Number),
         y: expect.any(Number),
@@ -248,6 +250,53 @@ describe.skipIf(skip)(`a compile, with ${BIN} (${probe.version ?? "missing"})`, 
       // Inside the 20 mm margin (56.7 pt), which keeps palier B's 10 mm free.
       expect(zone["x"]).toBeGreaterThanOrEqual(56);
     }
+  });
+
+  /*
+   * ADR-148: several papers in one PDF. Each booklet starts on a recto, a
+   * blank verso padding the one before; it counts its own pages, its label
+   * and `p. n/N` in every footer; its zones carry it in the manifest, so the
+   * same zone ids stay apart.
+   */
+  it.skipIf(skip)("prints booklets on rectos, each page labelled with its own count, its zones keyed to it", async () => {
+    const paper = (questions: number): Block[] => [
+      heading(1, "Exam"),
+      ...Array.from({ length: questions }, (_, i) => [
+        heading(2, `Question ${i + 1}`),
+        markdown("Lorem ipsum dolor sit amet. ".repeat(60)),
+        ...scopeZones(`i${i}`, [answerZone("lines", { lines: 5 })]),
+      ]).flat(),
+    ];
+    const source = sourceOf([booklet("A", "Variant A", paper(3)), booklet("B", "Variant B", paper(5)), booklet("C", "Variant C", paper(2))]);
+    const pdf = await compileTypst({ source, assets: [] }, options());
+    // pdftotext ends each page with a form feed.
+    const pages = (await pdfText(pdf)).split("\f").slice(0, 8);
+    const footers = pages.map((page) => /Variant [A-C] · p\. \d\/\d/.exec(page)?.[0] ?? "");
+    expect(footers).toEqual([
+      "Variant A · p. 1/2",
+      "Variant A · p. 2/2",
+      "Variant B · p. 1/3",
+      "Variant B · p. 2/3",
+      "Variant B · p. 3/3",
+      // The blank verso before C's recto: no header, no footer.
+      "",
+      "Variant C · p. 1/2",
+      "Variant C · p. 2/2",
+    ]);
+    expect(pages[5]!.trim()).toBe("");
+    const zones = await inTempDir(async (dir) => {
+      await writeFile(join(dir, "main.typ"), source);
+      const args = ["eval", "--root", dir, "--ignore-system-fonts", "--in", "main.typ", "query(<answer-zone>).map(it => it.value)"];
+      return JSON.parse((await run(BIN, args, dir, 20_000)).stdout) as Record<string, unknown>[];
+    });
+    expect(zones).toHaveLength(10);
+    const keys = zones.map((z) => `${String(z["booklet"])}/${String(z["id"])}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(zones.filter((z) => z["id"] === "i0").map((z) => [z["booklet"], z["page"]])).toEqual([
+      ["A", 1],
+      ["B", 3],
+      ["C", 7],
+    ]);
   });
 
   it("draws a figure as inline SVG, its text in the embedded DejaVu Sans Mono faces, extractable from the PDF (ADR-126 §2)", async () => {

@@ -28,7 +28,26 @@ export type Block =
   | { kind: "separator" }
   | Choices
   | DrawingBlock
-  | AnswerZone;
+  | AnswerZone
+  | Booklet;
+
+/**
+ * Blocks printed as a paper of their own (ADR-148): in a PDF a booklet
+ * starts on a recto page (a blank verso pads the one before), counts its own
+ * pages, and names itself in every page's footer, `label · p. 2/4`; the
+ * answer zones in it carry its `id` in the manifest (ADR-125 §6), so one
+ * PDF holds several papers whose zone ids repeat. A Markdown file prints the
+ * label once, above its blocks. One level deep: a booklet in a booklet is
+ * not a paper of its own.
+ */
+export interface Booklet {
+  kind: "booklet";
+  /** Its name in the zone manifest. */
+  id: string;
+  /** Its name on every page: `Variant C`. */
+  label: string;
+  blocks: readonly Block[];
+}
 
 /** One choice of a {@link Choices} block: its letter, and its text as Markdown. */
 export interface ChoiceItem {
@@ -172,6 +191,13 @@ export const choices = (items: readonly ChoiceItem[], multiple: boolean, checked
   items,
   checked,
 });
+
+/** A {@link Booklet}: `blocks` printed as a paper of their own, named `label` on each page. */
+export const booklet = (id: string, label: string, blocks: Booklet["blocks"]): Booklet => ({ kind: "booklet", id, label, blocks });
+
+/** Every block of `blocks`, a booklet's in its place. */
+export const flatBlocks = (blocks: readonly Block[]): Block[] =>
+  blocks.flatMap((b) => (b.kind === "booklet" ? b.blocks : [b]));
 
 /** `2`, `1.5`: two decimals at most, as the CSV writes points. */
 export const number = (value: number): string => String(Math.round(value * 100) / 100);

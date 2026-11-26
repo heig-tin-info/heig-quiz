@@ -8,13 +8,15 @@
  * in, so the dashboard and the results show its badge; the scan is kept in
  * memory, its bytes counted and never read.
  */
-import type { PaperAttemptCreated, PaperItems, PaperSheet } from "@quiz/contracts";
+import type { PaperAttemptCreated, PaperItems, PaperSheet, PaperVariantRef } from "@quiz/contracts";
+import { variantLetter } from "@quiz/domain";
 
 import {
   evaluationOr404,
   evaluations,
   itemQuestion,
   mockPaperRefusal,
+  mockVariants,
   PRINTABLE_TYPES,
   uuid,
   type MockEvaluation,
@@ -23,8 +25,18 @@ import { solutionOf } from "./pool";
 import { viewOf } from "./preview";
 import { MockError, nextId, on, refuse } from "./runtime";
 
-/** The hand-out's seed: one per evaluation, never sent anywhere. */
+/** The hand-out's seed: one per evaluation and variant (ADR-148), never sent anywhere. */
 const PAPER_SEED = 4_242;
+
+/** The variant a copy is typed from, like the server's: named where the paper has several (`422 paper_variant`). */
+function copyVariant(e: MockEvaluation, named: string | null): PaperVariantRef {
+  const of = mockVariants(e).count;
+  const number = named ? Number(named) : of === 1 ? 1 : null;
+  if (number === null || !Number.isInteger(number) || number < 1 || number > of) {
+    throw refuse(422, "paper_variant", "name the paper variant printed on the copy");
+  }
+  return { number, letter: variantLetter(number), of };
+}
 
 const sheets = new Map<string, PaperSheet>();
 
@@ -47,6 +59,8 @@ function seedPaperExam(): void {
     ...running,
     id: PAPER_EXAM_ID,
     title: "Examen sur papier — pointeurs",
+    // ADR-148: three variants, printed before the opening, held since.
+    paperVariants: 3,
     items,
     rows: running.rows.map((row) => ({
       ...row,
@@ -74,9 +88,11 @@ on("GET", "/app/api/evaluations/:id/paper/items", (m, _body, url): PaperItems =>
   const e = evaluationOr404(m.groups!.id!);
   eligible(e);
   const row = studentRow(e, url.searchParams.get("user") ?? "");
-  const view = viewOf(e, PAPER_SEED);
+  const variant = copyVariant(e, url.searchParams.get("variant"));
+  const view = viewOf(e, PAPER_SEED + variant.number - 1);
   return {
     student: { userId: row.userId, displayName: row.displayName },
+    variant,
     view,
     solutions: Object.fromEntries(
       e.items.flatMap((item) => {
@@ -93,10 +109,11 @@ on("POST", "/app/api/evaluations/:id/paper", (m, body): PaperAttemptCreated => {
   const e = evaluationOr404(m.groups!.id!);
   eligible(e);
   const row = studentRow(e, String(body.userId));
+  const variant = copyVariant(e, body.variant === undefined ? null : String(body.variant));
   const replaced = row.attemptId;
   const attemptId = nextId("paper-");
   Object.assign(row, { attemptId, state: "submitted", origin: "paper", deadlineAt: null, attemptCount: 1 });
-  sheets.set(attemptId, { attemptId, examDate: String(body.examDate), scan: null });
+  sheets.set(attemptId, { attemptId, examDate: String(body.examDate), variant, scan: null });
   return { attemptId, supersededAttemptId: replaced };
 });
 

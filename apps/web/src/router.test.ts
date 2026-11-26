@@ -171,9 +171,9 @@ describe("routeToPath / parsePath", () => {
     }
   });
 
-  it("carries the paper entry's student and date in the query, read back by the page", () => {
-    const path = routeToPath({ view: "paperEntry", evaluationId: "e-1", user: "u-1", date: "2026-11-02" });
-    expect(path).toBe("/evaluations/e-1/paper/new?user=u-1&date=2026-11-02");
+  it("carries the paper entry's student, date and variant in the query, read back by the page", () => {
+    const path = routeToPath({ view: "paperEntry", evaluationId: "e-1", user: "u-1", date: "2026-11-02", variant: 2 });
+    expect(path).toBe("/evaluations/e-1/paper/new?user=u-1&date=2026-11-02&variant=2");
     expect(parsePath(path.split("?")[0]!)).toEqual({ view: "paperEntry", evaluationId: "e-1" });
   });
 

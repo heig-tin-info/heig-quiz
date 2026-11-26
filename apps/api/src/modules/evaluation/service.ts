@@ -46,7 +46,14 @@ export {
 } from "./stateMachine.js";
 export type { JoinedItem } from "./reads.js";
 export { listActivities } from "./activities.js";
-export { declares, paperRefusal, paperVariant, printRefusal } from "./print.js";
+export { declares, paperRefusal, printRefusal } from "./print.js";
+export {
+  paperVariant,
+  paperVariantCount,
+  redrawPaperVariants,
+  setPaperVariantCount,
+  variantRef,
+} from "./variants.js";
 export { sebUnlockPasswordOf } from "./sebUnlock.js";
 // The hand-out, for the student's blank print of a past series (the `privacy` module).
 export { handout, handoutTree } from "./document.js";

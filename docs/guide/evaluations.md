@@ -242,3 +242,15 @@ Still editable: the feedback policy and its two switches. You can decide after t
 
 !!! warning
     A student who has started keeps the version of each question they started with. If a key turns out to be wrong, fix the question in its pool, publish it, then use **Re-grade this question** in the grading panel against the new version. Do not delete and recreate the evaluation: its attempts go with it.
+
+## Printing the exam on paper
+
+**Export…**, in the evaluation's menu, downloads the **Hand-out** to print and the **Statement with answer key**, as PDF, Markdown or JSON. A paper copy is typed back in with **Enter a paper copy**, on the student's row of the live dashboard or of the results.
+
+### Variants
+
+When the questions or the choices are shuffled, or a question is [parameterized](parameterized-questions.md), the sheet offers **Variants**: from 1 to 26 papers, lettered A to Z, each in its own order and with its own numbers, so that neighbours do not hold the same sheet. Set their number with **−** and **+**; **Variant** then picks what the downloads hold: **All variants** in one PDF, each starting on a right-hand page, or one variant in any format. With several variants, every page reads "Variant C · p. 2/4", and the key of a variant matches that variant's hand-out only. A student printing a past series always gets variant A, without a label.
+
+**Redraw** gives every variant a new order and new numbers: papers already printed no longer match, so print them again. Once the exam has opened, or a paper copy has been entered, Redraw and fewer variants are refused: a printed stack may already be in the students' hands. More variants are still possible.
+
+When you enter a paper copy of an exam with several variants, the dialog first asks for the copy's variant, the letter in the footer of its pages; the entry shows that variant's paper and is graded against its key.

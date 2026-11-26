@@ -29,7 +29,7 @@ describe("PaperEntryPage", () => {
     expect(await screen.findByRole("region", { name: "Paper copy of Nadia Roux" })).toBeInTheDocument();
     await user.click(await screen.findByRole("radio", { name: "&x" }));
     // Kept in the tab, keyed on the evaluation and the student.
-    expect(JSON.parse(sessionStorage.getItem(paperDraftKey(EVAL, USER))!)).toEqual({ [I1]: { selected: [1] } });
+    expect(JSON.parse(sessionStorage.getItem(paperDraftKey(EVAL, USER, 1))!)).toEqual({ [I1]: { selected: [1] } });
     // Free navigation on paper, whatever the exam's: Next, not "Validate and continue".
     expect(screen.queryByRole("button", { name: /Validate/ })).toBeNull();
 
@@ -54,11 +54,11 @@ describe("PaperEntryPage", () => {
       body: { userId: USER, examDate: "2026-11-01", answers: { [I1]: { selected: [1] } }, coordinates: "position" },
     });
     // The draft is gone.
-    expect(sessionStorage.getItem(paperDraftKey(EVAL, USER))).toBeNull();
+    expect(sessionStorage.getItem(paperDraftKey(EVAL, USER, 1))).toBeNull();
   });
 
   it("restores the draft of the tab", async () => {
-    sessionStorage.setItem(paperDraftKey(EVAL, USER), JSON.stringify({ [I1]: { selected: [1] } }));
+    sessionStorage.setItem(paperDraftKey(EVAL, USER, 1), JSON.stringify({ [I1]: { selected: [1] } }));
     mockFetch({ [`GET ${ITEMS_URL}`]: ok(makePaper()) });
     renderWithProviders(<PaperEntryPage evaluationId={EVAL} navigate={() => {}} />, { route: ROUTE });
     expect(await screen.findByRole("radio", { name: "&x" })).toBeChecked();

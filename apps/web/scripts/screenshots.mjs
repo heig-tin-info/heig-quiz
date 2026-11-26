@@ -334,6 +334,19 @@ const scenes = [
   { name: "launch-template-behind", role: "teacher", path: `/evaluations/${TEMPLATE_INSTANCE}?step=launch` },
   { name: "launch-template-pull-confirm", role: "teacher", path: `/evaluations/${TEMPLATE_INSTANCE}?step=launch`, fold: true, act: async (p) => { await p.getByRole("button", { name: /^(update…|mettre à jour…)$/i }).first().click(); } },
   { name: "eval-export", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /^actions$/i }).first().click(); await p.getByRole("menuitem", { name: /^(export|exporter)…$/i }).click(); } },
+  // ADR-148: three variants set on the draft, then the running exam's, held since its opening.
+  { name: "eval-export-variants", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^actions$/i }).first().click();
+      await p.getByRole("menuitem", { name: /^(export|exporter)…$/i }).click();
+      for (let i = 0; i < 2; i += 1) {
+        await p.getByRole("button", { name: /one variant more|une variante de plus/i }).click();
+        await p.waitForTimeout(300);
+      }
+    } },
+  { name: "eval-export-locked", role: "teacher", path: `/evaluations/${PAPER_EXAM}?step=questions`, fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^actions$/i }).first().click();
+      await p.getByRole("menuitem", { name: /^(export|exporter)…$/i }).click();
+    } },
   { name: "eval-save-template", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /^actions$/i }).first().click(); await p.getByRole("menuitem", { name: /save as template|enregistrer comme modèle/i }).click(); } },
   // #155: a hidden course brought back by "Show hidden", the course menu with
   // "Hide for me", and a course's archived classrooms behind "Show archived".
@@ -2178,8 +2191,14 @@ const scenes = [
   { name: "paper-entry-live", role: "teacher", ...liveAllOn(PAPER_EXAM), path: `/evaluations/${PAPER_EXAM}/live`, fold: true },
   { name: "paper-entry-dialog", role: "teacher", path: `/evaluations/${PAPER_EXAM}/live`, fold: true, act: (p) =>
       p.getByRole("button", { name: /enter a paper copy|saisir une copie papier/i }).first().click() },
+  // ADR-148: the exam has three variants, so the dialog asks the copy's first.
+  { name: "paper-entry-variant", role: "teacher", path: `/evaluations/${PAPER_EXAM}/live`, fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /enter a paper copy|saisir une copie papier/i }).first().click();
+      await p.getByLabel(/variant of the copy|variante de la copie/i).selectOption("2");
+    } },
   { name: "paper-entry-page", role: "teacher", path: `/evaluations/${PAPER_EXAM}/live`, fold: true, settle: 1500, act: async (p) => {
       await p.getByRole("button", { name: /enter a paper copy|saisir une copie papier/i }).first().click();
+      await p.getByLabel(/variant of the copy|variante de la copie/i).selectOption("2");
       await p.getByRole("button", { name: /start the entry|commencer la saisie/i }).click();
     } },
   // The correction on a beamer (ADR-033): hidden, revealed (R), and walked

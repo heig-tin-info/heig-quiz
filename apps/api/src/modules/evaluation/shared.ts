@@ -109,6 +109,10 @@ const REFUSALS = {
   mode_frozen: [409, "the mode can no longer change: students have been let in, or an attempt exists (ADR-092)"],
   // ADR-125 §5: the body carries the `PrintRefusal`, `reason` and `types`.
   not_printable: [409, "this evaluation does not print"],
+  // ADR-148: Redraw, or fewer variants, once a printed stack may be out; the body's `reason`.
+  variants_locked: [409, "the paper variants are fixed: the evaluation opened, or a paper copy was entered"],
+  variants_identical: [422, "nothing varies between two papers: one variant only"],
+  variant_unknown: [422, "the paper has no such variant"],
 } satisfies Record<string, Refusal>;
 
 export type EvaluationErrorCode = keyof typeof REFUSALS;

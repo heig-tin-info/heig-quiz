@@ -40,9 +40,11 @@ async function downloadFile(path: string): Promise<void> {
 /**
  * A file downloaded as a mutation of the screen: `mutate(path)`, and a
  * refusal — a PDF the server cannot make now (ADR-125 §3), or any other — is
- * a toast, never a page left. `variables` is the path on its way.
+ * a toast, never a page left. `variables` is the path on its way. `words`
+ * rewords a refusal where the screen knows better (every variant in one PDF
+ * too large to make: download them one by one, ADR-148).
  */
-export function useDownload() {
+export function useDownload(words: Partial<Record<string, keyof Dict>> = {}) {
   const t = useT();
   const toast = useToast();
   return useMutation({
@@ -59,6 +61,7 @@ export function useDownload() {
             rate_limited: "export.limited",
             // A type with no paper form (ADR-125 §5).
             not_printable: "export.notPrintable",
+            ...words,
           },
           t,
         ),

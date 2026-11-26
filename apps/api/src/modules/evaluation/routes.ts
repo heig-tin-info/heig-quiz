@@ -10,6 +10,7 @@
  * write is audited (invariant 9).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { z } from "zod";
 
 import {
   EvaluationAfterDueBody,
@@ -25,6 +26,9 @@ import {
   ItemPatch,
   ItemsAdd,
   ItemsOrder,
+  PaperPdfQuery,
+  PaperVariantQuery,
+  PaperVariantsBody,
   TemplateCreate,
   TemplateInstantiate,
   TemplateNew,
@@ -36,6 +40,7 @@ import {
   type TemplateInstance,
   type TemplatePullResult,
 } from "@quiz/contracts";
+import type { Document } from "@quiz/docexport";
 import type { Locale } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
@@ -55,7 +60,15 @@ import {
 import * as gradebook from "../gradebook/service.js";
 import { notFound, readerLang, readerLocale, sendFailure, teacherRoute } from "../http.js";
 import * as live from "../live/service.js";
-import { evaluationDocument, evaluationDocumentTree, handout, handoutTree } from "./document.js";
+import {
+  basenameOf,
+  everyVariant,
+  evaluationDocument,
+  evaluationDocumentTree,
+  handout,
+  handoutTree,
+  type Found,
+} from "./document.js";
 import { evaluationChanged } from "./events.js";
 import * as service from "./service.js";
 import * as templates from "./templates.js";
@@ -234,31 +247,91 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
    * Markdown, as a PDF or as its record: the staff "statement with key" and
    * the hand-out (student views in the paper's order), both worded in the
    * reader's language. Staff only, like the answers export; `409 not_printable {
-   * reason, types }` for an evaluation that does not print.
+   * reason, types }` for an evaluation that does not print. `?variant=` names
+   * the paper variant (ADR-148), 1 by default, `422 variant_unknown` beyond
+   * the count; a PDF may take `all`, every variant on its own pages.
    */
-  /** What a document is served from: the evaluation loaded, the clock, the format, the reader's language. */
-  type Served = { reply: FastifyReply; evaluation: service.EvaluationRecord; now: Date; format: ExportFormat; lang: Locale };
+  interface Served<R> {
+    /** The file's stem, before a variant's letter. */
+    stem: string;
+    build: (evaluation: service.EvaluationRecord, now: Date, variant: number) => Promise<Found<R>>;
+    tree: (found: Found<R>, lang: Locale) => Document;
+    schema: z.ZodType<R>;
+  }
   const documents = {
-    document: async ({ reply, evaluation, now, format, lang }: Served) => {
-      const found = await evaluationDocument(app.db, evaluation, { now });
-      return sendExport(reply, format, found, EvaluationDocumentRecord, () => evaluationDocumentTree(found, lang));
-    },
-    handout: async ({ reply, evaluation, now, format, lang }: Served) => {
-      const found = await handout(app.db, evaluation, { now });
-      return sendExport(reply, format, found, HandoutRecord, () => handoutTree(found, lang));
-    },
+    document: {
+      stem: "key",
+      build: (evaluation, now, variant) => evaluationDocument(app.db, evaluation, { now, variant }),
+      tree: evaluationDocumentTree,
+      schema: EvaluationDocumentRecord,
+    } satisfies Served<EvaluationDocumentRecord>,
+    handout: {
+      stem: "handout",
+      build: (evaluation, now, variant) => handout(app.db, evaluation, { now, variant }),
+      tree: handoutTree,
+      schema: HandoutRecord,
+    } satisfies Served<HandoutRecord>,
   };
-  for (const [name, serve] of Object.entries(documents)) {
+  async function serveDocument<R>(
+    served: Served<R>,
+    { reply, evaluation, now, format, lang, variant }: { reply: FastifyReply; evaluation: service.EvaluationRecord; now: Date; format: ExportFormat; lang: Locale; variant: number | "all" },
+  ) {
+    const count = variant === "all" ? await service.paperVariantCount(app.db, evaluation.id) : 1;
+    if (variant !== "all" || count === 1) {
+      const found = await served.build(evaluation, now, variant === "all" ? 1 : variant);
+      return sendExport(reply, format, found, served.schema, () => served.tree(found, lang));
+    }
+    const founds: Found<R>[] = [];
+    for (let number = 1; number <= count; number += 1) founds.push(await served.build(evaluation, now, number));
+    const all = { record: founds[0]!.record, basename: basenameOf(evaluation, `${served.stem}-all`) };
+    return sendExport(reply, "pdf", all, served.schema, () => everyVariant(founds.map((found) => served.tree(found, lang))));
+  }
+  const routeDocument = <R>(name: string, served: Served<R>) => {
     for (const format of EXPORT_FORMATS) {
       app.get(
         `/app/api/evaluations/:id/${name}.${format}`,
         { preHandler: requireTeacher },
-        teacher({ params: IdParam, load: staffEvaluation }, ({ req, reply, now, scope }) =>
-          serve({ reply, evaluation: scope.evaluation, now, format, lang: readerLocale(req) }),
+        teacher(
+          { params: IdParam, query: format === "pdf" ? PaperPdfQuery : PaperVariantQuery, load: staffEvaluation },
+          ({ req, reply, now, query, scope }) =>
+            serveDocument(served, { reply, evaluation: scope.evaluation, now, format, lang: readerLocale(req), variant: query.variant }),
         ),
       );
     }
-  }
+  };
+  routeDocument("document", documents.document);
+  routeDocument("handout", documents.handout);
+
+  /**
+   * The paper's variants (ADR-148), from the export sheet: how many (`PUT`,
+   * the missing made, the highest removed) and Redraw (`POST …/redraw`, every
+   * seed drawn again, every stored value cleared). Any member of the course,
+   * like the documents; refused once a printed stack may be out (`409
+   * variants_locked`, its `reason`), and more than one where nothing varies
+   * (`422 variants_identical`). Audited without a seed; the detail answers.
+   */
+  app.put(
+    "/app/api/evaluations/:id/paper-variants",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: PaperVariantsBody, load: staffEvaluation },
+      async ({ req, now, body, scope }) => {
+        const { from, to } = await service.setPaperVariantCount(app.db, scope.evaluation, body.count, now);
+        if (from !== to) await trace(req, "evaluation.paper_variants", "evaluation", scope.evaluation.id, { from, to });
+        return detail(req, scope.evaluation, scope.classroom.courseId);
+      },
+    ),
+  );
+
+  app.post(
+    "/app/api/evaluations/:id/paper-variants/redraw",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffEvaluation }, async ({ req, now, scope }) => {
+      const count = await service.redrawPaperVariants(app.db, scope.evaluation, now);
+      await trace(req, "evaluation.paper_redraw", "evaluation", scope.evaluation.id, { count });
+      return detail(req, scope.evaluation, scope.classroom.courseId);
+    }),
+  );
 
   /** The pools the question picker offers: the course's own (F-EVAL-01). */
   app.get(

@@ -474,6 +474,65 @@ describe("the paper attempt (F-PAPER-01..03)", () => {
     expect((await variantsOf(evaluation.id))[0]!.instances).toEqual({ [item.item.id]: flagged });
   });
 
+  it("takes a copy on the variant printed on it, graded against that variant's key; the anonymised table names none (ADR-148)", async () => {
+    const { evaluation, poolId } = await exam({ mcq: MCQ });
+    const question = await publishParameterized(db(), { poolId, teacherId: teacher.id, type: "short" });
+    await addItems(db(), await reload(db(), evaluation.id), [question], (type, version) =>
+      typeOf(type).defaultPoints(poolService.exampleConfig(type, version)), { attemptCount: 0 });
+    const item = (await joinedItems(db(), evaluation.id)).find((j) => j.question.id === question)!;
+    const count = await server.app.inject({
+      method: "PUT",
+      url: `/app/api/evaluations/${evaluation.id}/paper-variants`,
+      headers: teacher.headers,
+      payload: { count: 3 },
+    });
+    expect(count.statusCode, count.body).toBe(200);
+    await started(evaluation.id);
+    await closed(evaluation.id);
+
+    // Several variants: the copy names its own, one the paper has.
+    for (const variant of [undefined, 4]) {
+      const query = variant === undefined ? "" : `&variant=${variant}`;
+      const read = await get(`/app/api/evaluations/${evaluation.id}/paper/items?user=${second.id}${query}`, teacher.headers);
+      expect([read.statusCode, read.json().error]).toEqual([422, "paper_variant"]);
+      const res = await enter(evaluation.id, { ...body(second.id), ...(variant === undefined ? {} : { variant }) });
+      expect([res.statusCode, res.json().error]).toEqual([422, "paper_variant"]);
+    }
+    const res = await get(`/app/api/evaluations/${evaluation.id}/paper/items?user=${second.id}&variant=2`, teacher.headers);
+    const paper = PaperItems.parse(res.json());
+    expect(paper.variant).toEqual({ number: 2, letter: "B", of: 3 });
+    const [, b] = await variantsOf(evaluation.id);
+    const values = b!.instances[item.item.id]!.values;
+    // Variant B's own paper: its order and its numbers.
+    const handoutB = (await get(`/app/api/evaluations/${evaluation.id}/handout.json?variant=2`, teacher.headers)).json();
+    expect(paper.view.items.map((i) => [i.id, i.student])).toEqual(
+      handoutB.items.map((i: { id: string; statement: unknown }) => [i.id, i.statement]),
+    );
+    expect(showsKey(JSON.stringify(paper.solutions[item.item.id]), values)).toBe(true);
+
+    const entered = await enter(evaluation.id, { ...body(second.id, { [item.item.id]: { text: fallOf(values) } }), variant: 2 });
+    expect(entered.statusCode, entered.body).toBe(201);
+    const [row] = await attemptsOf(evaluation.id, second.id);
+    expect(row).toMatchObject({ seed: b!.seed, instances: b!.instances });
+    const [grading] = await db()
+      .select()
+      .from(gradings)
+      .where(and(eq(gradings.attemptId, row!.id), eq(gradings.itemId, item.item.id)));
+    expect(grading).toMatchObject({ state: "validated", points: item.item.points });
+    const sheet = PaperSheet.parse((await get(`/app/api/evaluations/${evaluation.id}/attempts/${row!.id}/paper`, teacher.headers)).json());
+    expect(sheet.variant).toEqual({ number: 2, letter: "B", of: 3 });
+    const [audit] = await db()
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "paper.enter"), eq(auditLog.subjectId, row!.id)));
+    expect(audit!.payload).toMatchObject({ variant: 2 });
+
+    // The anonymised grading table (ADR-125 §17): no variant, by number or letter.
+    const queue = await get(`/app/api/evaluations/${evaluation.id}/grading?itemId=${item.item.id}`, teacher.headers);
+    expect(queue.statusCode).toBe(200);
+    expect(queue.body).not.toMatch(/"variant"|Variant/i);
+  });
+
   it("hands two copies of one student entered at once in one after the other", async () => {
     const { evaluation } = await exam();
     await started(evaluation.id);
@@ -582,6 +641,7 @@ describe("the scan (F-PAPER-04)", () => {
     expect(PaperSheet.parse((await get(sheetUrl, teacher.headers)).json())).toEqual({
       attemptId,
       examDate: "2026-11-02",
+      variant: { number: 1, letter: "A", of: 1 },
       scan: null,
     });
     expect((await get(`${sheetUrl}/scan`, teacher.headers)).statusCode).toBe(404);

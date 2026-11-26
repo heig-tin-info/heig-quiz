@@ -123,6 +123,8 @@ function block(b: Block, l: Labels): string {
       return drawingLine(b.alt);
     case "answerZone":
       return zoneBlock(b, l);
+    case "booklet":
+      return [`*${oneLine(b.label)}*`, ...b.blocks.map((inner) => block(inner, l))].filter((text) => text !== "").join("\n\n");
   }
 }
 

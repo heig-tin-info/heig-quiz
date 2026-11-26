@@ -49,7 +49,7 @@ export async function paperPlugin(
     "/app/api/evaluations/:id/paper/items",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, query: PaperItemsQuery, load: staffEvaluation }, ({ now, query, scope }) =>
-      service.paperItems(app.db, scope.evaluation, query.user, now),
+      service.paperItems(app.db, scope.evaluation, query, now),
     ),
   );
 
@@ -66,6 +66,7 @@ export async function paperPlugin(
           evaluationId: scope.evaluation.id,
           userId: body.userId,
           examDate: body.examDate,
+          variant: inserted.variant,
           ...(supersededAttemptId === null ? {} : { supersededAttemptId }),
         });
         const created: PaperAttemptCreated = { attemptId: inserted.attempt.id, supersededAttemptId };
@@ -79,7 +80,7 @@ export async function paperPlugin(
     "/app/api/evaluations/:id/attempts/:attemptId/paper",
     { preHandler: requireTeacher },
     teacher({ params: AttemptParam, load: staffEvaluationAttempt }, ({ scope }) =>
-      service.paperSheet(app.db, scope.attempt.id),
+      service.paperSheet(app.db, scope.evaluation.id, scope.attempt.id),
     ),
   );
 
@@ -91,7 +92,7 @@ export async function paperPlugin(
       const part = await multipartFile(req, reply);
       if (!part) return reply;
       const bytes = await part.toBuffer();
-      const sheet = await service.attachScan(app.db, config.ASSETS_DIR, scope.attempt.id, bytes, callerOf(req).id, now);
+      const sheet = await service.attachScan(app.db, config.ASSETS_DIR, scope.evaluation.id, scope.attempt.id, bytes, callerOf(req).id, now);
       await trace(req, "paper.scan_upload", "attempt", scope.attempt.id, {
         evaluationId: scope.evaluation.id,
         mime: sheet.scan?.mime,

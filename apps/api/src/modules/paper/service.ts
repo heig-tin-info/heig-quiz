@@ -25,7 +25,14 @@ import { readdir, rm } from "node:fs/promises";
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
-import type { PaperAttemptBody, PaperItems, PaperRefusal, PaperScanMime, PaperSheet } from "@quiz/contracts";
+import type {
+  PaperAttemptBody,
+  PaperItems,
+  PaperRefusal,
+  PaperScanMime,
+  PaperSheet,
+  PaperVariantRef,
+} from "@quiz/contracts";
 import { localDate } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
@@ -50,6 +57,8 @@ const REFUSALS = {
   not_printable: [409],
   // §9: the student is a claimed, non-staff seat of the classroom.
   paper_no_seat: [422, "this person holds no claimed student seat in the classroom"],
+  // ADR-148: the copy names the variant printed on it, one the paper has.
+  paper_variant: [422, "name the paper variant printed on the copy, one this evaluation has"],
   // Two copies of one student handed in at the same instant: the second is refused.
   paper_conflict: [409, "another paper copy of this student was just handed in"],
   // §15: the bytes are neither a PDF, a PNG nor a JPEG.
@@ -97,6 +106,18 @@ async function studentSeat(db: Db | Tx, record: EvaluationRecord, userId: string
 }
 
 /**
+ * The variant a copy is typed from (ADR-148): the one named, else 1 where the
+ * paper has only one; `422 paper_variant` without a name where it has
+ * several, or for one it does not have.
+ */
+async function copyVariant(db: Db, record: EvaluationRecord, named: number | undefined): Promise<PaperVariantRef> {
+  const of = await evaluation.paperVariantCount(db, record.id);
+  const number = named ?? (of === 1 ? 1 : null);
+  if (number === null || number > of) throw new PaperError("paper_variant");
+  return evaluation.variantRef(number, of);
+}
+
+/**
  * The entry page's paper (ADR-125 §8, §9): the evaluation exactly as the
  * hand-out printed it — the student views of the paper variant (ADR-148),
  * built by the one builder of an attempt's view — with the whole key of
@@ -107,15 +128,17 @@ async function studentSeat(db: Db | Tx, record: EvaluationRecord, userId: string
 export async function paperItems(
   db: Db,
   record: EvaluationRecord,
-  userId: string,
+  query: { user: string; variant?: number | undefined },
   now: Date,
 ): Promise<PaperItems> {
   const items = await eligibleItems(db, record);
-  const student = await studentSeat(db, record, userId);
-  const variant = await evaluation.paperVariant(db, record, items, now);
-  const current = await live.attemptOf(db, record.id, userId);
+  const student = await studentSeat(db, record, query.user);
+  const ref = await copyVariant(db, record, query.variant);
+  const variant = await evaluation.paperVariant(db, record, items, now, ref.number);
+  const current = await live.attemptOf(db, record.id, query.user);
   return {
     student,
+    variant: ref,
     view: await live.previewView(db, record, now, variant, items),
     solutions: live.paperKey(record, items, variant),
     replaces: current && { attemptId: current.id, state: current.state, origin: current.origin },
@@ -134,11 +157,12 @@ export async function enterPaperCopy(
   body: PaperAttemptBody,
   by: string,
   now: Date,
-): Promise<live.InsertedPaperAttempt> {
+): Promise<live.InsertedPaperAttempt & { variant: number }> {
   const { db } = app;
   const items = await eligibleItems(db, record);
   await studentSeat(db, record, body.userId);
-  const variant = await evaluation.paperVariant(db, record, items, now);
+  const ref = await copyVariant(db, record, body.variant);
+  const variant = await evaluation.paperVariant(db, record, items, now, ref.number);
   // Before any write: one refused answer refuses the copy.
   const answers = live.paperAnswers(record, items, variant, body.answers, body.coordinates);
   let inserted: live.InsertedPaperAttempt;
@@ -152,14 +176,14 @@ export async function enterPaperCopy(
       if (moved) throw new PaperError(moved.code);
       await studentSeat(tx, record, body.userId, true);
       const rows = await live.insertPaperAttempt(tx, { evaluation: record, userId: body.userId, variant, answers, now });
-      await tx.insert(paperSheets).values({ attemptId: rows.attempt.id, examDate: body.examDate, enteredBy: by });
+      await tx.insert(paperSheets).values({ attemptId: rows.attempt.id, examDate: body.examDate, variant: ref.number, enteredBy: by });
       return rows;
     });
   } catch (error) {
     throw conflictOf(error);
   }
   await live.announcePaperAttempt(app, record, inserted, now);
-  return inserted;
+  return { ...inserted, variant: ref.number };
 }
 
 /**
@@ -171,9 +195,9 @@ export function conflictOf(error: unknown): unknown {
   return isUniqueViolation(error, "attempts_evaluation_user_number_uq") ? new PaperError("paper_conflict") : error;
 }
 
-/** The sheet of a paper attempt, or `404` for any other attempt. */
-export async function paperSheet(db: Db, attemptId: string): Promise<PaperSheet> {
-  return sheetOut(await sheetRow(db, attemptId));
+/** The sheet of a paper attempt of evaluation `evaluationId`, or `404` for any other attempt. */
+export async function paperSheet(db: Db, evaluationId: string, attemptId: string): Promise<PaperSheet> {
+  return sheetOut(await sheetRow(db, attemptId), await evaluation.paperVariantCount(db, evaluationId));
 }
 
 async function sheetRow(db: Db, attemptId: string) {
@@ -182,11 +206,13 @@ async function sheetRow(db: Db, attemptId: string) {
   return row;
 }
 
-function sheetOut(row: typeof paperSheets.$inferSelect): PaperSheet {
+/** A sheet as the staff read it; `of`, the paper's variant count now. */
+function sheetOut(row: typeof paperSheets.$inferSelect, of: number): PaperSheet {
   const scanned = row.scanMime !== null && row.scanBytes !== null && row.scanUploadedAt !== null;
   return {
     attemptId: row.attemptId,
     examDate: row.examDate,
+    variant: evaluation.variantRef(row.variant, of),
     scan: scanned ? { mime: row.scanMime!, bytes: row.scanBytes!, uploadedAt: iso(row.scanUploadedAt!) } : null,
   };
 }
@@ -214,6 +240,7 @@ export function scanMimeOf(bytes: Buffer): PaperScanMime | null {
 export async function attachScan(
   db: Db,
   assetsDir: string,
+  evaluationId: string,
   attemptId: string,
   bytes: Buffer,
   by: string,
@@ -232,7 +259,7 @@ export async function attachScan(
     .returning();
   const old = before.scanSha256 !== null && before.scanMime !== null ? scanPath(attemptId, before.scanSha256, before.scanMime) : null;
   if (old !== null && old !== path) await sweep(assetsDir, old);
-  return sheetOut(row!);
+  return sheetOut(row!, await evaluation.paperVariantCount(db, evaluationId));
 }
 
 /** The scan's bytes and type, or `404` when the copy has none (or its file went missing). */

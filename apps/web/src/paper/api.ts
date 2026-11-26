@@ -19,15 +19,20 @@ import { api, refusalCodeOf } from "../api";
 import type { Dict } from "../i18n";
 import { paperItemsKey, paperSheetKey, resultsKey } from "../queryKeys";
 
-/** `GET /evaluations/:id/paper/items?user=`: the student's paper, refused like the submission. */
-export function usePaperItems(evaluationId: string, userId: string) {
+/**
+ * `GET /evaluations/:id/paper/items?user=&variant=`: the student's paper, of
+ * the variant printed on the copy (ADR-148; null where the paper has one),
+ * refused like the submission. Waits while `enabled` is false.
+ */
+export function usePaperItems(evaluationId: string, userId: string, variant: number | null, enabled = true) {
+  const query = { user: userId, ...(variant === null ? {} : { variant: String(variant) }) };
   return useQuery<PaperItems>({
-    queryKey: paperItemsKey(evaluationId, userId),
-    queryFn: () =>
-      api(
-        `/app/api/evaluations/${evaluationId}/paper/items?${new URLSearchParams(PaperItemsQuery.parse({ user: userId }))}`,
-      ),
-    enabled: userId !== "",
+    queryKey: paperItemsKey(evaluationId, userId, variant),
+    queryFn: () => {
+      PaperItemsQuery.parse(query);
+      return api(`/app/api/evaluations/${evaluationId}/paper/items?${new URLSearchParams(query)}`);
+    },
+    enabled: userId !== "" && enabled,
     // A refusal is an answer, not a hiccup: it is said at once.
     retry: false,
     staleTime: Infinity,
@@ -38,7 +43,7 @@ export function usePaperItems(evaluationId: string, userId: string) {
 export function useEnterPaper(evaluationId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { userId: string; examDate: string; answers: Record<string, unknown> }) =>
+    mutationFn: (input: { userId: string; examDate: string; variant: number; answers: Record<string, unknown> }) =>
       api<PaperAttemptCreated>(`/app/api/evaluations/${evaluationId}/paper`, {
         method: "POST",
         body: JSON.stringify(PaperAttemptBody.parse({ ...input, coordinates: ANSWER_COORDINATES })),
@@ -87,6 +92,7 @@ export const REFUSAL_KEYS: Record<PaperRefusal, keyof Dict> = {
   paper_not_started: "paper.refused.paper_not_started",
   not_printable: "paper.refused.not_printable",
   paper_no_seat: "paper.refused.paper_no_seat",
+  paper_variant: "paper.refused.paper_variant",
   paper_conflict: "paper.refused.paper_conflict",
   answer_invalid: "paper.refused.answer_invalid",
 };

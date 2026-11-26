@@ -15,7 +15,8 @@
  * `headed`: the aside sits outside the heading, so no bookmark holds it.
  *
  * Every answer space is a `zone(id, kind, body)`: it records
- * `(id, kind, page, x, y, w, h)` — position and size in points — as a
+ * `(id, kind, booklet, page, x, y, w, h)` — the booklet it is in (ADR-148),
+ * none outside one, its page in the PDF, position and size in points — as a
  * `<answer-zone>` metadata, so `typst eval 'query(<answer-zone>)…'` lists the
  * zones of the printed paper, the manifest palier B reads a scan with.
  * An image is `img(id, alt, width)`: drawn from `assets/<id>` when the API
@@ -41,6 +42,34 @@ export const MARGIN_MM = 20;
 
 /** An A4 page, in millimetres. */
 export const PAGE_MM = { width: 210, height: 297 } as const;
+
+/**
+ * The booklets of ADR-148, before the page setup, whose header and footer
+ * read them: a booklet starts on a recto with its page count at 1 and names
+ * itself in a state; `page-place()` answers the page's label, its number in
+ * the booklet and the booklet's page count (`booklet-end` marks its last
+ * page), or none outside a booklet.
+ */
+export const BOOKLETS = String.raw`
+#let booklet-state = state("booklet", none)
+
+#let booklet-start(id, label) = {
+  pagebreak(weak: true, to: "odd")
+  counter(page).update(1)
+  booklet-state.update((id: id, label: label))
+}
+
+#let booklet-end(id) = [#metadata(id) <booklet-end>]
+
+#let page-place() = {
+  let b = booklet-state.get()
+  if b == none { return none }
+  let n = counter(page).get().first()
+  let end = query(<booklet-end>).find(m => m.value == b.id)
+  (label: b.label, n: n, total: if end == none { n } else { counter(page).at(end.location()).first() })
+}
+
+`;
 
 export const PREAMBLE = String.raw`
 #let img(id, alt, width) = if id in drawable { image("assets/" + id, width: width * 1%) } else { alt }
@@ -73,7 +102,9 @@ export const PREAMBLE = String.raw`
   let size = measure(block(width: region.width, body))
   context {
     let at = here().position()
-    [#metadata((id: id, kind: kind, page: at.page, x: at.x.pt(), y: at.y.pt(), w: size.width.pt(), h: size.height.pt())) <answer-zone>]
+    let b = booklet-state.get()
+    let booklet = if b == none { none } else { b.id }
+    [#metadata((id: id, kind: kind, booklet: booklet, page: at.page, x: at.x.pt(), y: at.y.pt(), w: size.width.pt(), h: size.height.pt())) <answer-zone>]
   }
   body
 }))
@@ -107,13 +138,19 @@ export const PREAMBLE = String.raw`
   grid(columns: (1fr, 1fr), column-gutter: 8mm, field(name), field(first)))
 `;
 
-/** The page setup: `title`, `lang` and the PDF metadata are string literals already. */
-export function pageSetup(title: string, lang: string): string {
+/**
+ * The page setup: `title`, `lang`, `pageWord` (`p.`) and the PDF metadata are
+ * string literals already. The footer is `n / N`, or in a booklet (ADR-148)
+ * its label and its own count, `Variant C · p. 2/4`; the blank verso that
+ * pads a booklet to a recto carries neither header nor footer. Both sit in
+ * the 20 mm margin, above its outer 10 mm (ADR-125 §6).
+ */
+export function pageSetup(title: string, lang: string, pageWord: string): string {
   return [
     `#set document(title: ${title}, author: "Quiz")`,
     `#set page(paper: "a4", margin: ${MARGIN_MM}mm,`,
-    `  header: context if counter(page).get().first() > 1 { set text(size: 8pt, fill: luma(90)); emph(${title}) },`,
-    `  footer: context align(center, text(size: 8pt, fill: luma(90), counter(page).display("1 / 1", both: true))))`,
+    `  header: context { let p = page-place(); if counter(page).get().first() > 1 and (p == none or p.n <= p.total) { set text(size: 8pt, fill: luma(90)); emph(${title}) } },`,
+    `  footer: context align(center, text(size: 8pt, fill: luma(90), { let p = page-place(); if p == none { counter(page).display("1 / 1", both: true) } else if p.n <= p.total [#p.label · #${pageWord} #p.n/#p.total] })))`,
     `#set text(font: "${BODY_FONT}", size: 11pt, lang: ${lang})`,
     `#set par(justify: false)`,
     `#show raw: set text(font: "${MONO_FONT}", size: 9pt)`,

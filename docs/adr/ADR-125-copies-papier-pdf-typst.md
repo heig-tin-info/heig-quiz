@@ -22,7 +22,9 @@ paper seed becomes variant 1 of `paper_variants`, with the values it draws
 stored; the statement with key of a printed evaluation follows the paper's
 order), §9 (a paper attempt is entered on the variant and carries its
 values) and §17 (those values tell a paper copy apart on the anonymised
-table: an accepted limit).
+table: an accepted limit); then, the same day, §6 (a zone's manifest entry
+names its booklet, the variant) and §9, §11 (a paper copy names the variant
+printed on it, `422 paper_variant`).
 
 Scope: the printed hand-out of an exam and the PDF of every export; the
 paper attempt a staff member enters, its scan, and every reader of
@@ -139,7 +141,9 @@ nothing of B or C.
    `#metadata((id, kind, page, x, y, w, h)) <answer-zone>` for palier B's
    `typst query`. No fiducial, no QR code; a margin of at least 10 mm stays
    free for them. *(Amended by ADR-126 §3: a ruled `free` frame; amended
-   2026-11-04, see the end: a `choices` block is a zone too.)*
+   2026-11-04, see the end: a `choices` block is a zone too; amended by
+   ADR-148 §10: the entry is `(id, kind, booklet, page, x, y, w, h)`, the
+   booklet the variant's letter, none outside one.)*
 
 7. **Fixed words of a student-facing document** (a scoped exception to
    invariant 1 / N-I18N-01 and to ADR-121 §4). Three documents only — the
@@ -210,7 +214,9 @@ nothing of B or C.
     evaluation's first run (`startedAt` set) until its release — `running`,
     `paused`, `closed`, `grading`; `draft`, `scheduled`, `lobby` →
     `409 paper_not_started`; `released` → `409 paper_released`. Any staff
-    member of the course (`staffAccess`); a stranger gets a 404.
+    member of the course (`staffAccess`); a stranger gets a 404. *(Amended
+    by ADR-148 §12: where the paper has several variants, the copy names the
+    one printed on it, else `422 paper_variant`.)*
 
 12. **Superseding.** A paper attempt may replace the student's attempts,
     digital or paper; nothing is merged. `attempts.superseded_by` (uuid,

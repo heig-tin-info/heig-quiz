@@ -24,9 +24,10 @@
  * It lives beside the `evaluation` service, which re-exports it: it reads the
  * `live` module's student exit, which itself imports the service.
  */
-import type { EvaluationDocumentRecord, HandoutRecord } from "@quiz/contracts";
+import type { EvaluationDocumentRecord, HandoutRecord, PaperVariantRef } from "@quiz/contracts";
 import {
   answerZone,
+  booklet,
   heading,
   LABELS,
   markdown,
@@ -34,6 +35,7 @@ import {
   scopeZones,
   type Block,
   type Document,
+  type Labels,
   type Lang,
 } from "@quiz/docexport";
 import { evaluationTotal, slugify } from "@quiz/domain";
@@ -43,9 +45,10 @@ import type { Db } from "../../db/client.js";
 import { explanationBlocks, itemKeyBlocks, provenanceOf } from "../../documents/blocks.js";
 import * as live from "../live/service.js";
 import { explanationOrNull, typeOf } from "../pool/service.js";
-import { paperVariant, printRefusal } from "./print.js";
+import { printRefusal } from "./print.js";
 import { joinedItems, type JoinedItem } from "./reads.js";
 import { EvaluationError, type EvaluationRecord } from "./shared.js";
+import { paperVariant, paperVariantCount, variantRef } from "./variants.js";
 
 /** A record, with what its Markdown needs beside it. */
 export interface Found<R> {
@@ -67,26 +70,57 @@ async function printableItems(
 }
 
 /** `<title>-<suffix>`, as a slug. */
-const basenameOf = (evaluation: EvaluationRecord, suffix: string): string =>
+export const basenameOf = (evaluation: EvaluationRecord, suffix: string): string =>
   `${slugify(evaluation.title) || "evaluation"}-${suffix}`;
 
+/** Variant `number` of the paper (ADR-148), checked against the count: `422 variant_unknown` beyond it. */
+async function variantOf(db: Db, evaluation: EvaluationRecord, number: number): Promise<PaperVariantRef> {
+  const of = await paperVariantCount(db, evaluation.id);
+  if (number > of) throw new EvaluationError("variant_unknown");
+  return variantRef(number, of);
+}
+
+/** The suffix of a document's file: its letter when the paper has several variants. */
+const variantSuffix = (variant: PaperVariantRef | null): string => (variant && variant.of > 1 ? `-${variant.letter}` : "");
+
 /**
- * The staff "statement with key" (F-EXP-04): the record — the key of the
- * evaluation's paper variant (ADR-148), each item in the paper's order, its
- * statement as the hand-out prints it, its whole key in that view and its
- * explanation, with the variant's values, so the key and the hand-out agree.
+ * A document tree's blocks, as a paper of their own when the paper has
+ * several variants (ADR-148): a booklet named `Variant C` on every page.
+ */
+function asVariant(blocks: Block[], variant: PaperVariantRef | null, l: Labels): Block[] {
+  if (!variant || variant.of === 1) return blocks;
+  return [booklet(variant.letter, `${l.variant} ${variant.letter}`, blocks)];
+}
+
+/**
+ * Every variant's document as ONE PDF (ADR-148): each variant a booklet,
+ * on its own recto, its pages counted apart. `trees` are the variants' own,
+ * in order; the provenance is the first's.
+ */
+export function everyVariant(trees: readonly Document[]): Document {
+  return { ...trees[0]!, blocks: trees.flatMap((tree) => tree.blocks) };
+}
+
+/**
+ * The staff "statement with key" (F-EXP-04): the record — the key of
+ * variant `variant` of the evaluation's paper (ADR-148), each item in that
+ * paper's order, its statement as the hand-out prints it, its whole key in
+ * that view and its explanation, with the variant's values, so the key and
+ * the hand-out of one variant agree.
  */
 export async function evaluationDocument(
   db: Db,
   evaluation: EvaluationRecord,
-  options: { now: Date },
+  options: { now: Date; variant: number },
 ): Promise<Found<EvaluationDocumentRecord>> {
   const items = await printableItems(db, evaluation, "document");
-  const variant = await paperVariant(db, evaluation, items, options.now);
+  const ref = await variantOf(db, evaluation, options.variant);
+  const variant = await paperVariant(db, evaluation, items, options.now, ref.number);
   return {
     record: {
       kind: "evaluation-document",
-      version: 2,
+      version: 3,
+      variant: ref,
       generatedAt: iso(options.now),
       evaluation: {
         id: evaluation.id,
@@ -109,7 +143,7 @@ export async function evaluationDocument(
         explanation: explanationOrNull(explanation),
       })),
     },
-    basename: basenameOf(evaluation, "key"),
+    basename: basenameOf(evaluation, `key${variantSuffix(ref)}`),
   };
 }
 
@@ -130,28 +164,32 @@ export function evaluationDocumentTree(found: Found<EvaluationDocumentRecord>, l
       ...explanationBlocks(item.explanation, l),
     );
   });
-  return { provenance: provenanceOf(record, { evaluationId: record.evaluation.id }, []), lang, blocks };
+  return { provenance: provenanceOf(record, { evaluationId: record.evaluation.id }, []), lang, blocks: asVariant(blocks, record.variant, l) };
 }
 
 /**
  * The hand-out (ADR-125): the record, in the paper's order. The views are a
- * digital attempt's of the paper variant (ADR-148), through the live
- * module's one builder, so the paper, its key and a paper attempt entered
- * later agree item for item, choice for choice and value for value
- * (ADR-097). The variant's seed and values map go nowhere.
+ * digital attempt's of variant `variant` of the paper (ADR-148), through the
+ * live module's one builder, so the paper, its key and a paper attempt
+ * entered on it later agree item for item, choice for choice and value for
+ * value (ADR-097). The variant's seed and values map go nowhere. Without a
+ * `variant` — a student's blank print of a series — it is variant 1, named
+ * nowhere.
  */
 export async function handout(
   db: Db,
   evaluation: EvaluationRecord,
-  options: { now: Date },
+  options: { now: Date; variant?: number },
 ): Promise<Found<HandoutRecord>> {
   const items = await printableItems(db, evaluation, "handout");
-  const variant = await paperVariant(db, evaluation, items, options.now);
+  const ref = options.variant === undefined ? null : await variantOf(db, evaluation, options.variant);
+  const variant = await paperVariant(db, evaluation, items, options.now, ref?.number ?? 1);
   const view = await live.previewView(db, evaluation, options.now, variant, items);
   return {
     record: {
       kind: "handout",
-      version: 1,
+      version: 2,
+      variant: ref,
       generatedAt: iso(options.now),
       evaluation: { id: evaluation.id, title: evaluation.title, totalPoints: view.evaluation.totalPoints },
       items: view.items.map((item) => ({
@@ -165,7 +203,7 @@ export async function handout(
         statement: item.student,
       })),
     },
-    basename: basenameOf(evaluation, "handout"),
+    basename: basenameOf(evaluation, `handout${variantSuffix(ref)}`),
   };
 }
 
@@ -189,5 +227,5 @@ export function handoutTree(found: Found<HandoutRecord>, lang: Lang): Document {
       ...scopeZones(item.id, [...type.statementDoc!(item.statement, l), ...type.answerZone!(item.statement)]),
     );
   });
-  return { provenance: provenanceOf(record, { evaluationId: record.evaluation.id }, []), lang, blocks };
+  return { provenance: provenanceOf(record, { evaluationId: record.evaluation.id }, []), lang, blocks: asVariant(blocks, record.variant, l) };
 }

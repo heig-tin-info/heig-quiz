@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   answerZone,
+  booklet,
   choices,
   code,
   drawing,
@@ -221,5 +222,18 @@ describe("renderTypst", () => {
     expect(bodyOf(source)).toBe(
       '#heading(level: 1)[\\#import \\"\\@preview\\/x:0\\.1\\.0\\": \\*]\n\n\\#import \\"\\@preview\\/x:0\\.1\\.0\\": \\*\n\n',
     );
+  });
+
+  it("prints a booklet between its start and its end, its label as markup, its title the document's (ADR-148)", () => {
+    const { source } = renderTypst(
+      doc([booklet("B", "Variant B #[x]", [heading(1, "Exam B"), ...scopeZones("i1", [answerZone("lines")])])], "de"),
+    );
+    const body = bodyOf(source);
+    expect(body.startsWith('#booklet-start("B", [Variant B \\#\\[x\\]])')).toBe(true);
+    expect(body.trim().endsWith('#booklet-end("B")')).toBe(true);
+    expect(body).toContain('#zone("i1", "lines"');
+    // The title is the first level-1 heading, inside a booklet too; the footer's word is the document's language.
+    expect(source).toContain('#set document(title: "Exam B"');
+    expect(source).toContain('#"S."');
   });
 });

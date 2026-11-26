@@ -10,6 +10,7 @@
  * metadata (`query(<provenance>)`) and as the PDF's own title and author.
  */
 import {
+  flatBlocks,
   number,
   type AnswerZone,
   type Block,
@@ -22,7 +23,7 @@ import { PX_MM, toSvg, type Drawing } from "../drawing.js";
 import { labelled, LABELS, type Labels } from "../labels.js";
 import { rawBlock, typstLine, typstString, typstTable, typstText, typstValue } from "./escape.js";
 import { markdownToTypst, typstContext, type AssetRef, type TypstContext } from "./markdown.js";
-import { MARGIN_MM, PAGE_MM, pageSetup, PREAMBLE } from "./template.js";
+import { BOOKLETS, MARGIN_MM, PAGE_MM, pageSetup, PREAMBLE } from "./template.js";
 
 export interface RenderedTypst {
   /** `main.typ`, without its {@link drawable} line. */
@@ -194,13 +195,18 @@ function block(b: Block, l: Labels, ctx: TypstContext, zones: { n: number }): st
       return drawingBlock(b);
     case "answerZone":
       return zoneBlock(b, zones.n++, l);
+    case "booklet": {
+      const id = typstString(b.id);
+      const inner = b.blocks.map((one) => block(one, l, ctx, zones)).filter((s) => s !== "");
+      return [`#booklet-start(${id}, [${typstLine(b.label)}])`, ...inner, `#booklet-end(${id})`].join("\n\n");
+    }
   }
 }
 
 /** The document's title: its first level-1 heading, else its kind. */
 const titleOf = (doc: Document): string =>
-  doc.blocks.find((b): b is Extract<Block, { kind: "heading" }> => b.kind === "heading" && b.level === 1)?.text ??
-  doc.provenance.kind;
+  flatBlocks(doc.blocks).find((b): b is Extract<Block, { kind: "heading" }> => b.kind === "heading" && b.level === 1)
+    ?.text ?? doc.provenance.kind;
 
 /** The whole `main.typ` of `doc`, but its {@link drawable} line. */
 export function renderTypst(doc: Document, options: TypstOptions = {}): RenderedTypst {
@@ -215,7 +221,8 @@ export function renderTypst(doc: Document, options: TypstOptions = {}): Rendered
   const provenance = typstValue({ export: { kind, format: "pdf", version }, source, attempts, generatedAt, app });
   return {
     source: [
-      pageSetup(typstString(titleOf(doc).replace(/\s+/g, " ").trim()), typstString(doc.lang)),
+      BOOKLETS.trim(),
+      pageSetup(typstString(titleOf(doc).replace(/\s+/g, " ").trim()), typstString(doc.lang), typstString(labels.pageShort)),
       PREAMBLE.trim(),
       `#metadata(${provenance}) <provenance>`,
       body,
