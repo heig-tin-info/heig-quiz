@@ -29,7 +29,7 @@
 import type { GradebookStaff, GradebookStaffCell } from "@quiz/contracts";
 import { countsInMean } from "@quiz/domain";
 
-import { csvFile, grade, HEADER_MAX, line, type NumericField } from "../../csv.js";
+import { csvFile, grade, headerLabel, line, type NumericField } from "../../csv.js";
 
 /** What a column header ends with while the column is not released: its grades are not in the mean. */
 const UNRELEASED_SUFFIX = " (unreleased)";
@@ -49,11 +49,12 @@ export function gradebookCsv(table: GradebookStaff): string {
     "email",
     "last_name",
     "first_name",
-    ...table.columns.map((c) => `${c.title.slice(0, HEADER_MAX)}${c.released ? "" : UNRELEASED_SUFFIX}`),
-    ...components.map((k) => k.name.slice(0, HEADER_MAX)),
+    ...table.columns.map((c) => `${headerLabel(c.title)}${c.released ? "" : UNRELEASED_SUFFIX}`),
+    ...components.map((k) => headerLabel(k.name)),
     "mean",
   ];
-  const names = new Map(components.map((k) => [k.id, k.name]));
+  // The label of the component's own column, so the `component` line reads against the header.
+  const names = new Map(components.map((k) => [k.id, headerLabel(k.name)]));
   const componentLine =
     components.length === 0
       ? []

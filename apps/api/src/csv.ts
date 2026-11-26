@@ -20,7 +20,16 @@ export const BOM = "﻿";
 export const SEPARATOR = ";";
 
 /** A column header built from a name (an item's, an activity's) is truncated to this (§4.6). */
-export const HEADER_MAX = 30;
+const HEADER_MAX = 30;
+
+/**
+ * A column header built from a name (an item's, an activity's, a component's):
+ * no comma, then cut at {@link HEADER_MAX}. A spreadsheet whose list separator
+ * is the comma cuts a `;` line at its commas, and that line alone (#1224);
+ * quoting does not stop it. Only labels are rewritten, never a person's name.
+ */
+export const headerLabel = (name: string): string =>
+  name.replace(/(\s*,\s*)+/g, " ").trim().slice(0, HEADER_MAX);
 
 /**
  * RFC-4180 quoting, with the separator of these files. A field is quoted only
