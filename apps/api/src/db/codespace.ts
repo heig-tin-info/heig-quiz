@@ -11,7 +11,7 @@
  * secret: the launch token is never stored (its `jti` is in the audit log).
  */
 import { sql } from "drizzle-orm";
-import { bigint, check, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, check, index, integer, pgTable, primaryKey, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { ADMISSION_IN_FLIGHT, ADMISSION_STATES, IMAGE_REFUSALS } from "@quiz/contracts";
 import { COLLECTION_FAILURE_REASONS, COLLECTION_OUTCOMES } from "@quiz/domain";
@@ -132,24 +132,33 @@ export const codespaceLaunches = pgTable(
 );
 
 /**
- * The staff's review launches (ADR-129 §6): per (staff member, repository),
- * until when the portal may ask for the read token of the review session
- * just launched — the launch time plus `REVIEW_GRANT_MINUTES`, by the
- * database's clock, moved by every launch. The token route's only proof
- * that this user launched a review of this repository; never a credential.
+ * The staff's review launches (ADR-129 §6): per (staff member, project,
+ * repository), until when the portal may ask for the read token of the
+ * review session just launched — the launch time plus
+ * `REVIEW_GRANT_MINUTES`, by the database's clock, moved by every launch.
+ * `project_repo_id` null is the project's distribution repository (ADR-147
+ * §4), which has no `project_repos` row; one row per target, nulls not
+ * distinct. The token route's only proof that this user launched a review
+ * of this target; never a credential.
  */
 export const codespaceReviews = pgTable(
   "codespace_reviews",
   {
+    /** A surrogate key: the target's `project_repo_id` may be null, so no natural primary key exists. */
+    id: uuid("id").primaryKey(),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    projectRepoId: uuid("project_repo_id")
+    projectId: uuid("project_id")
       .notNull()
-      .references(() => projectRepos.id, { onDelete: "cascade" }),
+      .references(() => projects.id, { onDelete: "cascade" }),
+    projectRepoId: uuid("project_repo_id").references(() => projectRepos.id, { onDelete: "cascade" }),
     grantUntil: timestamp("grant_until", { withTimezone: true }).notNull(),
   },
-  (t) => [primaryKey({ columns: [t.userId, t.projectRepoId] })],
+  (t) => [
+    unique("codespace_reviews_target_uq").on(t.userId, t.projectId, t.projectRepoId).nullsNotDistinct(),
+    index("codespace_reviews_project_idx").on(t.projectId),
+  ],
 );
 
 /**

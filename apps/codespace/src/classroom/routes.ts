@@ -107,6 +107,7 @@ import {
   isOpen,
   isReview,
   liveReviewSessionIds,
+  reviewAssignmentId,
   splitRepoRef,
   upsertAssignment,
 } from "../sessions/store.js";
@@ -589,8 +590,9 @@ async function classroomRoutesImpl(
     if (!repo) return refuse("reviewRepoMissing", "repo-missing");
 
     // One assignment per reviewed repository, never the project's own: its
-    // sessions are never listed among the project's (ADR-129 §10).
-    const id = `${REVIEW_ASSIGNMENT_PREFIX}${claims.projectRepoId}`;
+    // sessions are never listed among the project's (ADR-129 §10). A null
+    // repository id is the project's distribution (ADR-147 §4).
+    const id = reviewAssignmentId(claims);
     return oneReviewAtATime(claims.sub, async () => {
       // A staff member keeps one live review session (ADR-129 §1): a new one
       // replaces the previous, which therefore counts against neither cap.
@@ -608,8 +610,10 @@ async function classroomRoutesImpl(
         title: repo.fullName,
         mode: "lab",
         image: config.CODESPACE_DEFAULT_IMAGE,
-        // The staff's review runs the platform's image, never a course's (ADR-146 §3).
-        imageRef: null,
+        // The project's image, as Quiz names it in the token; null the default
+        // (ADR-147 §6, reversing ADR-146 §3 for reviews). Not admitted: the
+        // start refuses it, like a student's.
+        imageRef: claims.image,
         uploadPack: true,
         templateRepo: null,
         targetRepo: null,
@@ -740,7 +744,9 @@ async function classroomRoutesImpl(
       // no container was started.
       if (err instanceof ImageNotAdmittedError) {
         request.log.warn({ launch: { jti: claims.jti, assignmentId: assignment.id, login: user.login, image: err.reference } }, "launch refused: the image is not admitted");
-        return html(reply, 409, errorPage(lang, t(lang, "imageRefusedTitle"), t(lang, "imageRefusedDetail")));
+        // A staff member's review is told where the image is managed, not to ask a teacher (ADR-147 §6).
+        const detail = isReview(assignment) ? "reviewImageRefusedDetail" : "imageRefusedDetail";
+        return html(reply, 409, errorPage(lang, t(lang, "imageRefusedTitle"), t(lang, detail)));
       }
       // The student's repository could not be fetched: **no container was
       // started** and the session does not open. Opening the editor on an empty

@@ -136,7 +136,7 @@ When an image is **refused**, its row says why, with the check's own words quote
 
 In the project's **Settings**, **Where students work** set to the online workspace, choose the **Image**: **Default (quiz-base)** or one of the course's ready images. The choice may change at any time: a workspace started afterwards (a new one, a resume, a restart) runs the new image, and a workspace already running keeps its own. An image a project uses cannot be removed from the course.
 
-Your own **Open in workspace** on a student's repository, and the reading of a workspace at the deadline, always run quiz-base.
+Your own **Open in workspace**, on a student's repository or on the distribution repository, runs the project's image too, so you can try the image before the students do: open the distribution from the project's page, even on a draft, and build there (see [Projects](projects.md#open-the-distribution-repository-in-the-workspace)). The reading of a workspace at the deadline always runs quiz-base.
 
 ## Update it: Refresh
 

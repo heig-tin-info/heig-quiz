@@ -200,13 +200,17 @@ These are the tools of **quiz-base**, the default image. A lab that needs others
 
 ### Open a student's repository in the workspace
 
-Any member of the course's staff can open a student's (or a group's) repository in the online workspace, whatever the project's work mode, own tools included: **Open in workspace**, the laptop icon at the end of its row or the button of its page. You build, run and browse the code and its history there, read-only: nothing is ever pushed. It is offered as long as the repository exists on GitHub; on a project in Safe Exam Browser, only once that repository's deadline has passed. One repository at a time: opening another closes the previous one. It counts against the same owner's workspaces as the students' (at most two such sessions at once), and is not there when that owner's account is not enabled for the workspace. Every opening is recorded in the audit log; the student is not notified. *(ADR-129.)*
+Any member of the course's staff can open a student's (or a group's) repository in the online workspace, whatever the project's work mode, own tools included: **Open in workspace**, the laptop icon at the end of its row or the button of its page. You build, run and browse the code and its history there, read-only: nothing is ever pushed. It is offered as long as the repository exists on GitHub; on a project in Safe Exam Browser, only once that repository's deadline has passed. One repository at a time: opening another closes the previous one. It counts against the same owner's workspaces as the students' (at most two such sessions at once), and is not there when that owner's account is not enabled for the workspace. Every opening is recorded in the audit log; the student is not notified. The session runs the project's image when it has one in an online mode, quiz-base otherwise. *(ADR-129, ADR-147.)*
 
 <figure markdown="span">
   ![A repository's page with Open in workspace, read-only](../assets/screenshots/mock-project-open-in-workspace-light.png#only-light)
   ![A repository's page with Open in workspace, read-only](../assets/screenshots/mock-project-open-in-workspace-dark.png#only-dark)
   <figcaption>Opening a student's repository in the workspace. (Mock data.)</figcaption>
 </figure>
+
+### Open the distribution repository in the workspace
+
+An owner of the course (the **Teacher** role, not an **Assistant**) can open the **distribution repository**, what every student receives, in the online workspace: the laptop icon beside its link, under **Work handed out** on a draft or a scheduled project, in the **Source** tile once published. It runs the project's image, so you build and run the lab as students will before anyone sees it. It is read-only like a student's repository: you may commit there, nothing goes back to GitHub, and the distribution changes only through **Sync**. It is offered in every state of the project but archived, Safe Exam Browser included, once the distribution is built. It shares the one-at-a-time rule and the limits above. *(ADR-147.)*
 
 ## Archive and delete
 

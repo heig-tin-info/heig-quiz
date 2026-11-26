@@ -39,6 +39,18 @@ export const JTI_RETENTION_AFTER_EXP_MS = (HS256_SKEW_SECONDS + 60) * 1000;
 export const REVIEW_ASSIGNMENT_PREFIX = "review-";
 
 /**
+ * The portal's id of a review assignment (ADR-129 §10): `review-<projectRepoId>`
+ * for a repository, `review-dist-<projectId>` for a project's distribution
+ * repository (ADR-147 §4; a uuid never starts with `dist-`, so the two never
+ * meet). Both under the reserved prefix: the same sweep, the same refusal of a sync.
+ */
+export function reviewAssignmentId(target: { projectId: string; projectRepoId: string | null }): string {
+  return target.projectRepoId === null
+    ? `${REVIEW_ASSIGNMENT_PREFIX}dist-${target.projectId}`
+    : `${REVIEW_ASSIGNMENT_PREFIX}${target.projectRepoId}`;
+}
+
+/**
  * At most this many live review sessions per quota holder (ADR-129 §3), so
  * that reviews cannot starve the students. The portal alone enforces it.
  */

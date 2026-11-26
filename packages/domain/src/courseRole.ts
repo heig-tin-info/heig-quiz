@@ -21,6 +21,11 @@ export interface CourseRoleFacts {
  * Super Powers make an owner; otherwise the seat's own role, and null for a
  * caller without a seat (who never got past `staffAccess` in the first place).
  * An admin WITHOUT Super Powers resolves like any teacher.
+ *
+ * Encoded a second time in SQL, for a user with no session in hand:
+ * `userReachesCourse(…, "owner")` of `apps/api/src/modules/guards.ts` (the
+ * distribution's review token route, ADR-147 §5). A change to one is a
+ * change to both.
  */
 export function effectiveCourseRole(facts: CourseRoleFacts): CourseRoleName | null {
   if (facts.reachesAll) return "owner";

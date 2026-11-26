@@ -515,9 +515,18 @@ function superPowersHeld(userId: string): SQL {
  * the course (`courseId`, in the query's scope) while the account's STORED
  * role is staff, as the pool predicates read it — a seat kept by an account
  * demoted to student opens nothing (ADR-013 rule 5).
+ *
+ * `role: "owner"` narrows it to what {@link requireCourseRole}`(owner)` lets
+ * through (the distribution's review, ADR-147 §5): Super Powers, under which
+ * an administrator is an owner (`effectiveCourseRole`, whose SQL twin this
+ * is), or an OWNER seat.
  */
-export function userReachesCourse(userId: string, courseId: AnyColumn | SQL): SQL {
-  return sql`(${superPowersHeld(userId)} OR (${staffAccount(userId)} AND ${staffAccess(userId, courseId)}))`;
+export function userReachesCourse(userId: string, courseId: AnyColumn | SQL, role?: "owner"): SQL {
+  const seat =
+    role === undefined
+      ? staffAccess(userId, courseId)
+      : sql`EXISTS (SELECT 1 FROM ${courseStaff} WHERE ${courseStaff.courseId} = ${courseId} AND ${courseStaff.userId} = ${userId} AND ${courseStaff.role} = ${role})`;
+  return sql`(${superPowersHeld(userId)} OR (${staffAccount(userId)} AND ${seat}))`;
 }
 
 /**

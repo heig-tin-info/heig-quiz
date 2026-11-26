@@ -1044,6 +1044,37 @@ describe("GET /review", () => {
     ]);
     // The staff member's own account, with no role (portal invariant 9).
     expect(h.db.all<{ role: string }>("SELECT role FROM users WHERE login = 'u-sam'")).toEqual([{ role: "student" }]);
+    // No image claim (an older platform): the default.
+    expect(row?.imageRef).toBeNull();
+  });
+
+  it("runs the project's image the token names (ADR-147 §6)", async () => {
+    const image = `ghcr.io/heig/lab-go@sha256:${"e".repeat(64)}`;
+    expect((await review({ image })).statusCode).toBe(303);
+    expect(findAssignment(h.db, `review-${REPO_A}`)?.imageRef).toBe(image);
+    // A later launch without it goes back to the default.
+    expect((await review({ image: null })).statusCode).toBe(303);
+    expect(findAssignment(h.db, `review-${REPO_A}`)?.imageRef).toBeNull();
+  });
+
+  it("opens the project's distribution on its own assignment, a review like the others (ADR-147 §4)", async () => {
+    const reply = await review({ projectRepoId: null, repo: { fullName: "org/tp-squashed", defaultBranch: "main" } });
+    expect(reply.statusCode).toBe(303);
+    expect(reply.headers.location).toBe(`/s/sess-u-sam-review-dist-${PROJECT}/`);
+    const row = findAssignment(h.db, `review-dist-${PROJECT}`);
+    expect(row).toMatchObject({ title: "org/tp-squashed", teacherId: "t-tania", reviewOf: { projectId: PROJECT, projectRepoId: null } });
+    expect(h.starts.at(-1)).toMatchObject({ assignmentId: `review-dist-${PROJECT}`, opts: { targetRepo: { fullName: "org/tp-squashed" } } });
+    // One review per staff member: a repository's review now replaces it.
+    await liveReview("u-sam", REPO_A);
+    expect(h.closes).toEqual([`sess-u-sam-review-dist-${PROJECT}`]);
+  });
+
+  it("tells a staff member where the image is managed when it is not admitted", async () => {
+    startFails = new ImageNotAdmittedError(`ghcr.io/heig/lab@sha256:${"d".repeat(64)}`);
+    const reply = await review({ image: `ghcr.io/heig/lab@sha256:${"d".repeat(64)}` });
+    expect(reply.statusCode).toBe(409);
+    expect(reply.body).toContain("onglet Images du cours");
+    expect(reply.headers["set-cookie"]).toBeUndefined();
   });
 
   it("a review token never opens /launch, nor a launch token /review", async () => {

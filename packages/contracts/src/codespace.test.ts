@@ -47,6 +47,8 @@ import {
   RelayHeadsClaims,
   LAUNCH_AUDIENCE,
   LaunchTokenClaims,
+  REVIEW_AUDIENCE,
+  ReviewLaunchTokenClaims,
   SERVICE_AUDIENCE,
   SITTING_CLOSE_AUDIENCE,
   SittingCloseClaims,
@@ -99,6 +101,39 @@ describe("tokens signed by heig-classroom", () => {
     expect(await verifyHs256(FIXTURE.launch, FIXTURE.secret, { ...o, audience: SERVICE_AUDIENCE })).toEqual({ ok: false, reason: "bad-audience" });
     expect(await verifyHs256(FIXTURE.launch, FIXTURE.secret, { ...o, issuer: "heig-quiz" })).toEqual({ ok: false, reason: "bad-issuer" });
     expect(await verifyHs256(FIXTURE.launch, FIXTURE.secret, { ...o, now: () => 1790000400 })).toEqual({ ok: false, reason: "expired" });
+  });
+});
+
+describe("ReviewLaunchTokenClaims (ADR-129 §7, ADR-147 §4)", () => {
+  const claims = {
+    iss: "heig-quiz",
+    aud: REVIEW_AUDIENCE,
+    iat: 1,
+    exp: 301,
+    jti: "j",
+    sub: "u1",
+    email: "a@b.ch",
+    displayName: "A",
+    githubLogin: null,
+    repo: { fullName: "org/lab-dist", defaultBranch: "main" },
+    projectId: "11111111-1111-4111-8111-111111111111",
+    projectRepoId: "22222222-2222-4222-8222-222222222222",
+    holder: { id: "h", email: "h@b.ch" },
+    maxActiveSessions: 5,
+  };
+  const digest = `ghcr.io/heig/lab@sha256:${"c".repeat(64)}`;
+
+  it("names a repository, or the distribution by a null repository id; the image defaults to null", () => {
+    expect(ReviewLaunchTokenClaims.parse(claims).image).toBeNull();
+    expect(ReviewLaunchTokenClaims.parse({ ...claims, projectRepoId: null }).projectRepoId).toBeNull();
+    expect(ReviewLaunchTokenClaims.parse({ ...claims, image: digest }).image).toBe(digest);
+  });
+
+  it("refuses an image by tag, a missing repository id and the student's audience", () => {
+    expect(ReviewLaunchTokenClaims.safeParse({ ...claims, image: "ghcr.io/heig/lab:latest" }).success).toBe(false);
+    const { projectRepoId: _, ...without } = claims;
+    expect(ReviewLaunchTokenClaims.safeParse(without).success).toBe(false);
+    expect(ReviewLaunchTokenClaims.safeParse({ ...claims, aud: LAUNCH_AUDIENCE }).success).toBe(false);
   });
 });
 
@@ -312,6 +347,14 @@ describe("the relay's token and declaration (ADR-078 §2)", () => {
     expect(GitTokenRequestClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE, repository: "lab-kid" }).success).toBe(false);
     expect(GitTokenRequestClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE, projectId: "p-1" }).success).toBe(false);
     expect(GitTokenRequestClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE, userId: "u-1" }).success).toBe(false);
+  });
+
+  it("names one review target at most: a repository or the distribution (ADR-147 §5)", () => {
+    const ask = (extra: object) => GitTokenRequestClaims.safeParse({ ...base, aud: GIT_TOKEN_AUDIENCE, ...extra }).success;
+    expect(ask({ reviewDistribution: true })).toBe(true);
+    expect(ask({ reviewRepoId: base.userId })).toBe(true);
+    expect(ask({ reviewRepoId: base.userId, reviewDistribution: true })).toBe(false);
+    expect(ask({ reviewDistribution: false })).toBe(false);
   });
 
   it("declares 1 to 50 heads, each a ref and a full SHA-1", () => {

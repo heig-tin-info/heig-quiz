@@ -13,6 +13,12 @@ stated to the owner and not objected to.
   `:<VERSION>` tag pushed from `main` is a candidate; it becomes a release
   once the approved production deploy has pinned, tested and switched to
   it ([amendment](#amendment-2026-11-25-candidate-tags)).
+- 2026-11-26, amended by [ADR-147](ADR-147-depot-de-distribution-dans-l-espace-de-travail.md)
+  (product owner: *"la règle du 25 novembre pose un problème il faut la
+  changer"*; scope: decision 3 and the review sentence of decision 9): the
+  staff's review sessions run the project's image; the collection's reader
+  and the portal's helper containers stay on the default
+  ([amendment](#amendment-2026-11-26-reviews-run-the-projects-image)).
 
 Scope: which container image a student's online workspace session runs,
 where it comes from, who chooses it and what Quiz checks before running it.
@@ -71,7 +77,9 @@ know what the students run, only that the image keeps the contract.
 3. **The platform's own runs are `quiz-base`, never a course image.** The
    default image (`CODESPACE_DEFAULT_IMAGE`), the confined reader of the
    deadline collection (`CODESPACE_IMAGE`, ADR-130) and the staff's review
-   sessions (ADR-129 §10) run the current `quiz-base` release by digest;
+   sessions (ADR-129 §10; *amended 2026-11-26: they run the project's
+   image, [below](#amendment-2026-11-26-reviews-run-the-projects-image)*)
+   run the current `quiz-base` release by digest;
    both variables move together, by a deploy that pulled the release
    first. The released set (the digests of every `quiz-base` release) is a
    portal configuration list, changed by a deploy.
@@ -208,3 +216,22 @@ it. So:
 - Decision 5's prefix check admits a course image only on a **released**
   base: an image derived from a candidate that never became a release is
   refused (`not_on_base`).
+
+## Amendment 2026-11-26: reviews run the project's image
+
+*Product owner, 2026-11-26: "la règle du 25 novembre pose un problème il
+faut la changer". [ADR-147](ADR-147-depot-de-distribution-dans-l-espace-de-travail.md)
+§6 and §8 own the rule; scope: decision 3 and decision 9's sentence on
+review sessions.*
+
+- **Decision 3** now reads: the default image and the confined reader of
+  the deadline collection run `quiz-base`, and so do the portal's helper
+  containers (the review wipe, the admission); the staff's review sessions
+  (ADR-129), and an owner's session on the distribution repository
+  (ADR-147), run **the project's image**, the default when it has none or
+  works in the students' own tools.
+- **Decision 9**: "Decision 3 keeps the staff's review sessions out of it"
+  no longer holds. A course image now reaches a staff member's browser,
+  beside their sessions of other courses, and renders students' notebook
+  outputs there; both risks are accepted by the product owner (ADR-147 §8).
+  One origin per session (open question 70, #1217) stays the fix.

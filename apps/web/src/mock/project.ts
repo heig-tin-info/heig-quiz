@@ -134,6 +134,7 @@ import {
   reviewState,
   roundPoints,
   teacherScoreMax,
+  distributionReviewRefusal,
   staffReviewRefusal,
   weekOf,
   windowExtendRefusal,
@@ -2151,6 +2152,21 @@ on("POST", "/app/api/projects/:id/repos/:rid/workspace/review", (m): WorkspaceRe
   });
   if (refusal) throw refuse(409, refusal, refusal);
   return { url: `https://workspace.heig-vd.example/review?token=mock-${r.id}` };
+});
+
+/** An owner's review session of the distribution (ADR-147 §4): an assistant's 403, then THE rule of `@quiz/domain`. */
+on("POST", "/app/api/projects/:id/workspace/distribution", (m): WorkspaceReview => {
+  const ws = mockWorkspace(m.groups!.id!);
+  const p = projectOr404(m.groups!.id!);
+  if (!ws.distributionReview) throw refuse(403, "owner_required", "Only an owner of this course may do that");
+  const refusal = distributionReviewRefusal({
+    holderGranted: ws.review,
+    classroomArchived: rooms.find((room) => room.id === p.classroom.id)?.archivedAt != null,
+    projectArchived: p.summary.archivedAt !== null,
+    distributionBuilt: p.summary.distribution !== null,
+  });
+  if (refusal) throw refuse(409, refusal, refusal);
+  return { url: `https://workspace.heig-vd.example/review?token=mock-dist-${p.summary.id}` };
 });
 on("POST", "/app/api/projects/:id/repos/:rid/unlock", (m) => setLock(m, false));
 

@@ -300,8 +300,15 @@ export function quotaHolder(creatorId: string, owners: readonly OwnerSeat[]): st
 
 // ---------------------------------------------------------------- the staff's review session (ADR-129)
 
+/**
+ * The refusals both kinds of review share (ADR-129 §5 rows 4–5, ADR-147 §3),
+ * in order: the holder's grant, then the archives ({@link reviewGateRefusal}).
+ */
+const REVIEW_GATE_REFUSALS = ["review_not_granted", "review_archived"] as const;
+type ReviewGateRefusalCode = (typeof REVIEW_GATE_REFUSALS)[number];
+
 /** Why a review session of a repository is refused (ADR-129 §5, rows 4–7): {@link staffReviewRefusal}. */
-export const STAFF_REVIEW_REFUSALS = ["review_not_granted", "review_archived", "review_repo_unavailable", "review_exam_open"] as const;
+export const STAFF_REVIEW_REFUSALS = [...REVIEW_GATE_REFUSALS, "review_repo_unavailable", "review_exam_open"] as const;
 export type StaffReviewRefusalCode = (typeof STAFF_REVIEW_REFUSALS)[number];
 
 /** The facts {@link staffReviewRefusal} decides on. */
@@ -326,11 +333,49 @@ export interface StaffReviewFacts {
  * deadline strategy (§2). Null: the review may open.
  */
 export function staffReviewRefusal(facts: StaffReviewFacts): StaffReviewRefusalCode | null {
-  if (!facts.holderGranted) return "review_not_granted";
-  if (facts.classroomArchived || facts.projectArchived) return "review_archived";
+  const gate = reviewGateRefusal(facts);
+  if (gate !== null) return gate;
   if (!isLiveRepo(facts.repo) || facts.repo.githubRepoId === null) return "review_repo_unavailable";
   if (facts.workMode === "online_seb" && facts.repo.deadlineAppliedAt === null) return "review_exam_open";
   return null;
+}
+
+type ReviewGateFacts = Pick<StaffReviewFacts, "holderGranted" | "classroomArchived" | "projectArchived">;
+
+/** The rows both kinds of review share ({@link REVIEW_GATE_REFUSALS}). */
+function reviewGateRefusal(facts: ReviewGateFacts): ReviewGateRefusalCode | null {
+  if (!facts.holderGranted) return "review_not_granted";
+  if (facts.classroomArchived || facts.projectArchived) return "review_archived";
+  return null;
+}
+
+/**
+ * Why an owner's review session of a project's distribution repository is
+ * refused (ADR-147 §3): {@link distributionReviewRefusal}.
+ */
+export const DISTRIBUTION_REVIEW_REFUSALS = [...REVIEW_GATE_REFUSALS, "review_distribution_missing"] as const;
+export type DistributionReviewRefusalCode = (typeof DISTRIBUTION_REVIEW_REFUSALS)[number];
+
+/** The facts {@link distributionReviewRefusal} decides on. */
+export interface DistributionReviewFacts extends ReviewGateFacts {
+  /** The project's distribution repository is built: its name and GitHub id stored. */
+  distributionBuilt: boolean;
+}
+
+/**
+ * THE rule of the distribution's review session (ADR-147 §3), the launch
+ * route's, the token route's and the page's, in order: the quota holder
+ * holds no enabled grant (`review_not_granted`), the classroom or the
+ * project archived (`review_archived`), no distribution repository built
+ * (`review_distribution_missing`). Never the project's state (draft,
+ * scheduled, open or closed alike), its mode, a deadline or a lock. Who
+ * may ask, an owner, is the loader's step, not this rule's. Null: the
+ * session may open.
+ */
+export function distributionReviewRefusal(facts: DistributionReviewFacts): DistributionReviewRefusalCode | null {
+  const gate = reviewGateRefusal(facts);
+  if (gate !== null) return gate;
+  return facts.distributionBuilt ? null : "review_distribution_missing";
 }
 
 // ---------------------------------------------------------------- the git relay's tokens (ADR-078)

@@ -80,6 +80,7 @@ const en = {
   // --- an image the portal has not admitted (ADR-146 §5)
   imageRefusedTitle: "Workspace not ready",
   imageRefusedDetail: "This project's image is not ready on the workspace server. Your work is kept. Tell your teacher.",
+  reviewImageRefusedDetail: "This project's image is not ready on the workspace server. Check it in the course's Images tab in Quiz.",
   portProxyTitle: "Port forwarding unavailable",
   portProxyDetail: "The online workspace does not open a program's ports in the browser.",
 };
@@ -153,6 +154,8 @@ const fr: Record<MessageKey, string> = {
   imageRefusedTitle: "Espace de travail pas prêt",
   imageRefusedDetail:
     "L'image de ce projet n'est pas prête sur le serveur de l'espace de travail. Votre travail est conservé. Signalez-le à l'équipe enseignante.",
+  reviewImageRefusedDetail:
+    "L'image de ce projet n'est pas prête sur le serveur de l'espace de travail. Voir l'onglet Images du cours dans Quiz.",
   portProxyTitle: "Redirection de port indisponible",
   portProxyDetail: "L'espace de travail en ligne n'ouvre pas les ports d'un programme dans le navigateur.",
 };
@@ -224,6 +227,8 @@ const de: Record<MessageKey, string> = {
   imageRefusedTitle: "Arbeitsbereich nicht bereit",
   imageRefusedDetail:
     "Das Image dieses Projekts ist auf dem Server des Arbeitsbereichs nicht bereit. Ihre Arbeit bleibt erhalten. Wenden Sie sich an das Lehrteam.",
+  reviewImageRefusedDetail:
+    "Das Image dieses Projekts ist auf dem Server des Arbeitsbereichs nicht bereit. Prüfen Sie es im Tab Images des Kurses in Quiz.",
   portProxyTitle: "Portweiterleitung nicht verfügbar",
   portProxyDetail: "Der Online-Arbeitsbereich öffnet die Ports eines Programms nicht im Browser.",
 };
@@ -296,6 +301,8 @@ const it: Record<MessageKey, string> = {
   imageRefusedTitle: "Spazio di lavoro non pronto",
   imageRefusedDetail:
     "L'immagine di questo progetto non è pronta sul server dello spazio di lavoro. Il lavoro è conservato. Informare il team docente.",
+  reviewImageRefusedDetail:
+    "L'immagine di questo progetto non è pronta sul server dello spazio di lavoro. Verificarla nella scheda Immagini del corso in Quiz.",
   portProxyTitle: "Inoltro delle porte non disponibile",
   portProxyDetail: "Lo spazio di lavoro online non apre nel browser le porte di un programma.",
 };
