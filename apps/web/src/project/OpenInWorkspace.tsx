@@ -125,7 +125,7 @@ export function OpenDistributionIcon({ project }: { project: ProjectDetail }) {
   });
   if (refusal !== null) return null;
   return (
-    <IconButton label={t("project.distribution.openInWorkspace")} aria-busy={busy} disabled={busy} onClick={launch}>
+    <IconButton label={t("project.distribution.openInWorkspace")} className="shrink-0" aria-busy={busy} disabled={busy} onClick={launch}>
       {busy ? <Loader2 className="animate-spin" /> : <Laptop />}
     </IconButton>
   );

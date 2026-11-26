@@ -300,8 +300,15 @@ export function quotaHolder(creatorId: string, owners: readonly OwnerSeat[]): st
 
 // ---------------------------------------------------------------- the staff's review session (ADR-129)
 
+/**
+ * The refusals both kinds of review share (ADR-129 §5 rows 4–5, ADR-147 §3),
+ * in order: the holder's grant, then the archives ({@link reviewGateRefusal}).
+ */
+const REVIEW_GATE_REFUSALS = ["review_not_granted", "review_archived"] as const;
+type ReviewGateRefusalCode = (typeof REVIEW_GATE_REFUSALS)[number];
+
 /** Why a review session of a repository is refused (ADR-129 §5, rows 4–7): {@link staffReviewRefusal}. */
-export const STAFF_REVIEW_REFUSALS = ["review_not_granted", "review_archived", "review_repo_unavailable", "review_exam_open"] as const;
+export const STAFF_REVIEW_REFUSALS = [...REVIEW_GATE_REFUSALS, "review_repo_unavailable", "review_exam_open"] as const;
 export type StaffReviewRefusalCode = (typeof STAFF_REVIEW_REFUSALS)[number];
 
 /** The facts {@link staffReviewRefusal} decides on. */
@@ -335,8 +342,8 @@ export function staffReviewRefusal(facts: StaffReviewFacts): StaffReviewRefusalC
 
 type ReviewGateFacts = Pick<StaffReviewFacts, "holderGranted" | "classroomArchived" | "projectArchived">;
 
-/** The two rows both kinds of review share (ADR-129 §5 rows 4–5, ADR-147 §3): the holder's grant, then the archives. */
-function reviewGateRefusal(facts: ReviewGateFacts): "review_not_granted" | "review_archived" | null {
+/** The rows both kinds of review share ({@link REVIEW_GATE_REFUSALS}). */
+function reviewGateRefusal(facts: ReviewGateFacts): ReviewGateRefusalCode | null {
   if (!facts.holderGranted) return "review_not_granted";
   if (facts.classroomArchived || facts.projectArchived) return "review_archived";
   return null;
@@ -346,7 +353,7 @@ function reviewGateRefusal(facts: ReviewGateFacts): "review_not_granted" | "revi
  * Why an owner's review session of a project's distribution repository is
  * refused (ADR-147 §3): {@link distributionReviewRefusal}.
  */
-export const DISTRIBUTION_REVIEW_REFUSALS = ["review_not_granted", "review_archived", "review_distribution_missing"] as const;
+export const DISTRIBUTION_REVIEW_REFUSALS = [...REVIEW_GATE_REFUSALS, "review_distribution_missing"] as const;
 export type DistributionReviewRefusalCode = (typeof DISTRIBUTION_REVIEW_REFUSALS)[number];
 
 /** The facts {@link distributionReviewRefusal} decides on. */

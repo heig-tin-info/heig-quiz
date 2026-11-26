@@ -665,9 +665,10 @@ here.
 - **Check 3 gains a staff read grant on the distribution, in every mode.**
   `GitTokenRequestClaims` gains an optional `reviewDistribution: true`,
   never beside `reviewRepoId`. A request carrying it is decided by
-  ADR-147 §5 only: a fresh `codespace_distribution_reviews` record of that
-  user on that project, the user's ownership of the course re-read at the
-  request, the stored distribution's name, and `distributionReviewRefusal`;
+  ADR-147 §5 only: a fresh `codespace_reviews` record of that user on
+  that project with a null repository, the user's ownership of the course
+  re-read at the request, the stored distribution's name, and
+  `distributionReviewRefusal`;
   the grant is `contents: read` on the stored `distribution_repo_id`,
   `useUntil` = `expiresAt`, whatever the mode, the project's state, the
   deadline or a lock. Without the claim, checks 2–5 hold unchanged, and the

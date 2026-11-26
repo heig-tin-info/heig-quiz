@@ -85,6 +85,16 @@ export function basicAuthorization(token: string): string {
   return `basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`;
 }
 
+/**
+ * What a review's token request names (ADR-129 §7, ADR-147 §5): the
+ * reviewed repository's id, or `reviewDistribution` for the project's
+ * distribution, which has no repository row. Nothing outside a review.
+ */
+function reviewClaim(review: ForgeOwner["review"]): Record<string, string | true> {
+  if (!review) return {};
+  return review.projectRepoId === null ? { reviewDistribution: true } : { reviewRepoId: review.projectRepoId };
+}
+
 export function createQuizForge(opts: QuizForgeOptions): Forge {
   const base = opts.platformUrl.replace(/\/+$/, "");
   const doFetch = opts.fetchImpl ?? fetch;
@@ -116,17 +126,12 @@ export function createQuizForge(opts: QuizForgeOptions): Forge {
         exp: iat + GIT_REQUEST_TTL_SECONDS,
         jti: randomUUID(),
         // A review names the reviewed project and repository (ADR-129 §7):
-        // without `reviewRepoId` Quiz would decide the request by ADR-078's
-        // launch rule, which a staff member never meets. The distribution's
-        // review names no repository row, `reviewDistribution` instead (ADR-147 §5).
+        // without it Quiz would decide the request by ADR-078's launch rule,
+        // which a staff member never meets.
         projectId: owner.review?.projectId ?? owner.assignment,
         userId: owner.student,
         repository: fullName(repo),
-        ...(owner.review
-          ? owner.review.projectRepoId === null
-            ? { reviewDistribution: true }
-            : { reviewRepoId: owner.review.projectRepoId }
-          : {}),
+        ...reviewClaim(owner.review),
         ...extra,
       },
       opts.secret,

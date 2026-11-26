@@ -18,10 +18,16 @@
  *   recorded repository of the request's project; the token in no log line
  *   and no audit row; without the claim, the staff are still refused a
  *   student's repository; `relay-heads` unchanged.
+ * - ADR-147: an owner's review of the distribution repository
+ *   (`POST /app/api/projects/:id/workspace/distribution`) in a draft, a
+ *   scheduled, a published or an `online_seb` project; an assistant's `403
+ *   owner_required`; its refusals; the token with a null repository id; its
+ *   read grant (`reviewDistribution`) while the ownership holds; and the
+ *   project's image in every review.
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import {
@@ -37,6 +43,7 @@ import {
   REVIEW_GRANT_MINUTES,
   ReviewLaunchTokenClaims,
   WorkspaceReview,
+  workspaceDistributionPath,
   workspaceReviewPath,
 } from "@quiz/contracts";
 import { signHs256, verifyHs256 } from "@quiz/domain";
@@ -49,6 +56,7 @@ import {
   codespaceProjects,
   codespaceReviews,
   courseStaff,
+  courseWorkspaceImages,
   projectGroups,
   projectRepos,
   projects,
@@ -65,6 +73,7 @@ import {
   PORTAL_SECRET as SECRET,
   captureLog,
   connectedClassroom,
+  digestRef,
   fakePortal,
   grantedTeacher as grantedWith,
   scopedMint,
@@ -98,19 +107,31 @@ const connected = (students: { id: string }[], teacher: Person = owner) => conne
 const seat = (room: Room, userId: string, role: "owner" | "assistant") =>
   server.app.db.insert(courseStaff).values({ courseId: room.courseId, userId, role });
 
-async function project(room: Room, mode: "free" | "online" | "online_seb" = "free", by: Person = owner): Promise<ProjectSummary> {
+type Mode = "free" | "online" | "online_seb";
+type State = "draft" | "scheduled" | "published";
+
+/** A project of `room` in `mode` and `state` (published by default), its distribution built at creation. */
+async function project(room: Room, mode: Mode = "free", by: Person = owner, state: State = "published") {
+  const scheduled = state === "scheduled";
   const created = await call("POST", `/app/api/classrooms/${room.classroomId}/projects`, by.headers, {
     name: `Review ${randomUUID().slice(0, 6)}`,
     sourceRepo: "starter",
     deadlineAt: new Date(Date.now() + 7 * DAY).toISOString(),
+    ...(scheduled && { publishMode: "scheduled", startAt: new Date(Date.now() + 2 * DAY).toISOString() }),
   });
   expect(created.statusCode, created.body).toBe(201);
   const summary = ProjectSummary.parse(created.json());
-  expect((await call("POST", `/app/api/projects/${summary.id}/publish`, by.headers)).statusCode).toBe(200);
   if (mode !== "free") {
     expect((await call("PUT", `/app/api/projects/${summary.id}/workspace/mode`, by.headers, workModeBody(mode))).statusCode).toBe(200);
   }
-  return summary;
+  if (state !== "draft") {
+    const opened = await call("POST", `/app/api/projects/${summary.id}/${scheduled ? "schedule" : "publish"}`, by.headers);
+    expect(opened.statusCode, opened.body).toBe(200);
+  }
+  const [row] = await server.app.db.select().from(projects).where(eq(projects.id, summary.id));
+  expect(row!.state).toBe(state);
+  expect(row!.distributionFullName).not.toBeNull();
+  return row!;
 }
 
 const repoOf = async (projectId: string, userId: string) =>
@@ -151,8 +172,10 @@ const review = (projectId: string, repoId: string, headers: Headers = {}) => cal
 const refused = (res: { statusCode: number; json: () => { error: string } }) => [res.statusCode, res.json().error];
 
 /** A launch that succeeds: the token's claims as the portal verifies them. */
-async function launchReview(projectId: string, repoId: string, who: Person) {
-  const res = await review(projectId, repoId, who.headers);
+const launchReview = async (projectId: string, repoId: string, who: Person) => claimsOf(await review(projectId, repoId, who.headers));
+
+/** A review launch's answer: the token and its claims as the portal verifies them. */
+async function claimsOf(res: Awaited<ReturnType<typeof call>>) {
   expect(res.statusCode, res.body).toBe(200);
   expect(res.headers["cache-control"]).toBe("no-store");
   const url = new URL(WorkspaceReview.parse(res.json()).url);
@@ -222,7 +245,7 @@ describe("POST /app/api/projects/:id/repos/:rid/workspace/review (ADR-129 §5)",
     expect(Number(record!.ahead)).toBeGreaterThan(REVIEW_GRANT_MINUTES * 60 - 30);
     expect(Number(record!.ahead)).toBeLessThanOrEqual(REVIEW_GRANT_MINUTES * 60);
     const [audited] = await reviewAudits(f.lab.id);
-    expect(audited!.payload).toEqual({ projectRepoId: f.repo.id, repository: f.repo.fullName, jti: claims.jti, reach: "seats" });
+    expect(audited!.payload).toEqual({ projectRepoId: f.repo.id, repository: f.repo.fullName, jti: claims.jti, reach: "seats", image: null });
     expect(audited!.actorUserId).toBe(f.assistant.id);
 
     await launchReview(f.lab.id, f.repo.id, owner);
@@ -465,5 +488,232 @@ describe("POST /app/codespace/git-token for a review (ADR-129 §7)", () => {
     const heads = [{ ref: "refs/heads/main", sha: "a".repeat(40) }];
     const declared = await askReview(f.assistant.id, f.lab.id, f.repo.fullName!, f.repo.id, RELAY_HEADS_AUDIENCE, { heads });
     expect(refused(declared)).toEqual([404, "not_found"]);
+  });
+});
+
+// ---------------------------------------------------------------- the distribution (ADR-147)
+
+const openDistribution = (projectId: string, headers: Headers = {}) => call("POST", workspaceDistributionPath(projectId), headers);
+const launchDistribution = async (projectId: string, who: Person) => claimsOf(await openDistribution(projectId, who.headers));
+const distributionAudits = (projectId: string) =>
+  server.app.db.select().from(auditLog).where(and(eq(auditLog.action, "codespace.distribution_review_launched"), eq(auditLog.subjectId, projectId)));
+/** The distribution's review record of `projectId`: its null repository. */
+const distributionRecord = (projectId: string) => and(eq(codespaceReviews.projectId, projectId), isNull(codespaceReviews.projectRepoId));
+const askDistribution = (userId: string, projectId: string, repository: string, extra: object = { reviewDistribution: true }) =>
+  askReview(userId, projectId, repository, undefined, GIT_TOKEN_AUDIENCE, extra);
+
+/** A classroom of the owner's, an assistant on its course, and a project of it in `state` and `mode`. */
+async function distributed(state: State = "draft", mode: Mode = "free") {
+  const room = await connected([await newStudent()]);
+  const assistant = await grantedTeacher(null);
+  await seat(room, assistant.id, "assistant");
+  return { room, assistant, lab: await project(room, mode, owner, state) };
+}
+
+/** A ready course image picked by the project: its digest reference. */
+async function pickImage(room: Room, projectId: string): Promise<string> {
+  const id = randomUUID();
+  const digest = digestRef(`heig/${id.slice(0, 8)}`, "d");
+  const now = new Date();
+  await server.app.db.insert(courseWorkspaceImages).values({
+    id,
+    courseId: room.courseId,
+    name: `img-${id.slice(0, 6)}`,
+    reference: digest,
+    digestReference: digest,
+    state: "ready",
+    requestedAt: now,
+    createdBy: owner.id,
+    createdAt: now,
+    updatedAt: now,
+  });
+  await server.app.db
+    .insert(codespaceProjects)
+    .values({ projectId, imageId: id })
+    .onConflictDoUpdate({ target: codespaceProjects.projectId, set: { imageId: id } });
+  return digest;
+}
+
+describe("POST /app/api/projects/:id/workspace/distribution (ADR-147 §4)", () => {
+  it("opens a draft's distribution for an owner: a review token on it, recorded, audited, never a launch nor a sync", async () => {
+    const { lab } = await distributed("draft", "online");
+    portal.calls.length = 0;
+    const before = await server.app.db.select().from(codespaceProjects).where(eq(codespaceProjects.projectId, lab.id));
+
+    const { token, claims } = await launchDistribution(lab.id, owner);
+    expect(claims).toMatchObject({
+      sub: owner.id,
+      projectId: lab.id,
+      projectRepoId: null,
+      repo: { fullName: lab.distributionFullName, defaultBranch: lab.branches[0] },
+      holder: { id: owner.id },
+      maxActiveSessions: 5,
+      image: null,
+    });
+    const [record] = await server.app.db
+      .select({ ahead: sql<number>`extract(epoch from ${codespaceReviews.grantUntil} - now())` })
+      .from(codespaceReviews)
+      .where(and(eq(codespaceReviews.userId, owner.id), distributionRecord(lab.id)));
+    expect(Number(record!.ahead)).toBeGreaterThan(REVIEW_GRANT_MINUTES * 60 - 30);
+    // A second launch moves the one record, nulls not distinct.
+    await launchDistribution(lab.id, owner);
+    expect(await server.app.db.select().from(codespaceReviews).where(distributionRecord(lab.id))).toHaveLength(1);
+    const [audited] = await distributionAudits(lab.id);
+    expect(audited!.payload).toEqual({ repository: lab.distributionFullName, jti: claims.jti, reach: "seats", image: null });
+
+    // No launch record, no frozen mode, no sync, the project still a draft.
+    expect(await server.app.db.select().from(codespaceLaunches).where(eq(codespaceLaunches.projectId, lab.id))).toEqual([]);
+    expect(await server.app.db.select().from(codespaceProjects).where(eq(codespaceProjects.projectId, lab.id))).toEqual(before);
+    expect(portal.calls).toEqual([]);
+    expect((await server.app.db.select({ state: projects.state }).from(projects).where(eq(projects.id, lab.id)))[0]!.state).toBe("draft");
+    expect((await call("PUT", `/app/api/projects/${lab.id}/workspace/mode`, owner.headers, { mode: "free" })).statusCode).toBe(200);
+    const audits = JSON.stringify(await server.app.db.select().from(auditLog).where(eq(auditLog.subjectId, lab.id)));
+    expect(audits).not.toContain(token.split(".")[2]!);
+    expect(logLines.join("\n")).not.toContain(token.split(".")[2]!);
+  });
+
+  it.each<[State, Mode]>([
+    ["scheduled", "online"],
+    ["published", "free"],
+    ["published", "online_seb"],
+  ])("opens a %s %s project too", async (state, mode) => {
+    const { lab } = await distributed(state, mode);
+    expect((await launchDistribution(lab.id, owner)).claims.projectRepoId).toBeNull();
+  });
+
+  it("refuses an assistant 403 owner_required and anyone off the staff 404, before anything is recorded", async () => {
+    const { lab, assistant } = await distributed();
+    const stranger = await grantedTeacher(true);
+    const admin = await server.signIn("admin");
+    expect((await openDistribution(lab.id)).statusCode).toBe(401);
+    expect(refused(await openDistribution(lab.id, { cookie: owner.headers.cookie! }))).toEqual([403, "csrf"]);
+    expect(refused(await openDistribution(lab.id, assistant.headers))).toEqual([403, "owner_required"]);
+    for (const who of [stranger, await newStudent(), admin]) expect(refused(await openDistribution(lab.id, who.headers))).toEqual([404, "not_found"]);
+    expect((await openDistribution(randomUUID(), owner.headers)).statusCode).toBe(404);
+    expect(await distributionAudits(lab.id)).toEqual([]);
+    expect(await server.app.db.select().from(codespaceReviews).where(eq(codespaceReviews.projectId, lab.id))).toEqual([]);
+    // The page's flag says the same: the assistant keeps the repositories' review.
+    const read = async (who: Person) => ProjectWorkspace.parse((await call("GET", `/app/api/projects/${lab.id}/workspace`, who.headers)).json());
+    const [asOwner, asAssistant] = [await read(owner), await read(assistant)];
+    expect([asOwner.distributionReview, asAssistant.distributionReview, asAssistant.review]).toEqual([true, false, true]);
+  });
+
+  it("lets an administrator with Super Powers in, as an owner", async () => {
+    const { lab } = await distributed();
+    const admin = await server.signInWithSuperPowers();
+    const { claims } = await launchDistribution(lab.id, admin);
+    expect((await distributionAudits(lab.id))[0]!.payload).toMatchObject({ jti: claims.jti, reach: "all" });
+  });
+
+  it("answers 409 with distributionReviewRefusal's code, and opens once the cause is gone", async () => {
+    const { room, lab } = await distributed();
+    const db = server.app.db;
+    const open = () => openDistribution(lab.id, owner.headers);
+    await db.update(projects).set({ archivedAt: new Date() }).where(eq(projects.id, lab.id));
+    expect(refused(await open())).toEqual([409, "review_archived"]);
+    await db.update(projects).set({ archivedAt: null }).where(eq(projects.id, lab.id));
+    await db.update(classrooms).set({ archivedAt: new Date() }).where(eq(classrooms.id, room.classroomId));
+    expect(refused(await open())).toEqual([409, "review_archived"]);
+    await db.update(classrooms).set({ archivedAt: null }).where(eq(classrooms.id, room.classroomId));
+    await db.update(projects).set({ distributionRepoId: null }).where(eq(projects.id, lab.id));
+    expect(refused(await open())).toEqual([409, "review_distribution_missing"]);
+    await db.update(projects).set({ distributionRepoId: lab.distributionRepoId }).where(eq(projects.id, lab.id));
+    expect(await distributionAudits(lab.id)).toEqual([]);
+    await launchDistribution(lab.id, owner);
+  });
+
+  it("is refused review_not_granted, and absent from the page, without the holder's grant", async () => {
+    const ungranted = await grantedTeacher(false);
+    const room = await connected([await newStudent()], ungranted);
+    const lab = await project(room, "free", ungranted, "draft");
+    expect(refused(await openDistribution(lab.id, ungranted.headers))).toEqual([409, "review_not_granted"]);
+    const ws = ProjectWorkspace.parse((await call("GET", `/app/api/projects/${lab.id}/workspace`, ungranted.headers)).json());
+    expect(ws.distributionReview).toBe(false);
+  });
+});
+
+describe("the project's image in a review (ADR-147 §6)", () => {
+  it("names the project's digest in an online project's reviews, the default in a free one", async () => {
+    const f = await reviewable("online");
+    const digest = await pickImage(f.room, f.lab.id);
+    expect((await launchDistribution(f.lab.id, owner)).claims.image).toBe(digest);
+    expect((await distributionAudits(f.lab.id))[0]!.payload).toMatchObject({ image: digest });
+    expect((await launchReview(f.lab.id, f.repo.id, f.assistant)).claims.image).toBe(digest);
+    expect((await reviewAudits(f.lab.id))[0]!.payload).toMatchObject({ image: digest });
+
+    const free = await project(f.room, "free", owner, "draft");
+    await pickImage(f.room, free.id);
+    expect((await launchDistribution(free.id, owner)).claims.image).toBeNull();
+  });
+});
+
+describe("POST /app/codespace/git-token for the distribution (ADR-147 §5)", () => {
+  it("mints contents:read on the distribution's stored id, audited without the token", async () => {
+    const { lab } = await distributed("scheduled", "online");
+    await launchDistribution(lab.id, owner);
+    minted.length = 0;
+    logLines.length = 0;
+    const res = await askDistribution(owner.id, lab.id, lab.distributionFullName!.toUpperCase());
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.headers["cache-control"]).toBe("no-store");
+    const grant = GitTokenGrant.parse(res.json());
+    expect(grant).toMatchObject({ permission: "read", repository: { fullName: lab.distributionFullName, githubRepoId: lab.distributionRepoId } });
+    expect(grant.useUntil).toBe(grant.expiresAt);
+    expect(minted.at(-1)!.body).toMatchObject({ repository_ids: [lab.distributionRepoId], permissions: { contents: "read" } });
+    const [issued] = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "codespace.git_token_issued"), eq(auditLog.subjectId, lab.id)));
+    expect(issued!.payload).toMatchObject({ userId: owner.id, permission: "read", reviewDistribution: true, repository: lab.distributionFullName });
+    expect(JSON.stringify(await server.app.db.select().from(auditLog))).not.toContain(grant.token);
+    expect(logLines.join("\n")).not.toContain(grant.token);
+  });
+
+  it("refuses without a record, on another name, after the window, and with both review claims", async () => {
+    const { lab, assistant } = await distributed();
+    const name = lab.distributionFullName!;
+    expect(refused(await askDistribution(owner.id, lab.id, name))).toEqual([404, "not_found"]);
+    await launchDistribution(lab.id, owner);
+    expect(refused(await askDistribution(owner.id, lab.id, "vorg/someone-else"))).toEqual([404, "not_found"]);
+    expect(refused(await askDistribution(assistant.id, lab.id, name))).toEqual([404, "not_found"]);
+    expect(refused(await askDistribution(owner.id, lab.id, name, { reviewDistribution: true, reviewRepoId: randomUUID() }))).toEqual([401, "unauthorized"]);
+    // Without the claim, the launch rule: an owner never launched it.
+    expect(refused(await askDistribution(owner.id, lab.id, name, {}))).toEqual([404, "not_found"]);
+    expect((await askDistribution(owner.id, lab.id, name)).statusCode).toBe(200);
+    await server.app.db.update(codespaceReviews).set({ grantUntil: sql`now() - interval '1 second'` }).where(distributionRecord(lab.id));
+    minted.length = 0;
+    expect(refused(await askDistribution(owner.id, lab.id, name))).toEqual([404, "not_found"]);
+    expect(minted).toEqual([]);
+  });
+
+  it("refuses once the owner is an assistant, demoted to student, or the distribution gone; closes on an archive", async () => {
+    const { room, lab } = await distributed();
+    const name = lab.distributionFullName!;
+    const db = server.app.db;
+    const second = await grantedTeacher(null);
+    await seat(room, second.id, "owner");
+    await launchDistribution(lab.id, second);
+    expect((await askDistribution(second.id, lab.id, name)).statusCode).toBe(200);
+    const seatOf = and(eq(courseStaff.courseId, room.courseId), eq(courseStaff.userId, second.id));
+    await db.update(courseStaff).set({ role: "assistant" }).where(seatOf);
+    expect(refused(await askDistribution(second.id, lab.id, name))).toEqual([404, "not_found"]);
+    await db.update(courseStaff).set({ role: "owner" }).where(seatOf);
+    await db.update(users).set({ role: "student" }).where(eq(users.id, second.id));
+    expect(refused(await askDistribution(second.id, lab.id, name))).toEqual([404, "not_found"]);
+    await db.update(users).set({ role: "teacher" }).where(eq(users.id, second.id));
+    expect((await askDistribution(second.id, lab.id, name)).statusCode).toBe(200);
+    await db.update(classrooms).set({ archivedAt: new Date() }).where(eq(classrooms.id, room.classroomId));
+    expect(refused(await askDistribution(second.id, lab.id, name))).toEqual([409, "closed"]);
+    await db.update(classrooms).set({ archivedAt: null }).where(eq(classrooms.id, room.classroomId));
+    await db.update(projects).set({ distributionRepoId: null }).where(eq(projects.id, lab.id));
+    expect(refused(await askDistribution(second.id, lab.id, name))).toEqual([404, "not_found"]);
+  });
+
+  it("never grants the distribution on a repository's record, nor the reverse", async () => {
+    const f = await reviewable("online");
+    await launchReview(f.lab.id, f.repo.id, owner);
+    expect(refused(await askDistribution(owner.id, f.lab.id, f.lab.distributionFullName!))).toEqual([404, "not_found"]);
+    await launchDistribution(f.lab.id, owner);
+    expect(refused(await askReview(owner.id, f.lab.id, f.lab.distributionFullName!, f.repo.id))).toEqual([404, "not_found"]);
   });
 });

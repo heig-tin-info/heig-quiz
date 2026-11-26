@@ -75,10 +75,11 @@ import {
   projectWorkspace,
   requestCodespaceSync,
   sebProjectSeat,
-  startDistributionReview,
   startReview,
   startWorkspace,
   type LaunchVia,
+  type ReviewedProject,
+  type ReviewTarget,
 } from "./service.js";
 
 export async function codespacePlugin(app: FastifyInstance, opts: { config: AppConfig }) {
@@ -90,6 +91,14 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
     params: IdParam,
     load: withCourseRole(app, accessibleProject.bind(null, app), (scope) => scope.course.id, "owner"),
   };
+
+  /** Both review routes' answer: `startReview`'s refusal as a `409`, or the portal's `/review?token=…`, never cached. */
+  async function openReview(req: FastifyRequest, reply: FastifyReply, now: Date, row: ReviewedProject, target: ReviewTarget) {
+    const review = await startReview(app.db, config, row, target, { user: userOf(req), reach: callerOf(req).reach, actor: actorOf(req) }, now);
+    if (typeof review === "string") return reply.code(409).send({ error: review });
+    const started: WorkspaceReview = { url: `${config.CODESPACE_URL}/review?token=${encodeURIComponent(review.token)}` };
+    return reply.header("cache-control", "no-store").send(started);
+  }
 
   // ------------------------------------------------------------ the staff's
 
@@ -135,12 +144,9 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
   app.post(
     WORKSPACE_REVIEW_ROUTE,
     session,
-    teacher({ params: ProjectRepoParams, load: accessibleProjectRepo.bind(null, app) }, async ({ req, reply, now, scope }) => {
-      const review = await startReview(app.db, config, scope, { user: userOf(req), reach: callerOf(req).reach, actor: actorOf(req) }, now);
-      if (typeof review === "string") return reply.code(409).send({ error: review });
-      const started: WorkspaceReview = { url: `${config.CODESPACE_URL}/review?token=${encodeURIComponent(review.token)}` };
-      return reply.header("cache-control", "no-store").send(started);
-    }),
+    teacher({ params: ProjectRepoParams, load: accessibleProjectRepo.bind(null, app) }, ({ req, reply, now, scope }) =>
+      openReview(req, reply, now, scope, { kind: "repo", repo: scope.repo }),
+    ),
   );
 
   /**
@@ -157,13 +163,9 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
   app.post(
     WORKSPACE_DISTRIBUTION_ROUTE,
     session,
-    teacher(onOwnedProject, async ({ req, reply, now, scope }) => {
-      const row = { project: scope.project, courseId: scope.course.id, classroomArchivedAt: scope.room.archivedAt };
-      const review = await startDistributionReview(app.db, config, row, { user: userOf(req), reach: callerOf(req).reach, actor: actorOf(req) }, now);
-      if (typeof review === "string") return reply.code(409).send({ error: review });
-      const started: WorkspaceReview = { url: `${config.CODESPACE_URL}/review?token=${encodeURIComponent(review.token)}` };
-      return reply.header("cache-control", "no-store").send(started);
-    }),
+    teacher(onOwnedProject, ({ req, reply, now, scope }) =>
+      openReview(req, reply, now, { project: scope.project, courseId: scope.course.id, classroomArchivedAt: scope.room.archivedAt }, { kind: "distribution" }),
+    ),
   );
 
   app.post(

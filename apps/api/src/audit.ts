@@ -185,7 +185,8 @@ export type AuditAction =
    * session's read grant, `reviewRepoId`, ADR-129 §8) — never the token.
    * `review_launched` (ADR-129 §8): a staff member launched a review
    * session of one repository (subject the project; `payload.projectRepoId`,
-   * `repository`, `jti`, the caller's `reach`) — never the token.
+   * `repository`, `jti`, the caller's `reach` and, since ADR-147 §6, the
+   * `image` it runs, null for the default) — never the token.
    * `distribution_review_launched` (ADR-147 §7): an owner launched a review
    * session of the project's distribution repository (subject the project;
    * `payload.repository`, `jti`, the caller's `reach`, the `image` it runs,

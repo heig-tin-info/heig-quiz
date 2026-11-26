@@ -438,7 +438,8 @@ the rule (product owner, 2026-11-26); this section names what changes here.
   review session, in any unarchived state of the project, a draft and a
   scheduled one included (§2's gates do not apply to it; its own rule is
   `distributionReviewRefusal`). Its route, record
-  (`codespace_distribution_reviews`), token (`projectRepoId: null`) and
+  (§6's `codespace_reviews`, gaining `project_id`, a null
+  `project_repo_id` for the distribution), token (`projectRepoId: null`) and
   token grant (`reviewDistribution`) are ADR-147 §4–§5; §4's reach (any
   staff seat) is unchanged for a repository's review.
 - **The same session.** On the portal its assignment is

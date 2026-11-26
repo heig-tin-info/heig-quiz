@@ -102,9 +102,17 @@ distribution has no `project_repos` row:
 - **Route**: `POST /app/api/projects/:id/workspace/distribution`, a
   session write, no body, `{ url }` with `Cache-Control: no-store`, the
   portal's `/review?token=…`.
-- **Record**: `codespace_distribution_reviews` (`user_id`, `project_id`,
-  `grant_until`), the twin of `codespace_reviews`, the same window
-  (`REVIEW_GRANT_MINUTES`, ADR-129 §6).
+- **Record**: ADR-129 §6's `codespace_reviews`, extended: it gains
+  `project_id` (not null) and a surrogate `id`, and `project_repo_id`
+  becomes nullable — null is the distribution. One row per (user,
+  project, repository), nulls not distinct; the same window
+  (`REVIEW_GRANT_MINUTES`). The migration drops the rows in flight rather
+  than backfilling them: they live fifteen minutes.
+- **One rule, one launch, one grant.** `reviewDecision`, `startReview` and
+  the token route's `reviewGrant` take a target, a repository or the
+  distribution; only the domain rule (`staffReviewRefusal` or
+  `distributionReviewRefusal`), the name and id read, and the reach
+  re-read at the request differ.
 - **Token**: `ReviewLaunchTokenClaims` with `projectRepoId: null`; `repo`
   is the distribution and its handed-out default branch. A portal older
   than this record refuses the null, so the session never opens as some
@@ -123,10 +131,11 @@ distribution has no `project_repos` row:
 
 `GitTokenRequestClaims` gains `reviewDistribution: true`, never beside
 `reviewRepoId` (the contract refuses both). A request carrying it is
-decided after check 1 by: (1) a fresh `codespace_distribution_reviews` row
-of this user on the request's project; (2) the user's **ownership**
-re-read now (`userOwnsCourse`: Super Powers held in a session of their
-own, or an owner seat while the stored role is staff), so a grant never
+decided after check 1 by: (1) a fresh `codespace_reviews` row of this
+user on the request's project with a null repository; (2) the user's
+**ownership** re-read now (`userReachesCourse(…, "owner")`: Super Powers
+held in a session of their own, or an owner seat while the stored role is
+staff — the SQL twin of `effectiveCourseRole`), so a grant never
 outlives the owner seat; (3) the stored `distribution_full_name` equals the
 request's `repository`; (4) `distributionReviewRefusal` on facts read now —
 `review_not_granted` and `review_distribution_missing` → `404 not_found`,
@@ -150,7 +159,8 @@ default: they are the platform's runs, not sessions.
 
 A new member of the closed union, `codespace.distribution_review_launched`:
 subject the project, payload `{ repository, jti, reach, image }`, never
-the token. Each grant writes `codespace.git_token_issued` with
+the token. A repository's `codespace.review_launched` gains `image` too.
+Each distribution grant writes `codespace.git_token_issued` with
 `permission: "read"` and `reviewDistribution: true`.
 
 ### 8. The residual risks, accepted by the product owner (2026-11-26)
@@ -198,8 +208,8 @@ by its code.
 - Reviews and distribution sessions share one slot per staff member and the
   holder's cap: a teacher testing the image takes one of the holder's two
   review places.
-- One table and one migration in the API, one audit action, no portal
-  migration (`reviewOf` is JSON), no new secret.
+- One migration in the API (`codespace_reviews` extended), one audit
+  action, no portal migration (`reviewOf` is JSON), no new secret.
 
 ## Alternatives considered
 
@@ -207,9 +217,10 @@ by its code.
   Rejected: everything a read-only session needs is ADR-129's; a second
   kind would duplicate the quota, the wipe, the sweep and the read-only
   staging.
-- **Extend `codespace_reviews` with a nullable repository and a project
-  column.** Rejected: a nullable member of the primary key and a check
-  constraint, for a row the token route reads by another key anyway.
+- **A second table keyed by (user, project)** for the distribution's
+  record. Rejected: a twin of `codespace_reviews` with the same window and
+  the same reads, which would have doubled the launch, the decision and
+  the token branch.
 - **Open the source repository instead.** Rejected: students receive the
   distribution (protected files, the squash); the session tests that.
 - **Any staff seat, like a repository review.** Rejected by the product

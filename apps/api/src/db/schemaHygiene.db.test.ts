@@ -147,7 +147,6 @@ const UNINDEXED_FOREIGN_KEYS: readonly { reason: string; keys: readonly ForeignK
     reason: "Not measured yet: small tables or rare deletions, left to the statistics of Phase 2.1 (pg_stat_statements).",
     keys: [
       "answer_acceptances(attempt_id) -> attempts",
-      "codespace_distribution_reviews(project_id) -> projects",
       "codespace_reviews(project_repo_id) -> project_repos",
       "evaluations(course_id) -> courses",
       "grade_dispatches(checkpoint_id) -> project_checkpoints",

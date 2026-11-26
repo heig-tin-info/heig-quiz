@@ -20,7 +20,6 @@ import {
 import { foreignZone } from "./newProject";
 import { SyncButton } from "./parts";
 import { DistributionRepo } from "./DistributionRepo";
-import { OpenDistributionIcon } from "./OpenInWorkspace";
 import {
   deadlineDesc,
   deadlineRefusal,
@@ -288,19 +287,7 @@ function SourceTile({
       <Facts
         rows={[
           [t("project.source"), <RepoLink key="s" fullName={project.source.fullName} />],
-          [
-            t("project.distribution"),
-            project.distribution ? (
-              <DistributionRepo
-                key="d"
-                projectId={project.id}
-                fullName={project.distribution.fullName}
-                action={<OpenDistributionIcon project={project} />}
-              />
-            ) : (
-              <span className="text-fg-muted">{t("project.distribution.building")}</span>
-            ),
-          ],
+          [t("project.distribution"), <DistributionRepo key="d" project={project} />],
           [t("project.branches"), <span key="b" className="font-mono text-xs">{project.branches.join(", ")}</span>],
           [t("project.sourceStrategy"), t(`project.sourceStrategy.${project.sourceStrategy}`)],
           // When it opened (ADR-127: the start choice is a draft's; a published project has its date).

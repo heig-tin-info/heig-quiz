@@ -6,18 +6,19 @@
  * the link, never the page's primary. Without a linked account, a note
  * leads to the Settings card (F-GH-05) instead of the button. On a
  * platform without the App, or while the account loads, the link alone.
- * `action` sits beside the link: the owner's *Open in workspace* (ADR-147).
+ * Beside the link, an owner's *Open in workspace* (ADR-147); while the
+ * repository is not built, the word that says so.
  */
 import { useMutation } from "@tanstack/react-query";
-import type { ReactNode } from "react";
 
-import type { ProjectDistributionAccess } from "@quiz/contracts";
+import type { ProjectDetail, ProjectDistributionAccess } from "@quiz/contracts";
 
 import { api, refusedWith, wordedRefusal } from "../api";
 import { useGithubAccount } from "../github/api";
 import { useT, type Dict } from "../i18n";
 import { routeToPath } from "../router";
 import { Button, RepoLink } from "../ui";
+import { OpenDistributionIcon } from "./OpenInWorkspace";
 
 /** The refusals the tile words itself; any other is the server's message. */
 const REFUSALS: Partial<Record<string, keyof Dict>> = {
@@ -30,7 +31,15 @@ const REFUSALS: Partial<Record<string, keyof Dict>> = {
 
 const settingsHref = routeToPath({ view: "settings" });
 
-export function DistributionRepo({ projectId, fullName, action = null }: { projectId: string; fullName: string; action?: ReactNode }) {
+/** The project's *Distribution repository* fact: its link and actions once built, else that it is being built. */
+export function DistributionRepo({ project }: { project: ProjectDetail }) {
+  const t = useT();
+  if (project.distribution === null) return <span className="text-fg-muted">{t("project.distribution.building")}</span>;
+  return <BuiltDistribution project={project} fullName={project.distribution.fullName} />;
+}
+
+function BuiltDistribution({ project, fullName }: { project: ProjectDetail; fullName: string }) {
+  const projectId = project.id;
   const t = useT();
   const account = useGithubAccount();
   const access = useMutation({
@@ -82,7 +91,7 @@ export function DistributionRepo({ projectId, fullName, action = null }: { proje
       <span className="inline-flex max-w-full items-center gap-1">
         {/* The link truncates before the icon is pushed out of a narrow tile. */}
         <RepoLink fullName={fullName} className="min-w-0" />
-        {action ? <span className="shrink-0">{action}</span> : null}
+        <OpenDistributionIcon project={project} />
       </span>
       {below}
     </span>

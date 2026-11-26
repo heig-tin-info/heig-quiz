@@ -9,7 +9,6 @@ import { fail, mockFetch, ok, renderWithProviders, type RouteHandler } from "../
 import { ProjectRepos } from "./ProjectRepos";
 import { RepoPage } from "./RepoPage";
 import { DistributionRepo } from "./DistributionRepo";
-import { OpenDistributionIcon } from "./OpenInWorkspace";
 
 /*
  * The staff's *Open in workspace* (ADR-129 §11, F-PROJ-27): absent without
@@ -190,10 +189,15 @@ describe("Open in workspace, on the repository's page", () => {
 describe("Open in workspace, on the distribution repository (ADR-147)", () => {
   const DIST = `POST ${BASE}/workspace/distribution`;
   const NAME = "Open in workspace, read-only";
-  const renderDistribution = (p: ProjectDetail) =>
-    renderWithProviders(
-      <DistributionRepo projectId={p.id} fullName={p.distribution!.fullName} action={<OpenDistributionIcon project={p} />} />,
-    );
+  const renderDistribution = (p: ProjectDetail) => renderWithProviders(<DistributionRepo project={p} />);
+
+  it("is absent, the repository being built, while there is no distribution", async () => {
+    const { calls } = routes(ok(workspace()));
+    renderDistribution(project({ distribution: null }));
+    expect(screen.getByText("being built")).toBeInTheDocument();
+    await waitFor(() => expect(calls.length).toBe(0));
+    expect(screen.queryByRole("button", { name: NAME })).toBeNull();
+  });
 
   it.each<[string, Partial<ProjectDetail>]>([
     ["a draft", { state: "draft" }],

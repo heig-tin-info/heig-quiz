@@ -14,9 +14,8 @@
  *   - student → portal: a 5-minute single-use launch token, minted by the
  *     start route (`routes.ts`, {@link launchToken}) and carried in a 303.
  *   - staff → portal: a review launch token on one repository of a project
- *     ({@link startReview}, ADR-129), its own audience; and an owner's on the
- *     project's distribution repository ({@link startDistributionReview},
- *     ADR-147), the same audience with a null repository id.
+ *     ({@link startReview}, ADR-129), its own audience — or, an owner's, on
+ *     the project's distribution repository (ADR-147), a null repository id.
  *   - Quiz → portal: the close of a kiosk station's sitting
  *     ({@link sendSittingClose}, ADR-089), its own audience.
  *
@@ -84,7 +83,6 @@ import type { Db, Tx } from "../../db/client.js";
 import {
   classrooms,
   codespaceLaunches,
-  codespaceDistributionReviews,
   codespaceProjects,
   codespaceReviews,
   courseStaff,
@@ -165,13 +163,13 @@ async function portalState(db: Db, projectId: string) {
 }
 
 /**
- * The image a staff member's review session of the project runs (ADR-147
- * §6, reversing ADR-146 §3 for reviews): the digest in service of the course
- * image the project picks, as its sync sends it, or null — the default — for
- * a project with none and for a `free` project, whose students never run
- * one. Never a tag, never a Refresh's candidate.
+ * THE image a project's containers run, its sync's and its reviews'
+ * (ADR-146 §4, §6; ADR-147 §6): the digest in service of the course image
+ * the project picks, or null — the default — for a project with none and
+ * for a `free` project, whose students never run one. Never a tag, never a
+ * Refresh's candidate.
  */
-export async function reviewImageOf(db: Db | Tx, project: { id: string; workMode: WorkMode }): Promise<string | null> {
+async function projectImageOf(db: Db | Tx, project: { id: string; workMode: WorkMode }): Promise<string | null> {
   if (!isOnlineMode(project.workMode)) return null;
   const [row] = await db
     .select({ image: courseWorkspaceImages.digestReference })
@@ -331,23 +329,15 @@ export async function holderGrant(
  * the `commit` strategy, whose start route decides student by student
  * (#958; ADR-078 as amended 2026-10-29). It carries the teacher's update of
  * an `online` project ({@link workspaceUpdateOf}, ADR-132 §11), which the end
- * of every sync pass sends again. Its `image` is the digest in service of
- * the course image the project picks (ADR-146 §4, §6), null for the
- * default: never a tag, never a Refresh's candidate. (While the portal has
- * no image route, no image is ever admitted, so it stays null.)
+ * of every sync pass sends again. Its `image` is {@link projectImageOf}'s.
+ * (While the portal has no image route, no image is ever admitted, so it
+ * stays null.)
  */
 export async function syncPayload(db: Db, projectId: string): Promise<CodespaceAssignmentSync | null> {
   const [row] = await db
-    .select({
-      project: projects,
-      classroomName: classrooms.name,
-      courseId: classrooms.courseId,
-      image: courseWorkspaceImages.digestReference,
-    })
+    .select({ project: projects, classroomName: classrooms.name, courseId: classrooms.courseId })
     .from(projects)
     .innerJoin(classrooms, eq(classrooms.id, projects.classroomId))
-    .leftJoin(codespaceProjects, eq(codespaceProjects.projectId, projects.id))
-    .leftJoin(courseWorkspaceImages, eq(courseWorkspaceImages.id, codespaceProjects.imageId))
     .where(eq(projects.id, projectId));
   if (!row || !isOnlineMode(row.project.workMode) || row.project.distributionFullName === null) return null;
   const { project } = row;
@@ -361,7 +351,7 @@ export async function syncPayload(db: Db, projectId: string): Promise<CodespaceA
     classroomId: project.classroomId,
     classroomName: row.classroomName,
     mode: project.workMode,
-    image: row.image ?? null,
+    image: await projectImageOf(db, project),
     sourceRepo: { fullName: project.distributionFullName, defaultBranch: project.branches[0] ?? "main" },
     browserExamKeys: [],
     teacher: holder,
@@ -633,209 +623,133 @@ export async function startWorkspace(
   });
 }
 
-// ---------------------------------------------------------------- the staff's review (ADR-129)
+// ---------------------------------------------------------------- the staff's review (ADR-129, ADR-147)
 
-/** A repository of a project, as both review routes read it: `findAccessibleProjectRepo`'s row, and the token route's. */
-export interface ReviewedRepo {
+/** A project, as the review routes read it: their loaders' row, and the token route's. */
+export interface ReviewedProject {
   project: typeof projects.$inferSelect;
-  repo: typeof projectRepos.$inferSelect;
   courseId: string;
   classroomArchivedAt: Date | null;
 }
 
 /**
- * THE one place the facts of `staffReviewRefusal` (ADR-129 §5) are built,
- * for the launch and for the token route (§7): the row's archives, its
- * repository, its mode, and the quota holder's grant read now. Granted: the
- * live repository's name and GitHub id, the holder and their grant.
+ * What a review session opens: one repository of the project (ADR-129), or
+ * the project's distribution repository (ADR-147 §4), which has no
+ * `project_repos` row.
+ */
+export type ReviewTarget = { kind: "repo"; repo: typeof projectRepos.$inferSelect } | { kind: "distribution" };
+
+/** Why a review is refused: the repository's rule or the distribution's. */
+export type ReviewRefusal = StaffReviewRefusal | DistributionReviewRefusal;
+
+/**
+ * THE one place the facts of a review's rule are built, for the launch and
+ * for the token route (ADR-129 §5, §7; ADR-147 §3, §5): the row's archives,
+ * the quota holder's grant read now, and the target's own facts — the
+ * repository and the mode (`staffReviewRefusal`), or the stored
+ * distribution (`distributionReviewRefusal`). Granted: the target's name
+ * and GitHub id, the holder and their grant.
  */
 export async function reviewDecision(
   db: Db | Tx,
-  row: ReviewedRepo,
+  row: ReviewedProject,
+  target: ReviewTarget,
 ): Promise<
-  | { refusal: StaffReviewRefusal }
+  | { refusal: ReviewRefusal }
   | { refusal: null; fullName: string; githubRepoId: number; holder: { id: string; email: string }; grant: TeacherCodespaceGrant }
 > {
-  const { project, repo } = row;
+  const { project } = row;
   const held = await holderGrant(db, row.courseId, project.createdBy);
-  const refusal = staffReviewRefusal({
-    holderGranted: held?.grant?.enabled === true,
-    classroomArchived: row.classroomArchivedAt !== null,
-    projectArchived: project.archivedAt !== null,
-    repo,
-    workMode: project.workMode,
-  });
+  const gate = { holderGranted: held?.grant?.enabled === true, classroomArchived: row.classroomArchivedAt !== null, projectArchived: project.archivedAt !== null };
+  const [fullName, githubRepoId] =
+    target.kind === "repo" ? [target.repo.fullName, target.repo.githubRepoId] : [project.distributionFullName, project.distributionRepoId];
+  const refusal =
+    target.kind === "repo"
+      ? staffReviewRefusal({ ...gate, repo: target.repo, workMode: project.workMode })
+      : distributionReviewRefusal({ ...gate, distributionBuilt: fullName !== null && githubRepoId !== null });
   if (refusal !== null) return { refusal };
   // Granted and live, by the rule above; the test only tells the compiler so.
-  if (!held?.grant || repo.fullName === null || repo.githubRepoId === null) return { refusal: "review_repo_unavailable" };
-  return { refusal: null, fullName: repo.fullName, githubRepoId: repo.githubRepoId, holder: held.holder, grant: held.grant };
+  if (!held?.grant || fullName === null || githubRepoId === null) {
+    return { refusal: target.kind === "repo" ? "review_repo_unavailable" : "review_distribution_missing" };
+  }
+  return { refusal: null, fullName, githubRepoId, holder: held.holder, grant: held.grant };
 }
 
 /**
- * The review route's work (ADR-129 §5) on the repository its loader read
- * (`findAccessibleProjectRepo`): {@link reviewDecision}; then the launch
- * recorded (`codespace_reviews`, its window `REVIEW_GRANT_MINUTES` from the
- * database's clock, §6), a review launch token signed (§7) and audited
- * `codespace.review_launched` by its `jti` (§8) — the token never. It never
+ * A review route's work on what its loader read — a repository
+ * (`findAccessibleProjectRepo`, ADR-129 §5) or, for an owner, the project's
+ * distribution (`accessibleProject` then `requireCourseRole(owner)`,
+ * ADR-147 §4): {@link reviewDecision}; then the launch recorded
+ * (`codespace_reviews`, a null repository for the distribution, its window
+ * `REVIEW_GRANT_MINUTES` from the database's clock, ADR-129 §6), a review
+ * launch token signed (§7) with the target, its branch and the project's
+ * image, and audited by its `jti` (`codespace.review_launched` or
+ * `codespace.distribution_review_launched`) — the token never. It never
  * marks the project launched, never writes `codespace_launches` and never
- * asks for a sync: a review freezes no mode and opens nothing to students.
+ * asks for a sync: a review freezes no mode and opens nothing to students,
+ * in any state of the project, a draft included.
  *
  * The holder's grant is read in the transaction that records the launch;
- * the row's own facts (archives, repository, mode) are the loader's read,
- * just before it. That is safe: the launch grants nothing by itself — the
- * token route applies the same decision again, on facts it reads at its own
+ * the row's own facts (archives, target, mode) are the loader's read, just
+ * before it. That is safe: the launch grants nothing by itself — the token
+ * route applies the same decision again, on facts it reads at its own
  * request (§7, check 4), so a change between the two reads is refused there.
  */
 export async function startReview(
   db: Db,
   config: AppConfig,
-  row: ReviewedRepo,
+  row: ReviewedProject,
+  target: ReviewTarget,
   who: { user: Reviewer; reach: Reach; actor: AuditActor },
   now: Date,
-): Promise<{ token: string; jti: string } | StaffReviewRefusal> {
-  return db.transaction(async (tx) => {
-    const { project, repo } = row;
-    const decision = await reviewDecision(tx, row);
-    if (decision.refusal !== null) return decision.refusal;
-    await tx
-      .insert(codespaceReviews)
-      .values({ userId: who.user.id, projectRepoId: repo.id, grantUntil: reviewGrantUntil })
-      .onConflictDoUpdate({ target: [codespaceReviews.userId, codespaceReviews.projectRepoId], set: { grantUntil: sql`excluded.grant_until` } });
-    const issued = await reviewToken(tx, config, who.user, {
-      repo: { fullName: decision.fullName, defaultBranch: repo.defaultBranch ?? project.branches[0] ?? "main" },
-      projectId: project.id,
-      projectRepoId: repo.id,
-      holder: decision.holder,
-      maxActiveSessions: decision.grant.maxActiveSessions,
-      image: await reviewImageOf(tx, project),
-    }, now);
-    await audit(tx, {
-      ...who.actor,
-      action: "codespace.review_launched",
-      subjectType: "project",
-      subjectId: project.id,
-      payload: { projectRepoId: repo.id, repository: decision.fullName, jti: issued.jti, reach: who.reach },
-    });
-    return issued;
-  });
-}
-
-/** A review launch's window (ADR-129 §6): `REVIEW_GRANT_MINUTES` from the database's clock. */
-const reviewGrantUntil = sql`now() + make_interval(mins => ${REVIEW_GRANT_MINUTES})`;
-
-type Reviewer = { id: string; email: string; givenName: string; familyName: string };
-
-/** THE signer of a review launch token (ADR-129 §7, ADR-147 §4): the staff member's identity, then what the session opens. */
-async function reviewToken(
-  tx: Tx,
-  config: AppConfig,
-  user: Reviewer,
-  target: Pick<ReviewLaunchTokenClaims, "repo" | "projectId" | "projectRepoId" | "holder" | "maxActiveSessions" | "image">,
-  now: Date,
-): Promise<{ token: string; jti: string }> {
-  const [account] = await tx.select({ login: githubAccounts.login }).from(githubAccounts).where(eq(githubAccounts.userId, user.id));
-  return sessionToken<ReviewLaunchTokenClaims>(
-    config,
-    REVIEW_AUDIENCE,
-    {
-      sub: user.id,
-      email: user.email,
-      displayName: `${user.givenName} ${user.familyName}`.trim() || user.email,
-      githubLogin: account?.login ?? null,
-      ...target,
-    },
-    now,
-  );
-}
-
-// ---------------------------------------------------------------- the distribution's review (ADR-147)
-
-/** A project as the distribution's review routes read it: `findAccessibleProject`'s row, and the token route's. */
-export interface ReviewedDistribution {
-  project: typeof projects.$inferSelect;
-  courseId: string;
-  classroomArchivedAt: Date | null;
-}
-
-/**
- * THE one place the facts of `distributionReviewRefusal` (ADR-147 §3) are
- * built, for the launch and for the token route: the archives, the stored
- * distribution, and the quota holder's grant read now. Granted: the
- * distribution's name and GitHub id, the holder and their grant.
- */
-export async function distributionDecision(
-  db: Db | Tx,
-  row: ReviewedDistribution,
-): Promise<
-  | { refusal: DistributionReviewRefusal }
-  | { refusal: null; fullName: string; githubRepoId: number; holder: { id: string; email: string }; grant: TeacherCodespaceGrant }
-> {
-  const { project } = row;
-  const held = await holderGrant(db, row.courseId, project.createdBy);
-  const distribution = { fullName: project.distributionFullName, githubRepoId: project.distributionRepoId };
-  const refusal = distributionReviewRefusal({
-    holderGranted: held?.grant?.enabled === true,
-    classroomArchived: row.classroomArchivedAt !== null,
-    projectArchived: project.archivedAt !== null,
-    distributionBuilt: distribution.fullName !== null && distribution.githubRepoId !== null,
-  });
-  if (refusal !== null) return { refusal };
-  // Granted and built, by the rule above; the test only tells the compiler so.
-  if (!held?.grant || distribution.fullName === null || distribution.githubRepoId === null) return { refusal: "review_distribution_missing" };
-  return { refusal: null, fullName: distribution.fullName, githubRepoId: distribution.githubRepoId, holder: held.holder, grant: held.grant };
-}
-
-/**
- * The distribution's review route (ADR-147 §4) on the project its loader
- * read (`accessibleProject`, then `requireCourseRole(owner)`):
- * {@link distributionDecision}; then the launch recorded
- * (`codespace_distribution_reviews`, the window of ADR-129 §6), a review
- * launch token signed with a null `projectRepoId`, the distribution and its
- * handed-out default branch, and the project's image; audited
- * `codespace.distribution_review_launched` by its `jti`, the token never. In
- * any state of the project, a draft or a scheduled one included. Like a
- * repository's review it never marks the project launched, never writes
- * `codespace_launches` and never asks for a sync. The token route decides
- * again on facts it reads at its own request, so the loader's read just
- * before this transaction grants nothing by itself.
- */
-export async function startDistributionReview(
-  db: Db,
-  config: AppConfig,
-  row: ReviewedDistribution,
-  who: { user: Reviewer; reach: Reach; actor: AuditActor },
-  now: Date,
-): Promise<{ token: string; jti: string } | DistributionReviewRefusal> {
+): Promise<{ token: string; jti: string } | ReviewRefusal> {
   return db.transaction(async (tx) => {
     const { project } = row;
-    const decision = await distributionDecision(tx, row);
+    const decision = await reviewDecision(tx, row, target);
     if (decision.refusal !== null) return decision.refusal;
+    const projectRepoId = target.kind === "repo" ? target.repo.id : null;
     await tx
-      .insert(codespaceDistributionReviews)
-      .values({ userId: who.user.id, projectId: project.id, grantUntil: reviewGrantUntil })
+      .insert(codespaceReviews)
+      .values({ id: randomUUID(), userId: who.user.id, projectId: project.id, projectRepoId, grantUntil: sql`now() + make_interval(mins => ${REVIEW_GRANT_MINUTES})` })
       .onConflictDoUpdate({
-        target: [codespaceDistributionReviews.userId, codespaceDistributionReviews.projectId],
+        target: [codespaceReviews.userId, codespaceReviews.projectId, codespaceReviews.projectRepoId],
         set: { grantUntil: sql`excluded.grant_until` },
       });
-    const image = await reviewImageOf(tx, project);
-    const issued = await reviewToken(tx, config, who.user, {
-      repo: { fullName: decision.fullName, defaultBranch: project.branches[0] ?? "main" },
-      projectId: project.id,
-      projectRepoId: null,
-      holder: decision.holder,
-      maxActiveSessions: decision.grant.maxActiveSessions,
-      image,
-    }, now);
+    const defaultBranch = (target.kind === "repo" ? target.repo.defaultBranch : null) ?? project.branches[0] ?? "main";
+    const image = await projectImageOf(tx, project);
+    const [account] = await tx.select({ login: githubAccounts.login }).from(githubAccounts).where(eq(githubAccounts.userId, who.user.id));
+    const { user } = who;
+    const issued = await sessionToken<ReviewLaunchTokenClaims>(
+      config,
+      REVIEW_AUDIENCE,
+      {
+        sub: user.id,
+        email: user.email,
+        displayName: `${user.givenName} ${user.familyName}`.trim() || user.email,
+        githubLogin: account?.login ?? null,
+        repo: { fullName: decision.fullName, defaultBranch },
+        projectId: project.id,
+        projectRepoId,
+        holder: decision.holder,
+        maxActiveSessions: decision.grant.maxActiveSessions,
+        image,
+      },
+      now,
+    );
+    const payload = { repository: decision.fullName, jti: issued.jti, reach: who.reach, image };
     await audit(tx, {
       ...who.actor,
-      action: "codespace.distribution_review_launched",
       subjectType: "project",
       subjectId: project.id,
-      payload: { repository: decision.fullName, jti: issued.jti, reach: who.reach, image },
+      ...(projectRepoId === null
+        ? { action: "codespace.distribution_review_launched", payload }
+        : { action: "codespace.review_launched", payload: { projectRepoId, ...payload } }),
     });
     return issued;
   });
 }
+
+type Reviewer = { id: string; email: string; givenName: string; familyName: string };
 
 // ---------------------------------------------------------------- the launch mark
 

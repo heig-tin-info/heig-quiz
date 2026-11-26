@@ -2,6 +2,7 @@ import { act, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { makeProject } from "../test/project-fixtures";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { DistributionRepo } from "./DistributionRepo";
 
@@ -13,6 +14,7 @@ import { DistributionRepo } from "./DistributionRepo";
 
 const ID = "11111111-1111-4111-8111-111111111111";
 const FULL = "heig-org/lab-squashed";
+const PROJECT = makeProject({ id: ID, distribution: { fullName: FULL } });
 const ACCESS = `POST /app/api/projects/${ID}/distribution/access`;
 const linked = ok({ account: { login: "ychevallier", linkedAt: "2026-09-01T08:00:00.000Z" }, relevant: true });
 
@@ -24,7 +26,7 @@ describe("DistributionRepo", () => {
       "GET /app/api/me/github": linked,
       [ACCESS]: ok({ status: "pending", invitationsUrl: `https://github.com/${FULL}/invitations` }),
     });
-    renderWithProviders(<DistributionRepo projectId={ID} fullName={FULL} />);
+    renderWithProviders(<DistributionRepo project={PROJECT} />);
     await userEvent.click(await screen.findByRole("button", { name: "Request access" }));
     const invited = await screen.findByTestId("distribution-invited");
     expect(invited).toHaveTextContent("Invitation sent, accept it on GitHub");
@@ -38,14 +40,14 @@ describe("DistributionRepo", () => {
       "GET /app/api/me/github": linked,
       [ACCESS]: ok({ status: "accepted", invitationsUrl: `https://github.com/${FULL}/invitations` }),
     });
-    renderWithProviders(<DistributionRepo projectId={ID} fullName={FULL} />);
+    renderWithProviders(<DistributionRepo project={PROJECT} />);
     await userEvent.click(await screen.findByRole("button", { name: "Request access" }));
     expect(await screen.findByTestId("distribution-in")).toHaveTextContent("You have access");
   });
 
   it("shows a note leading to Settings instead of the button without a linked account", async () => {
     mockFetch({ "GET /app/api/me/github": ok({ account: null, relevant: true }) });
-    renderWithProviders(<DistributionRepo projectId={ID} fullName={FULL} />);
+    renderWithProviders(<DistributionRepo project={PROJECT} />);
     const note = await screen.findByTestId("distribution-link-first");
     expect(note).toHaveTextContent("Link GitHub in Settings to open it");
     expect(note).toHaveAttribute("href", "/settings");
@@ -59,7 +61,7 @@ describe("DistributionRepo", () => {
       "GET /app/api/me/github": linked,
       [ACCESS]: fail(502, { error: "invite_failed", message: "GitHub did not take the invitation" }),
     });
-    renderWithProviders(<DistributionRepo projectId={ID} fullName={FULL} />);
+    renderWithProviders(<DistributionRepo project={PROJECT} />);
     await userEvent.click(await screen.findByRole("button", { name: "Request access" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("GitHub did not answer. Try again in a moment.");
     expect(screen.getByRole("button", { name: "Request access" })).toBeInTheDocument();
@@ -67,7 +69,7 @@ describe("DistributionRepo", () => {
 
   it("shows the link alone on a platform without the App", async () => {
     const { fetchMock } = mockFetch({});
-    renderWithProviders(<DistributionRepo projectId={ID} fullName={FULL} />);
+    renderWithProviders(<DistributionRepo project={PROJECT} />);
     expect(screen.getByRole("link", { name: "lab-squashed" })).toBeInTheDocument();
     // The account's read answered (404: no App), and its answer handled.
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/app/api/me/github", expect.anything()));

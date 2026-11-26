@@ -210,7 +210,7 @@ Any member of the course's staff can open a student's (or a group's) repository 
 
 ### Open the distribution repository in the workspace
 
-An owner of the course can open the **distribution repository**, what every student receives, in the online workspace: the laptop icon beside its link, under **Work handed out** on a draft or a scheduled project, in the **Source** tile once published. It runs the project's image, so you build and run the lab as students will before anyone sees it. It is read-only like a student's repository: you may commit there, nothing goes back to GitHub, and the distribution changes only through **Sync**. It is offered in every state of the project but archived, Safe Exam Browser included, once the distribution is built; assistants do not have it. It shares the one-at-a-time rule and the limits above. *(ADR-147.)*
+An owner of the course (the **Teacher** role, not an **Assistant**) can open the **distribution repository**, what every student receives, in the online workspace: the laptop icon beside its link, under **Work handed out** on a draft or a scheduled project, in the **Source** tile once published. It runs the project's image, so you build and run the lab as students will before anyone sees it. It is read-only like a student's repository: you may commit there, nothing goes back to GitHub, and the distribution changes only through **Sync**. It is offered in every state of the project but archived, Safe Exam Browser included, once the distribution is built. It shares the one-at-a-time rule and the limits above. *(ADR-147.)*
 
 ## Archive and delete
 

@@ -23,7 +23,6 @@ import { projectGradebookRow, ProtectedFilesRow, useHandoutTree } from "./Projec
 import { WorkModeSetting, useWorkspace } from "./ProjectWorkspace";
 import { advancedCount, type WriteProject } from "./projectPage";
 import { DistributionRepo } from "./DistributionRepo";
-import { OpenDistributionIcon } from "./OpenInWorkspace";
 
 /** The grace, in minutes: written when the teacher leaves the field; 0 is a grace of none. */
 function GraceRow({ value, disabled, onWrite }: { value: number; disabled: boolean; onWrite: (minutes: number) => void }) {
@@ -104,19 +103,7 @@ export function ProjectDraftForm({
           <Facts
             rows={[
               [t("project.source"), <RepoLink key="s" fullName={project.source.fullName} />],
-              [
-                t("project.distribution"),
-                project.distribution ? (
-                  <DistributionRepo
-                    key="d"
-                    projectId={project.id}
-                    fullName={project.distribution.fullName}
-                    action={<OpenDistributionIcon project={project} />}
-                  />
-                ) : (
-                  <span className="text-fg-muted">{t("project.distribution.building")}</span>
-                ),
-              ],
+              [t("project.distribution"), <DistributionRepo key="d" project={project} />],
               [t("project.branches"), <span key="b" className="font-mono text-xs">{project.branches.join(", ")}</span>],
               [t("project.sourceStrategy"), t(`project.sourceStrategy.${project.sourceStrategy}`)],
               // There is no Source tile on a draft: whether the source moved on is said here, and Sync sits in the header.
