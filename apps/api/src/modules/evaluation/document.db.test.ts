@@ -16,22 +16,21 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { EvaluationDetail, EvaluationDocumentRecord, HandoutRecord } from "@quiz/contracts";
 import { findStudentLeaks } from "@quiz/core/testing";
-import { LABELS } from "@quiz/docexport";
 import { markdownBody } from "@quiz/docexport/markdown";
 import { renderTypst } from "@quiz/docexport/typst";
 import { splitFrontMatter } from "@quiz/docrender/frontMatter";
 import { LOCALES } from "@quiz/domain";
 
-import { evaluations, paperVariants, questions } from "../../db/schema.js";
+import { evaluationItems, evaluations, paperVariants, questions } from "../../db/schema.js";
 import { sessionOf, type TestServer, testServer } from "../../test/http.js";
 import { reload, seedLive } from "../../test/live.js";
-import { fallOf, markersIn, publishParameterized, showsKey, VARIABLES } from "../../test/parameterized.js";
+import { fallOf, legibleSeed, markersIn, publishParameterized, showsKey, VARIABLES } from "../../test/parameterized.js";
 import { pdfText, pdfTools } from "../../test/pdf.js";
 import * as live from "../live/service.js";
 import { typeOf } from "../pool/config.js";
 import * as poolService from "../pool/service.js";
 import { handout, handoutTree } from "./document.js";
-import { addItems, joinedItems, patchItem, settingsOf, updateVersions } from "./service.js";
+import { addItems, joinedItems, latestPublished, patchItem, settingsOf, updateVersions } from "./service.js";
 
 /** One question of each printable type, every secret a marker the search finds. */
 const QUESTIONS = {
@@ -168,7 +167,7 @@ describe("the statement with key (F-EXP-04)", () => {
     expect(res.headers["cache-control"]).toBe("no-store");
     const { frontMatter, body } = splitFrontMatter(res.body);
     expect(frontMatter).toMatchObject({
-      export: { kind: "evaluation-document", format: "md", version: 1 },
+      export: { kind: "evaluation-document", format: "md", version: 2 },
       source: { evaluationId: evaluation.id },
       attempts: [],
     });
@@ -188,48 +187,6 @@ describe("the statement with key (F-EXP-04)", () => {
     expect(body.match(/- \[x\]/g)).toHaveLength(1);
     expect(body).not.toMatch(/^---$/m);
   });
-
-  /*
-   * No registered type has a statement without a paper zone today: one is
-   * made by hiding `short`'s hook for this test, so the hand-out refuses
-   * `short` and the key alone is served.
-   */
-  it("keeps the base order where the hand-out does not print, a parameterized item with its example values, said so", async () => {
-    const db = server.app.db;
-    const evaluation = await exam(async (poolId) => [await publishParameterized(db, { poolId, teacherId: teacher.id, type: "short" })]);
-    const short = typeOf("short");
-    const zone = short.answerZone;
-    Reflect.deleteProperty(short, "answerZone");
-    try {
-      await baseOrderKey(evaluation);
-    } finally {
-      Object.assign(short, { answerZone: zone });
-    }
-  });
-
-  async function baseOrderKey(evaluation: { id: string }) {
-    const detail = EvaluationDetail.parse((await get(`/app/api/evaluations/${evaluation.id}`, teacher.headers)).json());
-    expect(detail.exports).toMatchObject({ document: null, handout: { reason: "type", types: ["short"] } });
-    const types = [...Object.keys(QUESTIONS), "short"];
-    const record = EvaluationDocumentRecord.parse((await get(url(evaluation.id, "document.json"), teacher.headers)).json());
-    expect(record.items.map((i) => i.type)).toEqual(types);
-    expect(record.items.map((i) => i.position)).toEqual(types.map((_, i) => i));
-    expect(record.items.map((i) => i.example)).toEqual(types.map((_, i) => i === types.length - 1));
-    // Not the template: its example values, instantiated, the explanation too (ADR-056 §4, §9).
-    expect(markersIn(JSON.stringify(record.items.at(-1)))).toEqual([]);
-    expect(record.items.at(-1)!.explanation).toMatch(/^The fall lasts \d+\.\d\d s\.$/);
-    // No paper: no variant drawn.
-    expect(await storedVariant(evaluation.id)).toBeNull();
-    for (const lang of LOCALES) {
-      const res = await get(url(evaluation.id, "document.md"), { ...teacher.headers, "accept-language": lang });
-      expect(res.statusCode).toBe(200);
-      const { body } = splitFrontMatter(res.body);
-      const label = `*${LABELS[lang].exampleValues}*`;
-      expect(body.split(label)).toHaveLength(2);
-      expect(body.indexOf(label)).toBeGreaterThan(body.search(new RegExp(`^## ${LABELS[lang].question} 6`, "m")));
-      expect(markersIn(body)).toEqual([]);
-    }
-  }
 
   it("words the key in French for a French teacher (ADR-121 §4, amended 2026-11-04)", async () => {
     const evaluation = await exam();
@@ -258,7 +215,7 @@ describe("the statement with key (F-EXP-04)", () => {
     expect(record.items.map((i) => [i.id, i.position, i.statement])).toEqual(handout.items.map((i) => [i.id, i.position, i.statement]));
     expect(record.items.map((i) => i.explanation)).toEqual(record.items.map((i) => explanationOf(i.type)));
     expect(record.items.map((i) => i.internalName)).toEqual(record.items.map((i) => nameOf(i.type)));
-    expect(record.items.every((i) => !i.example)).toBe(true);
+    expect(record.version).toBe(2);
     expect(res.body).not.toMatch(/seed/i);
     expect(showsSeed(res.body, (await storedSeed(evaluation.id))!)).toBe(false);
   });
@@ -386,10 +343,10 @@ describe("the hand-out (ADR-125)", () => {
 
 /*
  * A parameterized evaluation on paper (ADR-147): one variant's values,
- * drawn from its seed, stored, shared by the hand-out and the key, kept
- * across prints and edits; and no template in any form of the hand-out
- * (ADR-056 §4; 05 §5.7; ADR-125 §19), nor the variant's seed, version ids
- * or values map.
+ * drawn from its seed, stored, shared by the hand-out and the key, kept or
+ * drawn again by the keep rule of each side of the opening; and no
+ * template in any form of the hand-out (ADR-056 §4; 05 §5.7; ADR-125 §19),
+ * no drawn key, nor the variant's seed, version ids or values map.
  */
 describe("a parameterized evaluation on paper (ADR-147)", () => {
   /** An exam of the printable static types and one parameterized question of each v1 type. */
@@ -401,28 +358,32 @@ describe("a parameterized evaluation on paper (ADR-147)", () => {
       }
       return ids;
     });
-  const parameterizedIds = async (id: string) =>
-    (await joinedItems(server.app.db, id)).filter((j) => j.version.variables !== null).map((j) => j.item.id);
+  const parameterizedItems = async (id: string) =>
+    (await joinedItems(server.app.db, id)).filter((j) => j.version.variables !== null);
 
   it("prints a hand-out and a key whose values agree, stored once and stable across prints", async () => {
+    const db = server.app.db;
     const evaluation = await parameterizedExam();
     const detail = EvaluationDetail.parse((await get(`/app/api/evaluations/${evaluation.id}`, teacher.headers)).json());
     expect(detail.exports).toEqual({ document: null, handout: null, paper: "paper_not_started" });
 
     const first = HandoutRecord.parse((await get(url(evaluation.id, "handout.json"), teacher.headers)).json());
     const stored = (await storedVariant(evaluation.id))!;
-    const ids = await parameterizedIds(evaluation.id);
+    // Written back for a rolled-back image, which prints from `paper_seed` (ADR-147 §2).
+    expect((await reload(db, evaluation.id)).paperSeed).toBe(stored.seed);
+    const ids = (await parameterizedItems(evaluation.id)).map((j) => j.item.id);
     expect(Object.keys(stored.instances).sort()).toEqual([...ids].sort());
+    server.clock.advance(60_000);
     const key = EvaluationDocumentRecord.parse((await get(url(evaluation.id, "document.json"), teacher.headers)).json());
     const second = HandoutRecord.parse((await get(url(evaluation.id, "handout.json"), teacher.headers)).json());
     expect(second.items).toEqual(first.items);
-    expect((await storedVariant(evaluation.id))!.instances).toEqual(stored.instances);
+    // Nothing to draw: nothing written.
+    expect(await storedVariant(evaluation.id)).toEqual(stored);
     // The key is the paper's: the same statements, in the same order, with the same values.
     expect(key.items.map((i) => [i.id, i.statement])).toEqual(first.items.map((i) => [i.id, i.statement]));
     for (const id of ids) {
       const values = stored.instances[id]!.values;
       const keyItem = key.items.find((i) => i.id === id)!;
-      expect(keyItem.example).toBe(false);
       // The key: the number itself, or for an mcq the choice its position names.
       const choices = (keyItem.statement as { choices?: { text: string }[] }).choices;
       const keyText = choices
@@ -430,19 +391,21 @@ describe("a parameterized evaluation on paper (ADR-147)", () => {
         : JSON.stringify(keyItem.solution);
       expect(showsKey(keyText, values)).toBe(true);
       expect(keyItem.explanation).toBe(`The fall lasts ${fallOf(values)} s.`);
-      // The hand-out of a short or a cloze shows the statement's values, never the key.
-      const printed = JSON.stringify(first.items.find((i) => i.id === id)!.statement);
-      if (keyItem.type !== "mcq") expect(showsKey(printed, values)).toBe(false);
     }
   });
 
-  it("holds no template, no seed, no version id and no values map in any form of the hand-out", async () => {
+  it("holds no template, no drawn key, no seed, no version id and no values map in any form of the hand-out", async () => {
     const evaluation = await parameterizedExam();
+    const keys = await legibleSeed(server.app.db, evaluation.id, server.clock.now());
     const res = await get(url(evaluation.id, "handout.json"), teacher.headers);
     const record = HandoutRecord.parse(res.json());
     const items = await joinedItems(server.app.db, evaluation.id);
     const { seed, instances } = (await storedVariant(evaluation.id))!;
-    const forbidden = [...live.FORBIDDEN_STUDENT_KEYS, "versionId", "instances", "fallback", "condition"];
+    expect(Object.keys(instances)).toHaveLength(3);
+    // The keys searched are the variant's own.
+    const stored = (await parameterizedItems(evaluation.id)).filter((j) => j.question.type !== "mcq").map((j) => instances[j.item.id]!.values);
+    expect(stored).toEqual(keys);
+    const forbidden = [...live.FORBIDDEN_STUDENT_KEYS, "versionId", "instances", "variables", "fallback", "condition"];
     expect(findStudentLeaks(record, { forbiddenKeys: forbidden, secrets: SECRETS })).toEqual([]);
     const markdownExport = (await get(url(evaluation.id, "handout.md"), teacher.headers)).body;
     const found = await handout(server.app.db, evaluation, { now: server.clock.now() });
@@ -455,56 +418,66 @@ describe("a parameterized evaluation on paper (ADR-147)", () => {
     for (const text of forms) {
       expect(markersIn(text)).toEqual([]);
       expect(text).not.toContain("The fall lasts");
+      for (const values of keys) expect(showsKey(text, values)).toBe(false);
       expect(showsSeed(text, seed)).toBe(false);
       for (const entry of items) expect(text).not.toContain(entry.version.id);
       // The values map: no variable name as a key of its own.
       for (const row of VARIABLES.rows) expect(text).not.toContain(`"${row.name}":`);
     }
-    expect(Object.keys(instances)).toHaveLength(3);
   });
 
-  it.skipIf(!pdfTools)("prints the hand-out as a PDF whose text holds no template", async () => {
+  it.skipIf(!pdfTools)("prints the hand-out as a PDF whose text holds no template and no drawn key", async () => {
     const evaluation = await parameterizedExam();
+    const keys = await legibleSeed(server.app.db, evaluation.id, server.clock.now());
     const res = await get(url(evaluation.id, "handout.pdf"), teacher.headers);
     expect(res.statusCode).toBe(200);
     const text = await pdfText(res.rawPayload);
     expect(text).toContain("A ball is dropped from");
     expect(markersIn(text)).toEqual([]);
+    for (const values of keys) expect(showsKey(text, values)).toBe(false);
     for (const secret of SECRETS) expect(text).not.toContain(secret);
     expect(showsSeed(text, (await storedSeed(evaluation.id))!)).toBe(false);
   });
 
-  it("draws an item added or re-parameterized before the opening, keeping every other item's values", async () => {
+  /** The short's question published again: other names (`height`), or the same names on a corrected range. */
+  async function republishShort(evaluationId: string, rename: boolean) {
     const db = server.app.db;
-    const evaluation = await parameterizedExam();
-    expect((await get(url(evaluation.id, "handout.json"), teacher.headers)).statusCode).toBe(200);
-    const before = (await storedVariant(evaluation.id))!.instances;
-    const items = await joinedItems(db, evaluation.id);
-    const short = items.find((j) => j.question.internalName === "PARAM_short")!;
-
-    // The short's question republished with other variable names, and the item moved onto it.
+    const short = (await joinedItems(db, evaluationId)).find((j) => j.question.internalName === "PARAM_short")!;
+    const h = rename ? "height" : "h";
     const [question] = await db.select().from(questions).where(eq(questions.id, short.question.id));
-    const renamed = {
+    const saved = await poolService.putDraft(db, question!, {
       config: {
         configVersion: 3,
-        prompt: "A ball is dropped from [[height]] m where g = [[g]] m/s². How many seconds does it fall?",
+        prompt: `A ball is dropped from [[${h}]] m where g = [[g]] m/s². How many seconds does it fall?`,
         kind: "number",
         matchers: [{ kind: "number", value: "[[t]]", tolerance: "[[t/100]]" }],
       },
       explanation: "The fall lasts [[t]] s.",
       variables: {
         rows: [
-          { name: "height", expr: "randint(10, 100)", format: "int" },
+          { name: h, expr: "randint(200, 300)", format: "int" },
           { name: "g", expr: "choice([3.71, 9.81, 24.79])", format: ".2" },
-          { name: "t", expr: "sqrt(2*height/g)", format: ".2" },
+          { name: "t", expr: `sqrt(2*${h}/g)`, format: ".2" },
         ],
         condition: "t > 1.5",
       },
-    };
-    expect((await poolService.putDraft(db, question!, renamed)).valid).toBe(true);
+    });
+    expect(saved.valid).toBe(true);
     await poolService.publishQuestion(db, question!, { userId: teacher.id });
+    const latest = (await latestPublished(db, [short.question.id])).get(short.question.id)!;
+    return { short, latest };
+  }
+
+  it("before the opening, draws again an item edited or added, keeping every other item's values", async () => {
+    const db = server.app.db;
+    const evaluation = await parameterizedExam();
+    expect((await get(url(evaluation.id, "handout.json"), teacher.headers)).statusCode).toBe(200);
+    const before = (await storedVariant(evaluation.id))!.instances;
+
+    // The short corrected, same names, and the item moved onto it: drawn again, never replayed.
+    const { short, latest } = await republishShort(evaluation.id, false);
     await updateVersions(db, await reload(db, evaluation.id), [short.item.id], { attemptCount: 0 });
-    // And one more parameterized question added.
+    // One more parameterized question added.
     const added = await publishParameterized(db, { poolId: short.question.poolId!, teacherId: teacher.id, type: "mcq", name: "PARAM_added" });
     await addItems(db, await reload(db, evaluation.id), [added], (type, version) =>
       typeOf(type).defaultPoints(poolService.exampleConfig(type, version)), { attemptCount: 0 });
@@ -512,15 +485,45 @@ describe("a parameterized evaluation on paper (ADR-147)", () => {
     const res = await get(url(evaluation.id, "handout.json"), teacher.headers);
     expect(res.statusCode, res.body).toBe(200);
     const after = (await storedVariant(evaluation.id))!.instances;
-    const now = await joinedItems(db, evaluation.id);
-    const addedItem = now.find((j) => j.question.internalName === "PARAM_added")!;
+    const addedItem = (await joinedItems(db, evaluation.id)).find((j) => j.question.internalName === "PARAM_added")!;
     expect(Object.keys(after).sort()).toEqual([...Object.keys(before), addedItem.item.id].sort());
     for (const [id, kept] of Object.entries(before)) if (id !== short.item.id) expect(after[id]).toEqual(kept);
-    // The renamed item drawn again under its new version and names.
-    const moved = now.find((j) => j.item.id === short.item.id)!;
-    expect(after[short.item.id]).toMatchObject({ versionId: moved.version.id });
+    // Drawn for the corrected version, in its corrected range.
+    expect(after[short.item.id]).toMatchObject({ versionId: latest.id });
+    expect(after[short.item.id]!.values["h"]).toBeGreaterThanOrEqual(200);
+
+    // Renamed variables, before the opening: drawn again too, no error.
+    const renamed = await republishShort(evaluation.id, true);
+    await updateVersions(db, await reload(db, evaluation.id), [short.item.id], { attemptCount: 0 });
+    expect((await get(url(evaluation.id, "handout.json"), teacher.headers)).statusCode).toBe(200);
+    const third = (await storedVariant(evaluation.id))!.instances[short.item.id]!;
+    expect(third.versionId).toBe(renamed.latest.id);
+    expect(Object.keys(third.values).sort()).toEqual(["g", "height", "t"]);
+  });
+
+  it("after the opening, keeps an entry that replays, and draws again only one that cannot (a lost update)", async () => {
+    const db = server.app.db;
+    const evaluation = await parameterizedExam();
+    expect((await get(url(evaluation.id, "handout.json"), teacher.headers)).statusCode).toBe(200);
+    const before = (await storedVariant(evaluation.id))!;
+    const { short, latest } = await republishShort(evaluation.id, false);
+    // Opened, and the item retargeted onto the corrected version behind the guards (a regrade's retarget keeps the names).
+    await db.update(evaluations).set({ state: "running", startedAt: server.clock.now() }).where(eq(evaluations.id, evaluation.id));
+    await db.update(evaluationItems).set({ questionVersionId: latest.id }).where(eq(evaluationItems.id, short.item.id));
+    server.clock.advance(60_000);
+    expect((await get(url(evaluation.id, "handout.json"), teacher.headers)).statusCode).toBe(200);
+    // Replayed, never redrawn: the row is untouched.
+    expect(await storedVariant(evaluation.id)).toEqual(before);
+
+    // The lost update: values of the old names stored while the item sits on renamed variables.
+    const renamed = await republishShort(evaluation.id, true);
+    await db.update(evaluationItems).set({ questionVersionId: renamed.latest.id }).where(eq(evaluationItems.id, short.item.id));
+    const res = await get(url(evaluation.id, "handout.json"), teacher.headers);
+    expect(res.statusCode, res.body).toBe(200);
+    const after = (await storedVariant(evaluation.id))!.instances;
+    expect(after[short.item.id]).toMatchObject({ versionId: renamed.latest.id });
     expect(Object.keys(after[short.item.id]!.values).sort()).toEqual(["g", "height", "t"]);
-    expect(markersIn(res.body)).toEqual([]);
+    for (const [id, kept] of Object.entries(before.instances)) if (id !== short.item.id) expect(after[id]).toEqual(kept);
   });
 });
 

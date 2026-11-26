@@ -54,21 +54,36 @@ different papers in one room, so that neighbours do not share their numbers.
    `0163_paper_variants` copies every non-null `evaluations.paper_seed` into
    variant 1 with no values (a parameterized evaluation did not print
    before). **Expand, then contract**: the column stays in this step and the
-   code stops reading and writing it, except that creating variant 1 takes a
-   value found there — one an older server wrote during the deploy — in the
-   same statement; a later migration drops it.
+   code reads and writes it only where variant 1 is created, in one
+   statement: the seed is a value found there — one an older server wrote
+   during the deploy — else a new one, which is written back where the
+   column is null, so the previous image still prints the same order after
+   a rollback ([deployment](../development/deployment.md) §5). The contract
+   migration removes three things together: the column, that write-back and
+   that `coalesce` read.
 
 3. **What a variant freezes: the values only.** The item and choice orders
    are recomputed from the seed (D19, ADR-097), never stored. At each print
    and each paper entry, the values a parameterized item lacks are drawn from
-   the variant's seed by the stream of an attempt's (`instanceOf`,
-   `streamSeed(seed, itemId, "vars")`) and stored; stored values that still
-   fit their item are never overwritten. **Before the opening** (`draft`,
-   `scheduled`: while the item list may still change, `items_frozen`),
-   values that no longer fit their version — other variable names
-   (`InstanceMismatch`), or a replay that fails — are dropped and drawn again,
-   never a 500. **After the opening** nothing is redrawn: a read under
-   another version replays them exactly as ADR-056 §5 replays an attempt's.
+   the variant's seed by the stream of an attempt's (`streamSeed(seed,
+   itemId, "vars")`) and stored. One draw rule serves a new attempt and a
+   variant, `completeInstances` (`pool/instance.ts`): an item's stored entry
+   is kept where a keep rule holds, else its values are drawn; a static item
+   stores nothing. The row is written only when something was drawn, so an
+   entry of an item removed, or made static, drops at the next such write.
+   - **Before the opening** (`itemListLock(state, 0) === null`: `draft`,
+     `scheduled`, while the questions may still change), an entry is kept
+     only when it was drawn for the item's current version (`sameVersion`):
+     a question edited or retargeted is drawn again, even under the same
+     names — the teacher prints again anyway, and old values may sit outside
+     a corrected range or fail a corrected condition, which a replay does
+     not check.
+   - **After the opening** an entry is kept whenever it replays under the
+     item's version (`replays`, ADR-056 §5, as an attempt's are read). One
+     that cannot is drawn again rather than answering 500 for ever; only a
+     lost update leaves one — a print in flight writing values of the old
+     names while the item was moved onto renamed variables, the exam then
+     opened.
    A draw that fails is served from draw 0's values, the example the debrief
    already shows publicly (ADR-056 §7, §9), flagged in `fallback`. Draws are a
    function of the seed, so two first prints at the same instant write the
@@ -90,19 +105,19 @@ different papers in one room, so that neighbours do not share their numbers.
    the web app; its sentence leaves the four dictionaries. A poll and a type
    without the paper hooks still refuse.
 
-6. **The statement with key** (amends ADR-125 §8, "keeps the base order").
-   - When the evaluation's hand-out prints: the key of the variant, each item
-     in the paper's order, its statement as the hand-out prints it, its whole
-     key in that view's coordinates and its explanation, with the variant's
-     values. The record keeps `position`, the item's canonical place; the
-     Markdown and the PDF number the items as the paper does.
-   - When the hand-out is refused for a type but the key is not: the base
-     order, as before; a parameterized item shows its EXAMPLE values
-     (`exampleInstance`, draw 0), labelled as the debrief labels them, in the
-     requester's language (`LABELS.exampleValues`), and the record says so
-     (`example: true`). Never the `[[…]]` template: a template never reaches
-     a type's hook (ADR-056 §4). No registered type has a statement without
-     a paper zone today, so this branch waits for one.
+6. **The statement with key** (amends ADR-125 §8, "keeps the base order")
+   is always the key of the variant: each item in the paper's order, its
+   statement as the hand-out prints it, its whole key in that view's
+   coordinates and its explanation, with the variant's values — never a
+   `[[…]]` template, which never reaches a type's hook (ADR-056 §4). The
+   record keeps `position`, the item's canonical place; the Markdown and the
+   PDF number the items as the paper does. Its `version` becomes 2: the order
+   of `items` changed meaning (`HandoutRecord` stays 1). The owner's answer
+   for "an evaluation that does not print" (the base order, a parameterized
+   question's example values) described a case no registered type produces —
+   every type with a statement declares a paper zone — so the general rule
+   covers it: a future type without a zone gets the paper's order with the
+   variant's stored values too.
 
 7. **The student's blank print of a past series**: variant 1 for everyone,
    with no variant label and no variant parameter.
@@ -137,6 +152,11 @@ closes no door; none of it is built yet:
   waits for its contract migration.
 - A teacher who edits a question after printing and before the opening must
   print again: the platform holds the new draw, the paper holds the old one.
+- Anonymity: [PLACEHOLDER — wording to come from the coordinator after the
+  owner's answer. A paper attempt on a parameterized item carries the
+  variant's values, which the grading panel shows in each cell and which are
+  the numbers printed on the hand-out the grader holds, so a paper copy can
+  be told apart on the anonymised table (ADR-125 §17, F-GRADE-03).]
 
 ## Alternatives considered
 

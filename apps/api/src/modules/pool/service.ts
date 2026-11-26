@@ -34,6 +34,7 @@ export {
   type StaticVersion,
 } from "./config.js";
 export {
+  completeInstances,
   configPerAttempt,
   exampleConfig,
   exampleInstance,
@@ -44,9 +45,12 @@ export {
   parameterIssues,
   parametersOf,
   readingPerAttempt,
+  replays,
+  sameVersion,
   templateHash,
   writtenConfig,
   type InstanceAttempt,
+  type KeepRule,
   type Reading,
   type VersionContent,
 } from "./instance.js";

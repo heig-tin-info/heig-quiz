@@ -15,7 +15,8 @@ comes before step 5).
 
 Amended 2026-11-26 by [ADR-147](ADR-147-variantes-papier.md), scope: §8
 step 3 (a parameterized question is no longer refused: the hand-out and the
-key follow a stored paper variant).
+key follow a stored paper variant; the key's record moves to `version` 2, its
+items in the paper's order).
 
 Amended 2026-11-04 by [ADR-126](ADR-126-types-a-canevas-sur-papier.md),
 scope: §1 (the `drawing` block holds a closed drawing model, never

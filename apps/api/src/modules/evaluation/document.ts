@@ -3,14 +3,10 @@
  * Sources of the export factory for the export sheet.
  *
  *   - {@link evaluationDocument}, the staff "statement with key" (F-EXP-04):
- *     of an evaluation whose hand-out prints, the key of its paper variant
- *     (ADR-147) — every item in the paper's order, its statement as the
- *     hand-out prints it, its whole key in that view and its explanation,
- *     with the variant's values; of any other, every item in the base order,
- *     its statement as a student is served it (seed 0, no shuffle, like the
- *     grading panel's expected row), a parameterized one with its example
- *     values (ADR-056 §9), said so. Worded in the reader's language (ADR-121
- *     §4, amended 2026-11-04).
+ *     the key of the evaluation's paper variant (ADR-147) — every item in
+ *     the paper's order, its statement as the hand-out prints it, its whole
+ *     key in that view and its explanation, with the variant's values.
+ *     Worded in the reader's language (ADR-121 §4, amended 2026-11-04).
  *   - {@link handout}, the paper a student is handed (ADR-125 §5–§8): the
  *     student views only, through the one exit (invariant 4), in the order,
  *     with the shuffles and the values of the evaluation's paper variant —
@@ -46,7 +42,7 @@ import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { explanationBlocks, itemKeyBlocks, provenanceOf } from "../../documents/blocks.js";
 import * as live from "../live/service.js";
-import { exampleInstance, explanationOrNull, loadConfig, typeOf } from "../pool/service.js";
+import { explanationOrNull, typeOf } from "../pool/service.js";
 import { paperVariant, printRefusal } from "./print.js";
 import { joinedItems, type JoinedItem } from "./reads.js";
 import { EvaluationError, type EvaluationRecord } from "./shared.js";
@@ -74,35 +70,11 @@ async function printableItems(
 const basenameOf = (evaluation: EvaluationRecord, suffix: string): string =>
   `${slugify(evaluation.title) || "evaluation"}-${suffix}`;
 
-/** One item of the statement with key, before it becomes a record's row. */
-interface KeyedItem {
-  entry: JoinedItem;
-  statement: unknown;
-  solution: unknown;
-  explanation: string;
-  /** Shown with its example values: every student had their own (ADR-056 §9). */
-  example: boolean;
-}
-
 /**
- * Each item of `evaluation` in the base order, with its key: a static one as
- * written, a parameterized one with its example values (`exampleInstance`,
- * draw 0), never its template — a template never reaches a type's hook
- * (ADR-056 §4).
- */
-const baseKey = (items: readonly JoinedItem[]): KeyedItem[] =>
-  items.map((entry) => {
-    const { type } = entry.question;
-    const instance = exampleInstance(type, entry.version);
-    const { student, solution } = live.staffViews(type, loadConfig(type, instance.version), entry.item.id);
-    return { entry, statement: student, solution, explanation: instance.explanation, example: instance.values !== null };
-  });
-
-/**
- * The staff "statement with key" (F-EXP-04): the record. An evaluation whose
- * hand-out prints gets the key of its paper variant (ADR-147), in the paper's
- * order with its values, so the key and the hand-out agree; any other, the
- * base order.
+ * The staff "statement with key" (F-EXP-04): the record — the key of the
+ * evaluation's paper variant (ADR-147), each item in the paper's order, its
+ * statement as the hand-out prints it, its whole key in that view and its
+ * explanation, with the variant's values, so the key and the hand-out agree.
  */
 export async function evaluationDocument(
   db: Db,
@@ -110,16 +82,11 @@ export async function evaluationDocument(
   options: { now: Date },
 ): Promise<Found<EvaluationDocumentRecord>> {
   const items = await printableItems(db, evaluation, "document");
-  const keyed: KeyedItem[] =
-    printRefusal(evaluation, items, "handout") === null
-      ? live
-          .paperKeyItems(evaluation, items, await paperVariant(db, evaluation, items, options.now))
-          .map((key) => ({ ...key, example: false }))
-      : baseKey(items);
+  const variant = await paperVariant(db, evaluation, items, options.now);
   return {
     record: {
       kind: "evaluation-document",
-      version: 1,
+      version: 2,
       generatedAt: iso(options.now),
       evaluation: {
         id: evaluation.id,
@@ -127,7 +94,7 @@ export async function evaluationDocument(
         mode: evaluation.mode,
         totalPoints: evaluationTotal(items.map((i) => i.item)),
       },
-      items: keyed.map(({ entry, statement, solution, explanation, example }) => ({
+      items: live.paperKeyItems(evaluation, items, variant).map(({ entry, statement, solution, explanation }) => ({
         id: entry.item.id,
         position: entry.item.position,
         internalName: entry.question.internalName,
@@ -140,7 +107,6 @@ export async function evaluationDocument(
         statement,
         solution,
         explanation: explanationOrNull(explanation),
-        example,
       })),
     },
     basename: basenameOf(evaluation, "key"),
@@ -149,22 +115,18 @@ export async function evaluationDocument(
 
 /**
  * The Markdown tree of {@link evaluationDocument}, worded in `lang`: each
- * item numbered in the record's order — the paper's, or the base order — and
- * an item shown with example values says so under its heading. No rule
- * between items: each heading opens one.
+ * item numbered as the paper numbers it. No rule between items: each heading
+ * opens one.
  */
 export function evaluationDocumentTree(found: Found<EvaluationDocumentRecord>, lang: Lang): Document {
   const { record } = found;
   const l = LABELS[lang];
   const blocks: Block[] = [heading(1, record.evaluation.title)];
   record.items.forEach((item, rank) => {
-    const [head, ...key] = itemKeyBlocks(typeOf(item.type), rank, item.internalName, item.points, item.statement, item.solution, l);
     blocks.push(
       // The teacher's passage before the item (ADR-084).
       ...(item.intro ? [markdown(item.intro)] : []),
-      head!,
-      ...(item.example ? [markdown(`*${l.exampleValues}*`)] : []),
-      ...key,
+      ...itemKeyBlocks(typeOf(item.type), rank, item.internalName, item.points, item.statement, item.solution, l),
       ...explanationBlocks(item.explanation, l),
     );
   });

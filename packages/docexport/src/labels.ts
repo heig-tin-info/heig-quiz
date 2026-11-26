@@ -20,8 +20,6 @@ export interface Labels {
   statement: string;
   answerKey: string;
   explanation: string;
-  /** Under a parameterized question shown with its example values (ADR-056 §9): the debrief's words. */
-  exampleValues: string;
   yourAnswer: string;
   points: string;
   /** The unit after a number of points: `2 pt`. */
@@ -162,7 +160,6 @@ export const EN_LABELS: Labels = {
   statement: "Statement",
   answerKey: "Answer key",
   explanation: "Explanation",
-  exampleValues: "Example values: each student had their own numbers.",
   yourAnswer: "Your answer",
   points: "Points",
   pointsShort: "pt",
@@ -273,7 +270,6 @@ export const FR_LABELS: Labels = {
   statement: "Énoncé",
   answerKey: "Corrigé",
   explanation: "Explication",
-  exampleValues: "Valeurs d'exemple : chaque étudiant avait ses propres nombres.",
   yourAnswer: "Votre réponse",
   points: "Points",
   pointsShort: "pt",
@@ -389,7 +385,6 @@ export const DE_LABELS: Labels = {
   statement: "Aufgabenstellung",
   answerKey: "Musterlösung",
   explanation: "Erklärung",
-  exampleValues: "Beispielwerte: Alle Studierenden hatten eigene Zahlen.",
   yourAnswer: "Ihre Antwort",
   points: "Punkte",
   pointsShort: "Pkt.",
@@ -505,7 +500,6 @@ export const IT_LABELS: Labels = {
   statement: "Enunciato",
   answerKey: "Soluzione",
   explanation: "Spiegazione",
-  exampleValues: "Valori d'esempio: ogni persona aveva i propri numeri.",
   yourAnswer: "La sua risposta",
   points: "Punti",
   pointsShort: "pt",

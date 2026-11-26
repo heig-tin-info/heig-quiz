@@ -10,8 +10,7 @@ import { randomInt } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { EvaluationExports, PAPER_ENTRY_REFUSALS, PrintRefusal } from "@quiz/contracts";
-import { ITEM_LIST_EDITABLE_STATES, type EvaluationStateName } from "@quiz/domain";
-import { ParameterError } from "@quiz/domain/parameters";
+import { itemListLock } from "@quiz/domain";
 
 /** A paper copy's refusal: its code, and the hand-out's refusal when it does not print (the 409's body). */
 interface PaperEntryRefusal {
@@ -19,9 +18,8 @@ interface PaperEntryRefusal {
   print: PrintRefusal | null;
 }
 
-import type { StoredInstance } from "../../db/columns.js";
 import { evaluations, paperVariants } from "../../db/schema.js";
-import { instanceOf, InstanceMismatch, typeOf, type InstanceAttempt } from "../pool/service.js";
+import { completeInstances, replays, sameVersion, typeOf, type InstanceAttempt } from "../pool/service.js";
 import type { JoinedItem } from "./reads.js";
 import type { DbOrTx, EvaluationRecord } from "./shared.js";
 
@@ -67,22 +65,24 @@ const VARIANT = 1;
 
 /**
  * `evaluation`'s paper variant (ADR-147): its seed, and the values of every
- * parameterized item of `items`, each drawn from that seed by the stream of
- * an attempt's (`instanceOf`), completed and stored here — the one writer of
+ * parameterized item of `items`, completed and stored here by the draw rule
+ * of an attempt's (`completeInstances`) — the one writer of
  * `paper_variants`.
  *
- *   - The row is created on the first call, from the CSPRNG in the range of
- *     an attempt's seed (`drawSeed`), or from a seed an older server stored
- *     on the evaluation (`paper_seed`, read in the same statement); a
- *     concurrent first call keeps the row that landed first.
- *   - Stored values that still fit their item are kept, never redrawn; the
- *     values an item lacks are drawn now. Before the opening, while the
- *     items may still change, values that no longer fit their version (its
- *     variable names changed, or a replay fails) are dropped and drawn again;
- *     after it, nothing is redrawn and a read replays them as an attempt's
- *     are (ADR-056 §5). An item no longer in `items` keeps nothing.
- *   - Draws are a function of the seed alone, so two concurrent calls write
- *     the same values.
+ *   - The row is created on the first call ({@link variantRow}).
+ *   - The values an item lacks are drawn from the variant's seed. Before the
+ *     opening (`itemListLock`), while the questions may still change, a
+ *     stored entry is kept only when it was drawn for the item's current
+ *     version: an edited or retargeted question is drawn again, the teacher
+ *     printing again anyway, since old values may sit outside a corrected
+ *     range or fail a corrected condition, which a replay does not check.
+ *     After it, an entry is kept whenever it replays (ADR-056 §5); one that
+ *     cannot — only a lost update leaves one, a print in flight writing
+ *     values of the old names while the item was retargeted — is drawn
+ *     again rather than refused for ever.
+ *   - The row is written only when something was drawn; an entry of an item
+ *     gone, or made static, drops at the next such write. Draws are a
+ *     function of the seed, so two concurrent calls write the same values.
  *
  * Never returned to a client nor logged: the callers hand it to the `live`
  * module's builders only.
@@ -94,17 +94,9 @@ export async function paperVariant(
   now: Date,
 ): Promise<InstanceAttempt> {
   const row = await variantRow(db, evaluation.id, now);
-  const redraw = ITEM_LIST_EDITABLE_STATES.includes(evaluation.state as EvaluationStateName);
-  const instances: Record<string, StoredInstance> = {};
-  let changed = Object.keys(row.instances).some((id) => !items.some((entry) => entry.item.id === id));
-  for (const entry of items) {
-    const at = { seed: row.seed, itemId: entry.item.id };
-    const kept = row.instances[entry.item.id];
-    const stored = kept && (!redraw || fits(entry, { ...at, stored: kept })) ? kept : instanceOf(entry.question.type, entry.version, at).stored;
-    if (stored) instances[entry.item.id] = stored;
-    if ((stored ?? undefined) !== kept) changed = true;
-  }
-  if (changed) {
+  const editable = itemListLock(evaluation.state, 0) === null;
+  const { instances, drew } = completeInstances(items, row, editable ? sameVersion : replays);
+  if (drew) {
     await db
       .update(paperVariants)
       .set({ instances, updatedAt: now })
@@ -113,18 +105,15 @@ export async function paperVariant(
   return { seed: row.seed, instances };
 }
 
-/** Whether `stored` still renders `entry`'s version: the same version, or a replay under the same names. */
-function fits(entry: JoinedItem, at: { seed: number; itemId: string; stored: StoredInstance }): boolean {
-  try {
-    instanceOf(entry.question.type, entry.version, at);
-    return true;
-  } catch (error) {
-    if (error instanceof InstanceMismatch || error instanceof ParameterError) return false;
-    throw error;
-  }
-}
-
-/** The variant's row, created by the first caller. */
+/**
+ * The variant's row, created by the first caller in ONE statement: its seed
+ * is the one an older server stored on the evaluation (`paper_seed`), else
+ * one from the CSPRNG in the range of an attempt's (`drawSeed`); and that
+ * seed is written back to `paper_seed` where it is null, so a rolled-back
+ * image prints the same order. A concurrent first call keeps the row that
+ * landed first. The contract migration removes the column, this write-back
+ * and the `coalesce` read together (ADR-147 §2).
+ */
 async function variantRow(db: DbOrTx, evaluationId: string, now: Date) {
   const read = () =>
     db
@@ -133,16 +122,17 @@ async function variantRow(db: DbOrTx, evaluationId: string, now: Date) {
       .where(and(eq(paperVariants.evaluationId, evaluationId), eq(paperVariants.number, VARIANT)));
   const [found] = await read();
   if (found) return found;
-  await db
-    .insert(paperVariants)
-    .values({
-      evaluationId,
-      number: VARIANT,
-      seed: sql`coalesce((select ${evaluations.paperSeed} from ${evaluations} where ${evaluations.id} = ${evaluationId}), ${randomInt(0, 0x7fffffff)})`,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoNothing();
+  const at = now.toISOString();
+  await db.execute(sql`
+    with created as (
+      insert into ${paperVariants} ("evaluation_id", "number", "seed", "created_at", "updated_at")
+      select "id", ${VARIANT}, coalesce("paper_seed", ${randomInt(0, 0x7fffffff)}), ${at}::timestamptz, ${at}::timestamptz
+      from ${evaluations} where "id" = ${evaluationId}
+      on conflict do nothing
+      returning "evaluation_id", "seed"
+    )
+    update ${evaluations} set "paper_seed" = coalesce(${evaluations}."paper_seed", created."seed")
+    from created where ${evaluations}."id" = created."evaluation_id"`);
   const [created] = await read();
   if (!created) throw new Error(`evaluation ${evaluationId} has no paper variant`);
   return created;

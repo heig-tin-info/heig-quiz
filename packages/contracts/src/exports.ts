@@ -47,19 +47,17 @@ export const EvaluationExports = z.object({
 export type EvaluationExports = z.infer<typeof EvaluationExports>;
 
 /**
- * `GET /evaluations/:id/document.json` (staff, F-EXP-04): the type's
- * `toSolution` and the explanation beside each statement. When the
- * evaluation's hand-out prints, the key of its paper variant (ADR-147): the
- * items in the paper's order, each statement as the hand-out prints it,
- * the key in that view, the variant's values; `position` stays the item's
- * canonical place. Otherwise the base order, each statement as a student is
- * served it (seed 0, no shuffle), a parameterized one with its example
- * values (`example`). `statement` and `solution` are each type's own
- * shapes, typed per type later (ADR-121 §1).
+ * `GET /evaluations/:id/document.json` (staff, F-EXP-04): the key of the
+ * evaluation's paper variant (ADR-147) — the items in the paper's order,
+ * each statement as the hand-out prints it, the type's `toSolution` in that
+ * view and the explanation, with the variant's values; `position` stays the
+ * item's canonical place. Version 2: version 1 listed the items in the base
+ * order. `statement` and `solution` are each type's own shapes, typed per
+ * type later (ADR-121 §1).
  */
 export const EvaluationDocumentRecord = z.object({
   kind: z.literal("evaluation-document"),
-  version: z.literal(1),
+  version: z.literal(2),
   /** The server's clock. */
   generatedAt: z.iso.datetime(),
   evaluation: z.object({
@@ -78,12 +76,6 @@ export const EvaluationDocumentRecord = z.object({
       statement: z.unknown(),
       solution: z.unknown(),
       explanation: z.string().nullable(),
-      /**
-       * A parameterized question shown with its example values (draw 0,
-       * ADR-056 §9), because its students each had their own; false for a
-       * static one and on a paper variant's key, whose values are the paper's.
-       */
-      example: z.boolean(),
     }),
   ),
 });

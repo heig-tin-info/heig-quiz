@@ -172,10 +172,12 @@ export const evaluations = pgTable(
     /**
      * The seed of the printed paper before paper variants (ADR-125 §8),
      * superseded by {@link paperVariants} (ADR-147): migration 0163 copied
-     * every value into variant 1, and the code no longer reads nor writes it,
-     * but for one read — creating variant 1 takes a value found here (one
-     * an older server wrote during the deploy). Expand, then contract: a
-     * later migration drops it. A SECRET, like a variant's seed.
+     * every value into variant 1. Read and written only where variant 1 is
+     * created, in one statement: its seed is a value found here (one an
+     * older server wrote during the deploy), and a new seed is written back
+     * where this is null, so a rolled-back image prints the same order.
+     * Expand, then contract: the contract migration removes this column,
+     * that write-back and that read together. A SECRET, like a variant's seed.
      */
     paperSeed: integer("paper_seed"),
     /**

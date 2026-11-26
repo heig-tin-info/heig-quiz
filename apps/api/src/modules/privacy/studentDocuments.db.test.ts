@@ -41,7 +41,7 @@ import {
 import { type Payload, sessionOf, testServer, type TestServer } from "../../test/http.js";
 import { kioskStation } from "../../test/kiosk.js";
 import { reload, seedLive } from "../../test/live.js";
-import { markersIn, publishParameterized } from "../../test/parameterized.js";
+import { legibleSeed, markersIn, publishParameterized, showsKey, VARIABLES } from "../../test/parameterized.js";
 import { pdfText, pdfTools, typstProbe } from "../../test/pdf.js";
 import { addItems, applyState, handout, handoutTree } from "../evaluation/service.js";
 import { writeGrading } from "../grading/service.js";
@@ -634,6 +634,7 @@ describe("the blank print of a past series (ADR-122 §9)", () => {
       .json()
       .practice.find((c: { id: string }) => c.id === seed.evaluationId);
     expect(card).toMatchObject({ printable: true });
+    const keys = await legibleSeed(db, seed.evaluationId, server.clock.now());
     nextHour();
     const printed = await get(printUrl(seed.evaluationId), student.headers);
     expect(printed.statusCode).toBe(typstProbe.available ? 200 : 503);
@@ -647,13 +648,20 @@ describe("the blank print of a past series (ADR-122 §9)", () => {
     const staff = HandoutRecord.parse((await get(`/app/api/evaluations/${seed.evaluationId}/handout.json`, teacher.headers)).json());
     expect(found.record.items).toEqual(staff.items);
     const secrets = [...KEYS, ...KEY_HEADINGS, ...EXPLANATIONS, ...ALWAYS_SECRET, "The fall lasts"];
+    const forbiddenKeys = [...live.FORBIDDEN_STUDENT_KEYS, "versionId", "fallback", "instances", "variables"];
+    expect(findStudentLeaks(found.record, { forbiddenKeys, secrets })).toEqual([]);
+    forms.push(JSON.stringify(found.record));
     for (const lang of LOCALES) {
       const tree = handoutTree(found, lang);
-      expect(findStudentLeaks(tree, { forbiddenKeys: [...live.FORBIDDEN_STUDENT_KEYS, "versionId", "fallback"], secrets })).toEqual([]);
+      expect(findStudentLeaks(tree, { forbiddenKeys, secrets })).toEqual([]);
       for (const text of [JSON.stringify(tree), typstOf(tree), ...forms]) {
         expect(markersIn(text)).toEqual([]);
         expect(secrets.filter((secret) => text.includes(secret))).toEqual([]);
+        // The drawn keys, searched as numbers of their own (never a substring).
+        for (const values of keys) expect(showsKey(text, values)).toBe(false);
         expect(new RegExp(`(?<![\\w-])${variant!.seed}(?![\\w])`).test(text)).toBe(false);
+        // The values map: no variable name as a key of its own.
+        for (const row of VARIABLES.rows) expect(text).not.toContain(`"${row.name}":`);
       }
       expect(typstOf(tree)).toContain("A ball is dropped from");
     }

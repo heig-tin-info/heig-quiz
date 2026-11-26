@@ -237,19 +237,19 @@ export async function previewView(
    * draws them from the seed; a paper variant's (ADR-147) for the hand-out
    * and the paper entry.
    */
-  draw: InstanceAttempt = { seed: 0, instances: {} },
+  attempt: InstanceAttempt = { seed: 0, instances: {} },
   /** The evaluation's items when the caller already read them, not read twice. */
   items?: readonly JoinedItem[],
   /** The selection, the teacher's stateless preview's alone; its length is the conditions' count. */
   documents: ProvidedDocument[] = [],
 ): Promise<AttemptView> {
   return viewOf(db, evaluation, {
-    seed: draw.seed,
+    seed: attempt.seed,
     timeBonusPercent: 0,
     practice: false,
     documents,
     documentCount: documents.length,
-    instances: draw.instances,
+    instances: attempt.instances,
     acquired: [],
     items,
     answered: new Map(),
