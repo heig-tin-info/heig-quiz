@@ -24,18 +24,12 @@ const HEADER_MAX = 30;
 
 /**
  * A column header built from a name (an item's, an activity's, a component's):
- * no comma, then cut at {@link HEADER_MAX}.
- *
- * The comma goes because of how these files are opened (#1224). A spreadsheet
- * whose list separator is the comma puts every `;` line in one cell — except
- * a line holding a comma, which it cuts there: with a comma in a question's
- * name the header alone is split, and converting the column on `;` then
- * leaves a header shorter than its rows. Quoting does not help, a spreadsheet
- * honours quotes only at the start of a field of ITS separator. Only labels
- * are rewritten: a person's name or address is never altered, and the numbers
- * hold no comma.
+ * no comma, then cut at {@link HEADER_MAX}. A spreadsheet whose list separator
+ * is the comma cuts a `;` line at its commas, and that line alone (#1224);
+ * quoting does not stop it. Only labels are rewritten, never a person's name.
  */
-export const headerLabel = (name: string): string => name.replace(/\s*,\s*/g, " ").slice(0, HEADER_MAX);
+export const headerLabel = (name: string): string =>
+  name.replace(/(\s*,\s*)+/g, " ").trim().slice(0, HEADER_MAX);
 
 /**
  * RFC-4180 quoting, with the separator of these files. A field is quoted only

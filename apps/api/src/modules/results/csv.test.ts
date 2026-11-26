@@ -41,6 +41,9 @@ describe("headerLabel", () => {
   it("drops the commas of a name, then cuts it at 30 characters", () => {
     expect(headerLabel("Pb2e QCM — portée, résolution et fausses détections")).toBe("Pb2e QCM — portée résolution e");
     expect(headerLabel("a,b , c")).toBe("a b c");
+    // A comma at an edge or doubled leaves no stray space, so a suffix still follows one space.
+    expect(headerLabel("Q1,")).toBe("Q1");
+    expect(headerLabel(", a,,b")).toBe("a b");
     expect(headerLabel("Pointeurs")).toBe("Pointeurs");
   });
 });
