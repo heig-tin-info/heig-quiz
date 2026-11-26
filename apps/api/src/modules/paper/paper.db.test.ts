@@ -500,7 +500,7 @@ describe("the paper attempt (F-PAPER-01..03)", () => {
     }
     const res = await get(`/app/api/evaluations/${evaluation.id}/paper/items?user=${second.id}&variant=2`, teacher.headers);
     const paper = PaperItems.parse(res.json());
-    expect(paper.variant).toEqual({ number: 2, letter: "B", of: 3 });
+    expect(paper.variant).toBe(2);
     const [, b] = await variantsOf(evaluation.id);
     const values = b!.instances[item.item.id]!.values;
     // Variant B's own paper: its order and its numbers.
@@ -520,7 +520,7 @@ describe("the paper attempt (F-PAPER-01..03)", () => {
       .where(and(eq(gradings.attemptId, row!.id), eq(gradings.itemId, item.item.id)));
     expect(grading).toMatchObject({ state: "validated", points: item.item.points });
     const sheet = PaperSheet.parse((await get(`/app/api/evaluations/${evaluation.id}/attempts/${row!.id}/paper`, teacher.headers)).json());
-    expect(sheet.variant).toEqual({ number: 2, letter: "B", of: 3 });
+    expect(sheet.variant).toBe(2);
     const [audit] = await db()
       .select()
       .from(auditLog)
@@ -641,7 +641,7 @@ describe("the scan (F-PAPER-04)", () => {
     expect(PaperSheet.parse((await get(sheetUrl, teacher.headers)).json())).toEqual({
       attemptId,
       examDate: "2026-11-02",
-      variant: { number: 1, letter: "A", of: 1 },
+      variant: 1,
       scan: null,
     });
     expect((await get(`${sheetUrl}/scan`, teacher.headers)).statusCode).toBe(404);

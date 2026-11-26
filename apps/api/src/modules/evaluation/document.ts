@@ -48,7 +48,7 @@ import { explanationOrNull, typeOf } from "../pool/service.js";
 import { printRefusal } from "./print.js";
 import { joinedItems, type JoinedItem } from "./reads.js";
 import { EvaluationError, type EvaluationRecord } from "./shared.js";
-import { paperVariant, paperVariantCount, variantRef } from "./variants.js";
+import { paperVariant } from "./variants.js";
 
 /** A record, with what its Markdown needs beside it. */
 export interface Found<R> {
@@ -72,13 +72,6 @@ async function printableItems(
 /** `<title>-<suffix>`, as a slug. */
 export const basenameOf = (evaluation: EvaluationRecord, suffix: string): string =>
   `${slugify(evaluation.title) || "evaluation"}-${suffix}`;
-
-/** Variant `number` of the paper (ADR-148), checked against the count: `422 variant_unknown` beyond it. */
-async function variantOf(db: Db, evaluation: EvaluationRecord, number: number): Promise<PaperVariantRef> {
-  const of = await paperVariantCount(db, evaluation.id);
-  if (number > of) throw new EvaluationError("variant_unknown");
-  return variantRef(number, of);
-}
 
 /** The suffix of a document's file: its letter when the paper has several variants. */
 const variantSuffix = (variant: PaperVariantRef | null): string => (variant && variant.of > 1 ? `-${variant.letter}` : "");
@@ -114,8 +107,7 @@ export async function evaluationDocument(
   options: { now: Date; variant: number },
 ): Promise<Found<EvaluationDocumentRecord>> {
   const items = await printableItems(db, evaluation, "document");
-  const ref = await variantOf(db, evaluation, options.variant);
-  const variant = await paperVariant(db, evaluation, items, options.now, ref.number);
+  const { ref, attempt: variant } = await paperVariant(db, evaluation, items, options.now, options.variant);
   return {
     record: {
       kind: "evaluation-document",
@@ -182,8 +174,10 @@ export async function handout(
   options: { now: Date; variant?: number },
 ): Promise<Found<HandoutRecord>> {
   const items = await printableItems(db, evaluation, "handout");
-  const ref = options.variant === undefined ? null : await variantOf(db, evaluation, options.variant);
-  const variant = await paperVariant(db, evaluation, items, options.now, ref?.number ?? 1);
+  const paper = await paperVariant(db, evaluation, items, options.now, options.variant);
+  // A student's print names no variant.
+  const ref = options.variant === undefined ? null : paper.ref;
+  const variant = paper.attempt;
   const view = await live.previewView(db, evaluation, options.now, variant, items);
   return {
     record: {

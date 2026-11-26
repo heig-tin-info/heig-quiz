@@ -1,10 +1,11 @@
 /**
  * The paper's variants in the Export sheet (ADR-148): how many — a small
  * stepper, 1 to 26 — and Redraw, a quiet secondary action behind a
- * confirmation. Shown only where two papers can differ (`varies`): identical
- * papers under other letters would lie. Once a printed stack may be out (the
- * exam opened, a paper copy entered), Redraw and fewer variants are held, and
- * a muted line says why; one more stays possible.
+ * confirmation. Shown where two papers can differ (`varies`), or where
+ * several exist: identical papers under other letters would lie, so "one
+ * more" needs `varies`. Once the exam opened, a printed stack may be out:
+ * Redraw and fewer variants are held, a muted line says why, and the held
+ * buttons' tooltips say it again; one more stays possible.
  */
 import { Lock, Minus, Plus, RefreshCw } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -14,16 +15,10 @@ import { MAX_PAPER_VARIANTS } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
-import { useT, type Dict } from "../i18n";
+import { useT } from "../i18n";
 import { useErrorToast } from "../notify";
 import { evaluationKey } from "../queryKeys";
-import { Button, IconButton } from "../ui";
-
-/** Why the variants are held, as the sheet says it. */
-const LOCKED = {
-  opened: "eval.export.variants.locked.opened",
-  paper_copy: "eval.export.variants.locked.paper_copy",
-} as const satisfies Record<NonNullable<PaperVariantsState["locked"]>, keyof Dict>;
+import { HeldButton, IconButton } from "../ui";
 
 export function PaperVariants({ evaluationId, variants }: { evaluationId: string; variants: PaperVariantsState }) {
   const t = useT();
@@ -46,9 +41,9 @@ export function PaperVariants({ evaluationId, variants }: { evaluationId: string
     onSuccess,
     onError: toastError("eval.export.variants.failed"),
   });
-  const { count, locked } = variants;
+  const { count, varies, locked } = variants;
   const busy = setCount.isPending || redraw.isPending;
-  const lockedText = locked ? t(LOCKED[locked]) : null;
+  const lockedText = locked ? t("eval.export.variants.locked") : null;
 
   const askRedraw = async () => {
     const ok = await confirm({
@@ -82,15 +77,15 @@ export function PaperVariants({ evaluationId, variants }: { evaluationId: string
           <IconButton
             label={t("eval.export.variants.more")}
             size="sm"
-            disabled={busy || count === MAX_PAPER_VARIANTS}
+            disabled={busy || !varies || count === MAX_PAPER_VARIANTS}
             onClick={() => setCount.mutate(count + 1)}
           >
             <Plus />
           </IconButton>
         </div>
-        <Button variant="ghost" size="sm" disabled={busy || locked !== null} onClick={() => void askRedraw()}>
+        <HeldButton variant="ghost" size="sm" disabledReason={lockedText} disabled={busy} onClick={() => void askRedraw()}>
           <RefreshCw /> {t("eval.export.variants.redraw")}
-        </Button>
+        </HeldButton>
       </div>
       {lockedText ? (
         <p className="flex items-center gap-2 text-sm text-fg-faint">

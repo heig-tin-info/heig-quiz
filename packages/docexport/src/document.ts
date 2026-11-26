@@ -195,10 +195,6 @@ export const choices = (items: readonly ChoiceItem[], multiple: boolean, checked
 /** A {@link Booklet}: `blocks` printed as a paper of their own, named `label` on each page. */
 export const booklet = (id: string, label: string, blocks: Booklet["blocks"]): Booklet => ({ kind: "booklet", id, label, blocks });
 
-/** Every block of `blocks`, a booklet's in its place. */
-export const flatBlocks = (blocks: readonly Block[]): Block[] =>
-  blocks.flatMap((b) => (b.kind === "booklet" ? b.blocks : [b]));
-
 /** `2`, `1.5`: two decimals at most, as the CSV writes points. */
 export const number = (value: number): string => String(Math.round(value * 100) / 100);
 

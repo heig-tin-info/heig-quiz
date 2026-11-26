@@ -1,8 +1,7 @@
 import { Ban, Download } from "lucide-react";
 import { useState } from "react";
 
-import type { EvaluationDetail, PrintRefusal } from "@quiz/contracts";
-import { variantLetter } from "@quiz/domain";
+import { PaperPdfQuery, PaperVariantQuery, type EvaluationDetail, type PrintRefusal } from "@quiz/contracts";
 
 import { usePublicConfig } from "../api";
 import { useDownload } from "../download";
@@ -11,6 +10,7 @@ import { QueryError } from "../queryError";
 import { typeLabel } from "../questionTypes";
 import { Button, LinkButton, Select, Sheet, Skeleton } from "../ui";
 import { useEvaluation } from "./api";
+import { VariantOptions } from "../paper/VariantOptions";
 import { PaperVariants } from "./PaperVariants";
 
 /** The two documents of an evaluation (ADR-121 step 3, ADR-125), and their routes' stem. */
@@ -35,8 +35,13 @@ const REFUSAL = {
  * `variant` is a number, or `all` for one PDF of every variant (ADR-148);
  * none where the paper has one.
  */
-const exportPath = (evaluationId: string, document: string, ext: string, variant: number | "all" | null): string =>
-  `/app/api/evaluations/${evaluationId}/${document}.${ext}${variant === null ? "" : `?variant=${variant}`}`;
+function exportPath(evaluationId: string, document: string, ext: string, variant: PaperPdfQuery["variant"] | null): string {
+  const path = `/app/api/evaluations/${evaluationId}/${document}.${ext}`;
+  if (variant === null) return path;
+  // The routes' own query schemas: `all` for a PDF only.
+  const query = ext === "pdf" ? PaperPdfQuery.parse({ variant }) : PaperVariantQuery.parse({ variant });
+  return `${path}?${new URLSearchParams({ variant: String(query.variant) })}`;
+}
 
 /**
  * "Export…" of an evaluation (ADR-121 step 3, ADR-125 §17): the hand-out to
@@ -107,11 +112,7 @@ function ExportDocuments({ evaluationId, exports }: { evaluationId: string; expo
           onChange={(e) => setChosen(e.target.value === "all" ? "all" : Number(e.target.value))}
         >
           <option value="all">{t("eval.export.variant.all")}</option>
-          {Array.from({ length: variants.count }, (_, i) => (
-            <option key={i} value={i + 1}>
-              {t("eval.export.variant.one", { letter: variantLetter(i + 1) })}
-            </option>
-          ))}
+          <VariantOptions count={variants.count} />
         </Select>
       ) : null}
       {DOCUMENTS.map(({ key, label, desc }) => {

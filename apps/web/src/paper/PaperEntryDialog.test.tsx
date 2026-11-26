@@ -15,7 +15,7 @@ import { PaperEntryDialog } from "./PaperEntryDialog";
  */
 const DETAIL = `GET /app/api/evaluations/${EVAL}`;
 const detail = (count: number) =>
-  ok(makeEvaluationDetail({ exports: { document: null, handout: null, paper: null, variants: { count, varies: true, locked: "opened" } } }));
+  ok(makeEvaluationDetail({ exports: { document: null, handout: null, paper: null, variants: { count, varies: true, locked: true } } }));
 function open(onStart = vi.fn()) {
   renderWithProviders(
     <PaperEntryDialog evaluationId={EVAL} userId={USER} name="Nadia Roux" onClose={() => {}} onStart={onStart} />,
@@ -65,7 +65,7 @@ describe("PaperEntryDialog", () => {
     const user = userEvent.setup();
     const { calls } = mockFetch({
       [DETAIL]: detail(3),
-      [`GET ${ITEMS_URL}&variant=2`]: ok(makePaper({ variant: { number: 2, letter: "B", of: 3 } })),
+      [`GET ${ITEMS_URL}&variant=2`]: ok(makePaper({ variant: 2 })),
     });
     const onStart = open();
     const dialog = await screen.findByRole("dialog", { name: "Paper copy of Nadia Roux" });

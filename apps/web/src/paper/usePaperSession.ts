@@ -87,7 +87,7 @@ export function usePaperSession({
   /** Hands the copy in: the page posts it and says what came of it. */
   onSubmit: (answers: Record<string, unknown>) => Promise<void>;
 }): PlayerSession {
-  const key = paperDraftKey(evaluationId, userId, paper.variant.number);
+  const key = paperDraftKey(evaluationId, userId, paper.variant);
   // ONCE per mount (the page keys it on the student): a refetch of the paper
   // (a reconnect re-reads every query) never reloads the player under the
   // answers being typed.

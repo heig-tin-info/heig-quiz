@@ -1,5 +1,5 @@
 {
-  "id": "e5b3219d-b3cc-41f8-8765-abff2c904010",
+  "id": "6a5fbb45-a28a-4fe1-9ede-79322a1f785d",
   "prevId": "1323eb28-2102-4671-bbf4-cf560c95397b",
   "version": "7",
   "dialect": "postgresql",
@@ -5142,7 +5142,7 @@
       "checkConstraints": {
         "paper_sheets_variant_ck": {
           "name": "paper_sheets_variant_ck",
-          "value": "\"paper_sheets\".\"variant\" between 1 and 26"
+          "value": "\"paper_sheets\".\"variant\" >= 1"
         }
       },
       "isRLSEnabled": false

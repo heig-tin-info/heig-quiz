@@ -21,7 +21,7 @@ import { renderTypst } from "@quiz/docexport/typst";
 import { splitFrontMatter } from "@quiz/docrender/frontMatter";
 import { LOCALES } from "@quiz/domain";
 
-import { attempts, auditLog, evaluationItems, evaluations, paperVariants, questions } from "../../db/schema.js";
+import { auditLog, evaluationItems, evaluations, paperVariants, questions } from "../../db/schema.js";
 import { sessionOf, type TestServer, testServer } from "../../test/http.js";
 import { reload, seedLive } from "../../test/live.js";
 import { fallOf, legibleSeed, markersIn, publishParameterized, showsKey, VARIABLES } from "../../test/parameterized.js";
@@ -30,7 +30,7 @@ import * as live from "../live/service.js";
 import { typeOf } from "../pool/config.js";
 import * as poolService from "../pool/service.js";
 import { handout, handoutTree } from "./document.js";
-import { addItems, joinedItems, latestPublished, patchItem, settingsOf, updateVersions } from "./service.js";
+import { addItems, applyState, joinedItems, latestPublished, patchItem, settingsOf, updateVersions } from "./service.js";
 
 /** One question of each printable type, every secret a marker the search finds. */
 const QUESTIONS = {
@@ -612,10 +612,10 @@ describe("paper variants (ADR-148)", () => {
 
   it("makes N variants that differ, each stable, each key agreeing with its own hand-out only", async () => {
     const evaluation = await variedExam();
-    expect(await variantsOf(evaluation.id)).toEqual({ count: 1, varies: true, locked: null });
+    expect(await variantsOf(evaluation.id)).toEqual({ count: 1, varies: true, locked: false });
     const res = await setCount(evaluation.id, 3);
     expect(res.statusCode, res.body).toBe(200);
-    expect(EvaluationDetail.parse(res.json()).exports.variants).toEqual({ count: 3, varies: true, locked: null });
+    expect(EvaluationDetail.parse(res.json()).exports.variants).toEqual({ count: 3, varies: true, locked: false });
 
     const papers = [];
     for (const number of [1, 2, 3]) {
@@ -678,6 +678,9 @@ describe("paper variants (ADR-148)", () => {
   it("redraws every variant: new seeds, values cleared, the rollback seed following variant 1", async () => {
     const db = server.app.db;
     const evaluation = await variedExam();
+    // Nothing printed yet: nothing to draw again, nothing audited.
+    expect((await redraw(evaluation.id)).statusCode).toBe(200);
+    expect((await auditOf(evaluation.id)).filter((r) => r.action === "evaluation.paper_redraw")).toEqual([]);
     expect((await setCount(evaluation.id, 2)).statusCode).toBe(200);
     for (const number of [1, 2]) await handoutOf(evaluation.id, number);
     const before = await rows(evaluation.id);
@@ -691,34 +694,25 @@ describe("paper variants (ADR-148)", () => {
     expect((await auditOf(evaluation.id)).filter((r) => r.action === "evaluation.paper_redraw").map((r) => r.payload)).toEqual([{ count: 2 }]);
   });
 
-  it("refuses Redraw and fewer variants once opened or a paper copy exists; raising stays allowed", async () => {
+  it("fixes the variants from the lobby on, raising still allowed; a draft moved back is free again", async () => {
     const db = server.app.db;
     const evaluation = await variedExam();
     expect((await setCount(evaluation.id, 3)).statusCode).toBe(200);
-    await db.update(evaluations).set({ startedAt: server.clock.now() }).where(eq(evaluations.id, evaluation.id));
-    expect(await variantsOf(evaluation.id)).toMatchObject({ count: 3, locked: "opened" });
+    await applyState(db, await reload(db, evaluation.id), "lobby", server.clock.now());
+    expect(await variantsOf(evaluation.id)).toEqual({ count: 3, varies: true, locked: true });
     for (const res of [await setCount(evaluation.id, 2), await redraw(evaluation.id)]) {
       expect(res.statusCode).toBe(409);
-      expect(res.json()).toMatchObject({ error: "variants_locked", reason: "opened" });
+      expect(res.json()).toMatchObject({ error: "variants_locked" });
     }
     expect((await setCount(evaluation.id, 4)).statusCode).toBe(200);
-    // A paper copy, with no opening: locked all the same.
-    await db.update(evaluations).set({ startedAt: null }).where(eq(evaluations.id, evaluation.id));
-    const now = server.clock.now();
-    await db.insert(attempts).values({
-      id: randomUUID(),
-      evaluationId: evaluation.id,
-      userId: student.id,
-      state: "submitted",
-      seed: 1,
-      origin: "paper",
-      createdAt: now,
-      updatedAt: now,
-    });
-    expect(await variantsOf(evaluation.id)).toMatchObject({ count: 4, locked: "paper_copy" });
-    expect((await setCount(evaluation.id, 1)).json()).toMatchObject({ error: "variants_locked", reason: "paper_copy" });
-    expect((await redraw(evaluation.id)).statusCode).toBe(409);
     expect((await rows(evaluation.id)).map((r) => r.number)).toEqual([1, 2, 3, 4]);
+    // Closed with no attempt, then moved back to draft: the questions may change again, and so may the variants.
+    await db.update(evaluations).set({ state: "closed" }).where(eq(evaluations.id, evaluation.id));
+    expect(await variantsOf(evaluation.id)).toMatchObject({ locked: true });
+    await applyState(db, await reload(db, evaluation.id), "draft", server.clock.now());
+    expect(await variantsOf(evaluation.id)).toMatchObject({ count: 4, locked: false });
+    expect((await setCount(evaluation.id, 2)).statusCode).toBe(200);
+    expect((await redraw(evaluation.id)).statusCode).toBe(200);
   });
 
   it("offers one variant only where nothing varies", async () => {
@@ -728,7 +722,7 @@ describe("paper variants (ADR-148)", () => {
       .update(evaluations)
       .set({ settings: { ...settingsOf(evaluation), shuffleItems: false, shuffleChoices: false } })
       .where(eq(evaluations.id, evaluation.id));
-    expect(await variantsOf(evaluation.id)).toEqual({ count: 1, varies: false, locked: null });
+    expect(await variantsOf(evaluation.id)).toEqual({ count: 1, varies: false, locked: false });
     const res = await setCount(evaluation.id, 2);
     expect(res.statusCode).toBe(422);
     expect(res.json()).toMatchObject({ error: "variants_identical" });

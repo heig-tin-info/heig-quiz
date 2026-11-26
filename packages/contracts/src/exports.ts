@@ -8,7 +8,7 @@
  */
 import { z } from "zod";
 
-import { EVALUATION_MODES, ITEM_COUNTINGS, MAX_PAPER_VARIANTS, PAPER_VARIANTS_LOCKS } from "@quiz/domain";
+import { EVALUATION_MODES, ITEM_COUNTINGS, MAX_PAPER_VARIANTS } from "@quiz/domain";
 
 import { StaffItemRef } from "./common.js";
 
@@ -34,16 +34,19 @@ export const PAPER_ENTRY_REFUSALS = ["paper_mode", "paper_released", "paper_not_
 /** A variant's number, 1 to 26 (ADR-148). */
 export const PaperVariantNumber = z.number().int().min(1).max(MAX_PAPER_VARIANTS);
 
+/** A variant's number as a query string writes it. */
+export const VariantParam = z.coerce.number().pipe(PaperVariantNumber);
+
 /**
  * The paper variants of an evaluation as the export sheet reads them
  * (ADR-148): how many (1 while none was printed), whether two can differ —
- * a count above 1 is offered only then — and why Redraw and fewer variants
- * are refused, or null. Never a seed.
+ * a count above 1 is offered only then — and whether they are fixed (the
+ * evaluation opened: no Redraw, no fewer). Never a seed.
  */
 export const PaperVariantsState = z.object({
   count: PaperVariantNumber,
   varies: z.boolean(),
-  locked: z.enum(PAPER_VARIANTS_LOCKS).nullable(),
+  locked: z.boolean(),
 });
 export type PaperVariantsState = z.infer<typeof PaperVariantsState>;
 
@@ -64,12 +67,12 @@ export const PaperVariantRef = z.object({
 export type PaperVariantRef = z.infer<typeof PaperVariantRef>;
 
 /** `?variant=` of a document as Markdown or JSON: one variant, 1 by default (ADR-148). */
-export const PaperVariantQuery = z.object({ variant: z.coerce.number().pipe(PaperVariantNumber).default(1) });
+export const PaperVariantQuery = z.object({ variant: VariantParam.default(1) });
 export type PaperVariantQuery = z.infer<typeof PaperVariantQuery>;
 
 /** `?variant=` of a document as a PDF: one variant, or `all`, each on its own pages (ADR-148). */
 export const PaperPdfQuery = z.object({
-  variant: z.union([z.literal("all"), z.coerce.number().pipe(PaperVariantNumber)]).default(1),
+  variant: z.union([z.literal("all"), VariantParam]).default(1),
 });
 export type PaperPdfQuery = z.infer<typeof PaperPdfQuery>;
 

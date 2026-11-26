@@ -143,8 +143,8 @@ different papers in one room, so that neighbours do not share their numbers.
    when two papers can differ — shuffled items, shuffled choices, or a
    parameterized question (`variesOnPaper`; `422 variants_identical`):
    identical papers under other letters would lie. The sheet reads
-   `EvaluationDetail.exports.variants` (count, whether something varies, why
-   the variants are held), never a seed.
+   `EvaluationDetail.exports.variants` (count, whether something varies,
+   whether the variants are fixed), never a seed.
 
 10. **The page label.** When the paper has more than one variant, every page
     of a staff hand-out or key names its variant and counts its own pages,
@@ -167,13 +167,20 @@ different papers in one room, so that neighbours do not share their numbers.
 11. **Redraw** gives every variant a new seed and clears its stored values,
     so the next print draws them again; `evaluations.paper_seed` follows
     variant 1's new seed (the rollback write-back of decision 2). Redraw and
-    fewer variants are refused once the evaluation has opened (`startedAt`)
-    or a paper copy was entered on it (`409 variants_locked`, its `reason`,
-    `paperVariantsLock`) — variant 1 included: the server cannot know a
-    stack was printed. More variants stay allowed: a new one changes no
-    paper already out. The two writes serialize on the evaluation's row.
-    Both are audited (`evaluation.paper_variants` with `from` and `to`,
-    `evaluation.paper_redraw` with `count`), never with a seed.
+    fewer variants are refused once the evaluation has opened (`409
+    variants_locked`, `paperVariantsLocked`) — variant 1 included: the
+    server cannot know a stack was printed. "Opened" is the window in which
+    the questions may no longer change either, `itemListLock(state, 0)`
+    (decision 3): from the lobby on, every state after it, and free again on
+    an evaluation moved back to `draft`. The owner's "or a paper copy was
+    entered" is implied by it: a paper copy needs the exam to have run
+    (`paper_not_started` otherwise, ADR-125 §11), and an evaluation returns
+    to `draft` only while it holds no attempt, which a paper copy is. More
+    variants stay allowed: a new one changes no paper already out. The two
+    writes serialize on the evaluation's row. Both are audited
+    (`evaluation.paper_variants` with `from` and `to`,
+    `evaluation.paper_redraw` with `count`, none when nothing was printed
+    yet), never with a seed.
 
 12. **The variant of a paper copy.** A copy is typed from the variant printed
     on it: `PaperAttemptBody.variant` and the entry page's `?variant=`,

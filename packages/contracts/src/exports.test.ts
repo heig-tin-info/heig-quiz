@@ -13,9 +13,9 @@ describe("paper variants (ADR-148)", () => {
     expect(PaperVariantRef.parse(JSON.parse(JSON.stringify(ref)))).toEqual(ref);
     expect(PaperVariantRef.safeParse({ ...ref, letter: "c" }).success).toBe(false);
     expect(PaperVariantRef.safeParse({ ...ref, number: 27 }).success).toBe(false);
-    const state = { count: 26, varies: true, locked: "paper_copy" };
+    const state = { count: 26, varies: true, locked: true };
     expect(PaperVariantsState.parse(state)).toEqual(state);
-    expect(PaperVariantsState.safeParse({ ...state, locked: "printed" }).success).toBe(false);
+    expect(PaperVariantsState.safeParse({ ...state, locked: "opened" }).success).toBe(false);
     expect(PaperVariantsBody.safeParse({ count: 0 }).success).toBe(false);
     expect(PaperVariantsBody.safeParse({ count: 1.5 }).success).toBe(false);
   });

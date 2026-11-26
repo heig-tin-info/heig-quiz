@@ -80,7 +80,7 @@ export async function paperPlugin(
     "/app/api/evaluations/:id/attempts/:attemptId/paper",
     { preHandler: requireTeacher },
     teacher({ params: AttemptParam, load: staffEvaluationAttempt }, ({ scope }) =>
-      service.paperSheet(app.db, scope.evaluation.id, scope.attempt.id),
+      service.paperSheet(app.db, scope.attempt.id),
     ),
   );
 
@@ -92,7 +92,7 @@ export async function paperPlugin(
       const part = await multipartFile(req, reply);
       if (!part) return reply;
       const bytes = await part.toBuffer();
-      const sheet = await service.attachScan(app.db, config.ASSETS_DIR, scope.evaluation.id, scope.attempt.id, bytes, callerOf(req).id, now);
+      const sheet = await service.attachScan(app.db, config.ASSETS_DIR, scope.attempt.id, bytes, callerOf(req).id, now);
       await trace(req, "paper.scan_upload", "attempt", scope.attempt.id, {
         evaluationId: scope.evaluation.id,
         mime: sheet.scan?.mime,

@@ -8,8 +8,7 @@
  * in, so the dashboard and the results show its badge; the scan is kept in
  * memory, its bytes counted and never read.
  */
-import type { PaperAttemptCreated, PaperItems, PaperSheet, PaperVariantRef } from "@quiz/contracts";
-import { variantLetter } from "@quiz/domain";
+import type { PaperAttemptCreated, PaperItems, PaperSheet } from "@quiz/contracts";
 
 import {
   evaluationOr404,
@@ -29,13 +28,13 @@ import { MockError, nextId, on, refuse } from "./runtime";
 const PAPER_SEED = 4_242;
 
 /** The variant a copy is typed from, like the server's: named where the paper has several (`422 paper_variant`). */
-function copyVariant(e: MockEvaluation, named: string | null): PaperVariantRef {
+function copyVariant(e: MockEvaluation, named: string | null): number {
   const of = mockVariants(e).count;
   const number = named ? Number(named) : of === 1 ? 1 : null;
   if (number === null || !Number.isInteger(number) || number < 1 || number > of) {
     throw refuse(422, "paper_variant", "name the paper variant printed on the copy");
   }
-  return { number, letter: variantLetter(number), of };
+  return number;
 }
 
 const sheets = new Map<string, PaperSheet>();
@@ -89,7 +88,7 @@ on("GET", "/app/api/evaluations/:id/paper/items", (m, _body, url): PaperItems =>
   eligible(e);
   const row = studentRow(e, url.searchParams.get("user") ?? "");
   const variant = copyVariant(e, url.searchParams.get("variant"));
-  const view = viewOf(e, PAPER_SEED + variant.number - 1);
+  const view = viewOf(e, PAPER_SEED + variant - 1);
   return {
     student: { userId: row.userId, displayName: row.displayName },
     variant,

@@ -28,7 +28,7 @@ import { countsAsCompleted, providedDocumentsAllowedFor,
   type IntroScope,
   type ItemCounting,
   evaluationHoldsStudentWork,
-  paperVariantsLock,
+  paperVariantsLocked,
   variantCountRefusal,
   variesOnPaper,
 } from "@quiz/domain";
@@ -1174,14 +1174,14 @@ const exportsOf = (e: MockEvaluation): EvaluationExports => {
   return { document: null, handout, paper: mockPaperRefusal(e, handout)?.code ?? null, variants: mockVariants(e) };
 };
 
-/** Like the server's `paperVariantsState` (ADR-148): the count, whether papers can differ, why they are held. */
+/** Like the server's `paperVariantsState` (ADR-148): the count, whether papers can differ, whether they are fixed. */
 export const mockVariants = (e: MockEvaluation): EvaluationExports["variants"] => ({
   count: e.paperVariants ?? 1,
   varies: variesOnPaper(
     { shuffleItems: e.settings["shuffleItems"] === true, shuffleChoices: e.settings["shuffleChoices"] === true },
     e.items.some((item) => itemQuestion(item)?.randomizable === true),
   ),
-  locked: paperVariantsLock(e.startedAt, e.rows.filter((row) => row.origin === "paper").length),
+  locked: paperVariantsLocked(e.state),
 });
 
 /** Like the server's `paperRefusal` (ADR-125 §11): its code, and the hand-out's refusal for the 409's body. */
@@ -1399,16 +1399,15 @@ on("PUT", "/app/api/evaluations/:id/paper-variants", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
   const state = mockVariants(e);
   const to = Number(body.count);
-  const refusal = variantCountRefusal(state.count, to, { varies: state.varies, lock: state.locked });
+  const refusal = variantCountRefusal(state.count, to, { varies: state.varies, locked: state.locked });
   if (refusal === "variants_identical") throw new MockPayload(422, { error: refusal, message: "nothing varies" });
-  if (refusal) throw new MockPayload(409, { error: refusal, reason: state.locked, message: "the variants are fixed" });
+  if (refusal) throw new MockPayload(409, { error: refusal, message: "the variants are fixed since the exam opened" });
   e.paperVariants = to;
   return evaluationDetail(e);
 });
 on("POST", "/app/api/evaluations/:id/paper-variants/redraw", (m) => {
   const e = evaluationOr404(m.groups!.id!);
-  const { locked } = mockVariants(e);
-  if (locked) throw new MockPayload(409, { error: "variants_locked", reason: locked, message: "the variants are fixed" });
+  if (mockVariants(e).locked) throw new MockPayload(409, { error: "variants_locked", message: "the variants are fixed since the exam opened" });
   return evaluationDetail(e);
 });
 

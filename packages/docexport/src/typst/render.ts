@@ -10,7 +10,6 @@
  * metadata (`query(<provenance>)`) and as the PDF's own title and author.
  */
 import {
-  flatBlocks,
   number,
   type AnswerZone,
   type Block,
@@ -202,6 +201,9 @@ function block(b: Block, l: Labels, ctx: TypstContext, zones: { n: number }): st
     }
   }
 }
+
+/** Every block of `blocks`, a booklet's in its place. */
+const flatBlocks = (blocks: readonly Block[]): Block[] => blocks.flatMap((b) => (b.kind === "booklet" ? b.blocks : [b]));
 
 /** The document's title: its first level-1 heading, else its kind. */
 const titleOf = (doc: Document): string =>

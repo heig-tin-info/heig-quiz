@@ -306,8 +306,8 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
    * The paper's variants (ADR-148), from the export sheet: how many (`PUT`,
    * the missing made, the highest removed) and Redraw (`POST …/redraw`, every
    * seed drawn again, every stored value cleared). Any member of the course,
-   * like the documents; refused once a printed stack may be out (`409
-   * variants_locked`, its `reason`), and more than one where nothing varies
+   * like the documents; Redraw and fewer refused once the evaluation opened
+   * (`409 variants_locked`), and more than one where nothing varies
    * (`422 variants_identical`). Audited without a seed; the detail answers.
    */
   app.put(
@@ -328,7 +328,8 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: staffEvaluation }, async ({ req, now, scope }) => {
       const count = await service.redrawPaperVariants(app.db, scope.evaluation, now);
-      await trace(req, "evaluation.paper_redraw", "evaluation", scope.evaluation.id, { count });
+      // Nothing printed yet, nothing drawn again: nothing to trace.
+      if (count > 0) await trace(req, "evaluation.paper_redraw", "evaluation", scope.evaluation.id, { count });
       return detail(req, scope.evaluation, scope.classroom.courseId);
     }),
   );

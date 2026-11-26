@@ -14,12 +14,11 @@
  */
 import { useState } from "react";
 
-import { variantLetter } from "@quiz/domain";
-
 import { useEvaluation } from "../evaluation/api";
 import { useT } from "../i18n";
 import { Alert, FormDialog, FormError, Field, Select, Spinner } from "../ui";
 import { paperRefusalOf, REFUSAL_KEYS, usePaperItems } from "./api";
+import { VariantOptions } from "./VariantOptions";
 
 export function PaperEntryDialog({
   evaluationId,
@@ -72,11 +71,7 @@ export function PaperEntryDialog({
           <option value="" disabled>
             {t("paper.variant.pick")}
           </option>
-          {Array.from({ length: count }, (_, i) => (
-            <option key={i} value={i + 1}>
-              {t("paper.variant.one", { letter: variantLetter(i + 1) })}
-            </option>
-          ))}
+          <VariantOptions count={count} />
         </Select>
       ) : null}
       {paper.isPending && paper.fetchStatus !== "idle" ? (

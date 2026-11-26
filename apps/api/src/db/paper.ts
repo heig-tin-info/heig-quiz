@@ -32,7 +32,8 @@ export const paperSheets = pgTable("paper_sheets", {
   /**
    * The number of the paper variant the copy was typed from (ADR-148), as its
    * page footer names it; 1 for every copy entered before variants. Not a
-   * reference: no variant is removed once a copy exists (the lock).
+   * reference: no variant is removed once the evaluation opened, and a copy
+   * needs it opened (ADR-148 §11).
    */
   variant: integer("variant").notNull().default(1),
   /** The staff member who typed the copy in. NO ACTION, like `attempts.user_id`. */
@@ -44,4 +45,4 @@ export const paperSheets = pgTable("paper_sheets", {
   scanSha256: text("scan_sha256"),
   scanUploadedAt: timestamp("scan_uploaded_at", { withTimezone: true }),
   scanUploadedBy: uuid("scan_uploaded_by").references(() => users.id),
-}, (t) => [check("paper_sheets_variant_ck", sql`${t.variant} between 1 and 26`)]);
+}, (t) => [check("paper_sheets_variant_ck", sql`${t.variant} >= 1`)]);

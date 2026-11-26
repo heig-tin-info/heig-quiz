@@ -19,9 +19,11 @@ import { KeyRound, PenLine, UserX } from "lucide-react";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 
 import type { PaperItems } from "@quiz/contracts";
+import { variantLetter } from "@quiz/domain";
 
 import { currentItem } from "../attempt/playerReducer";
 import { useConfirm } from "../confirm";
+import { useEvaluation } from "../evaluation/api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { QuestionReviewHost } from "../questionTypes";
@@ -47,7 +49,7 @@ export function PaperEntryPage({ evaluationId, navigate }: { evaluationId: strin
   if (paper.data) {
     return (
       <PaperWalk
-        key={`${user}:${paper.data.variant.number}`}
+        key={`${user}:${paper.data.variant}`}
         evaluationId={evaluationId}
         paper={paper.data}
         examDate={date || paper.data.examDate}
@@ -115,15 +117,17 @@ function PaperWalk({
   const enter = useEnterPaper(evaluationId);
   const { userId, displayName: name } = paper.student;
   const variant = paper.variant;
+  // The variant is named where the paper has several (ADR-148).
+  const several = (useEvaluation(evaluationId).data?.exports.variants.count ?? 1) > 1;
   const enterAsync = enter.mutateAsync;
   const handIn = useCallback(
     async (answers: Record<string, unknown>) => {
-      const created = await enterAsync({ userId, examDate, variant: variant.number, answers });
-      clearPaperDraft(evaluationId, userId, variant.number);
+      const created = await enterAsync({ userId, examDate, variant, answers });
+      clearPaperDraft(evaluationId, userId, variant);
       toast(t("paper.done", { name }), "success");
       onDone(created.attemptId);
     },
-    [enterAsync, userId, examDate, variant.number, evaluationId, toast, t, name, onDone],
+    [enterAsync, userId, examDate, variant, evaluationId, toast, t, name, onDone],
   );
   const session = usePaperSession({ evaluationId, userId, paper, onSubmit: handIn });
   const initial = useMemo(() => paperView(paper, {}), [paper]);
@@ -148,7 +152,7 @@ function PaperWalk({
     <ModeBanner
       icon={<PenLine />}
       message={
-        variant.of > 1 ? t("paper.bannerVariant", { name, letter: variant.letter }) : t("paper.banner", { name })
+        several ? t("paper.bannerVariant", { name, letter: variantLetter(variant) }) : t("paper.banner", { name })
       }
     >
       <PlayerView

@@ -15,7 +15,7 @@ import { z } from "zod";
 import { PAPER_SCAN_MIMES } from "@quiz/domain";
 
 import { AnswerCoordinates } from "./common.js";
-import { PAPER_ENTRY_REFUSALS, PaperVariantNumber, PaperVariantRef } from "./exports.js";
+import { PAPER_ENTRY_REFUSALS, PaperVariantNumber, VariantParam } from "./exports.js";
 import { AttemptOrigin, AttemptState, AttemptView } from "./live.js";
 
 /**
@@ -23,7 +23,7 @@ import { AttemptOrigin, AttemptState, AttemptView } from "./live.js";
  * in, and the variant printed on it (ADR-148): required when the paper has
  * more than one (`422 paper_variant`), 1 otherwise.
  */
-export const PaperItemsQuery = z.object({ user: z.uuid(), variant: z.coerce.number().pipe(PaperVariantNumber).optional() });
+export const PaperItemsQuery = z.object({ user: z.uuid(), variant: VariantParam.optional() });
 export type PaperItemsQuery = z.infer<typeof PaperItemsQuery>;
 
 /** `POST /evaluations/:id/paper`: one student's whole copy. */
@@ -82,8 +82,8 @@ export const PaperItems = z.object({
    * id a placeholder: no attempt exists before the submission.
    */
   view: AttemptView,
-  /** The variant the copy is typed from (ADR-148). */
-  variant: PaperVariantRef,
+  /** The number of the variant the copy is typed from (ADR-148). */
+  variant: PaperVariantNumber,
   /** Item id → the whole key, in the coordinates of `view`: what the teacher checks the copy against. */
   solutions: z.record(z.uuid(), z.unknown()),
   /** The student's attempt that the copy will replace (ADR-125 §12), or null. */
@@ -103,8 +103,8 @@ export type PaperScanMime = z.infer<typeof PaperScanMime>;
 export const PaperSheet = z.object({
   attemptId: z.uuid(),
   examDate: z.iso.date(),
-  /** The variant the copy was typed from (ADR-148), its `of` the evaluation's count now. */
-  variant: PaperVariantRef,
+  /** The number of the variant the copy was typed from (ADR-148). */
+  variant: PaperVariantNumber,
   scan: z
     .object({
       mime: PaperScanMime,

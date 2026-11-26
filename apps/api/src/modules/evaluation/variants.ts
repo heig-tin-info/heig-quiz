@@ -10,8 +10,8 @@
  *     stored at each print and paper entry;
  *   - {@link setPaperVariantCount}, {@link redrawPaperVariants}: the export
  *     sheet's two writes, under the evaluation's row lock, refused by the
- *     pure rules of `@quiz/domain/paperVariants` once a printed stack may be
- *     in a student's hands;
+ *     pure rules of `@quiz/domain/paperVariants` once the evaluation opened,
+ *     when a printed stack may be in a student's hands;
  *   - {@link paperVariantsState}: what the sheet reads, never a seed.
  *
  * The seeds never leave this module but to the `live` module's builders.
@@ -21,10 +21,10 @@ import { randomInt } from "node:crypto";
 import { and, count, eq, gt, sql } from "drizzle-orm";
 
 import type { PaperVariantRef, PaperVariantsState } from "@quiz/contracts";
-import { itemListLock, paperVariantsLock, variantCountRefusal, variantLetter, variesOnPaper } from "@quiz/domain";
+import { itemListLock, paperVariantsLocked, variantCountRefusal, variantLetter, variesOnPaper } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { attempts, evaluations, paperVariants } from "../../db/schema.js";
+import { evaluations, paperVariants } from "../../db/schema.js";
 import { completeInstances, isParameterized, replays, sameVersion, type InstanceAttempt } from "../pool/service.js";
 import { joinedItems, settingsOf, type JoinedItem } from "./reads.js";
 import { EvaluationError, type DbOrTx, type EvaluationRecord } from "./shared.js";
@@ -44,15 +44,6 @@ export async function paperVariantCount(db: DbOrTx, evaluationId: string): Promi
 /** Variant `number` of a paper of `of` variants, as the documents and a paper copy name it. */
 export const variantRef = (number: number, of: number): PaperVariantRef => ({ number, letter: variantLetter(number), of });
 
-/** How many paper copies were entered on the evaluation: read by join, `attempts` is the `live` module's. */
-async function paperCopies(db: DbOrTx, evaluationId: string): Promise<number> {
-  const [row] = await db
-    .select({ n: count() })
-    .from(attempts)
-    .where(and(eq(attempts.evaluationId, evaluationId), eq(attempts.origin, "paper")));
-  return row?.n ?? 0;
-}
-
 const variesOf = (evaluation: EvaluationRecord, items: readonly Pick<JoinedItem, "version">[]): boolean =>
   variesOnPaper(settingsOf(evaluation), items.some((i) => isParameterized(i.version)));
 
@@ -65,14 +56,15 @@ export async function paperVariantsState(
   return {
     count: await paperVariantCount(db, evaluation.id),
     varies: variesOf(evaluation, items),
-    locked: paperVariantsLock(evaluation.startedAt, await paperCopies(db, evaluation.id)),
+    locked: paperVariantsLocked(evaluation.state),
   };
 }
 
 /**
- * Variant `number` of `evaluation`'s paper: its seed, and the values of every
- * parameterized item of `items`, completed and stored here by the draw rule
- * of an attempt's (`completeInstances`).
+ * Variant `number` of `evaluation`'s paper: its name (`ref`: number, letter,
+ * count), and as `attempt` its seed and the values of every parameterized
+ * item of `items`, completed and stored here by the draw rule of an
+ * attempt's (`completeInstances`). The one check of a variant's number.
  *
  *   - Variant 1 is created on the first call ({@link firstVariant}); any
  *     other exists only once the count was raised to it, else `422
@@ -100,9 +92,10 @@ export async function paperVariant(
   items: readonly JoinedItem[],
   now: Date,
   number = 1,
-): Promise<InstanceAttempt> {
+): Promise<{ ref: PaperVariantRef; attempt: InstanceAttempt }> {
   const row = number === 1 ? await firstVariant(db, evaluation.id, now) : await variantRow(db, evaluation.id, number);
-  if (!row) throw new EvaluationError("variant_unknown");
+  const of = await paperVariantCount(db, evaluation.id);
+  if (!row || number > of) throw new EvaluationError("variant_unknown");
   const editable = itemListLock(evaluation.state, 0) === null;
   const { instances, drew } = completeInstances(items, row, editable ? sameVersion : replays);
   if (drew) {
@@ -113,7 +106,7 @@ export async function paperVariant(
       // retarget or a Redraw must not write its older draw over a newer one.
       .where(and(variantWhere(evaluation.id, number), eq(paperVariants.instances, row.instances)));
   }
-  return { seed: row.seed, instances };
+  return { ref: variantRef(number, of), attempt: { seed: row.seed, instances } };
 }
 
 async function variantRow(db: DbOrTx, evaluationId: string, number: number) {
@@ -161,8 +154,8 @@ async function lockedEvaluation(tx: DbOrTx, evaluationId: string): Promise<Evalu
  * Sets how many variants the paper has (ADR-148 §2): the missing ones made
  * with seeds of their own, the highest numbers removed. More than one is
  * refused where nothing varies (`422 variants_identical`), fewer once the
- * evaluation opened or a paper copy exists (`409 variants_locked`, its
- * `reason`). Answers the counts before and after, for the audit.
+ * evaluation opened (`409 variants_locked`). Answers the counts before and
+ * after, for the audit.
  */
 export function setPaperVariantCount(
   db: Db,
@@ -173,9 +166,11 @@ export function setPaperVariantCount(
   return db.transaction(async (tx) => {
     const row = await lockedEvaluation(tx, evaluation.id);
     const from = await paperVariantCount(tx, row.id);
-    const lock = paperVariantsLock(row.startedAt, await paperCopies(tx, row.id));
-    const refusal = variantCountRefusal(from, to, { varies: variesOf(row, await joinedItems(tx, row.id)), lock });
-    if (refusal) throw new EvaluationError(refusal, undefined, refusal === "variants_locked" ? { reason: lock } : undefined);
+    const refusal = variantCountRefusal(from, to, {
+      varies: variesOf(row, await joinedItems(tx, row.id)),
+      locked: paperVariantsLocked(row.state),
+    });
+    if (refusal) throw new EvaluationError(refusal);
     if (to > 1) {
       await firstVariant(tx, row.id, now);
       const added = Array.from({ length: Math.max(0, to - from) }, (_, i) => ({
@@ -197,13 +192,12 @@ export function setPaperVariantCount(
  * values, so the next print draws them again; `paper_seed` follows variant
  * 1's (the rollback write-back). Refused like fewer variants (`409
  * variants_locked`): a paper already printed would no longer match. Answers
- * how many variants were drawn again.
+ * how many variants were drawn again, none before the first print.
  */
 export function redrawPaperVariants(db: Db, evaluation: EvaluationRecord, now: Date): Promise<number> {
   return db.transaction(async (tx) => {
     const row = await lockedEvaluation(tx, evaluation.id);
-    const lock = paperVariantsLock(row.startedAt, await paperCopies(tx, row.id));
-    if (lock) throw new EvaluationError("variants_locked", undefined, { reason: lock });
+    if (paperVariantsLocked(row.state)) throw new EvaluationError("variants_locked");
     const variants = await tx
       .select({ number: paperVariants.number })
       .from(paperVariants)
