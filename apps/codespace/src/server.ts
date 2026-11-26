@@ -224,6 +224,8 @@ export async function buildPortal(options: BuildOptions = {}): Promise<Portal> {
           forgeAuthorization: (repo, owner, url) => forge.authorization(repo, owner, url),
           forgeSettle: (authorization) => forge.settle?.(authorization),
           forgeInvalidate: (repo, owner) => forge.invalidate?.(repo, owner),
+          // ADR-149 §7: a staging repository is refreshed from the forge only when nothing waits for the relay.
+          pendingRelay: (student, assignment) => store.hasPending(student, assignment),
           // A closed workspace with nothing pending keeps no credential (ADR-078 §3).
           onSessionClosed: async (owner) => {
             if (forge.forget && !(await store.hasPending(owner.student, owner.assignment))) forge.forget(owner);

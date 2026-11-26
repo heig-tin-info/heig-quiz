@@ -196,6 +196,68 @@ export async function ensureStagingRepo(opts: StagingOptions): Promise<StagingRe
   return { ...paths, created: !existed, fetched, refs: await seededRefCount(paths.gitDir) };
 }
 
+/** Where {@link refreshStagingRepo} fetches the forge's branches: the portal's own refs, gone once it is done. */
+const FORGE_REFS = `${PORTAL_REFS}/forge`;
+
+/** What a refresh did, per branch: created, fast-forwarded, or left because it diverged from the forge. */
+export interface StagingRefresh {
+  created: string[];
+  advanced: string[];
+  diverged: string[];
+}
+
+/**
+ * Brings a seeded `lab` staging repository up to its forge, for a project
+ * whose students may also push from their own machines (ADR-149 §7): the
+ * forge's branches fetched into the portal's own refs ({@link FORGE_REFS},
+ * hidden from every push, deleted afterwards), then each branch of the
+ * staging repository created when it is missing, moved when it is an
+ * ancestor of the forge's — a compare-and-swap, so a student's push landing
+ * meanwhile wins — and left as it is otherwise: **never forced**, never
+ * deleted, no tag. Nothing here is relayed (no `PushEvent`); the student's
+ * work tree takes it with a pull. The caller refreshes only when nothing
+ * of the workspace waits for the relay. The authorization travels as for
+ * the seeding, in the environment only.
+ */
+export async function refreshStagingRepo(gitDir: string, from: string, authorization?: string): Promise<StagingRefresh> {
+  const done: StagingRefresh = { created: [], advanced: [], diverged: [] };
+  await gitBare(
+    gitDir,
+    ["fetch", "--no-tags", from, `+refs/heads/*:${FORGE_REFS}/*`],
+    authorization ? { env: gitAuthEnv(authorization, from) } : {},
+  );
+  try {
+    const refs = await refSnapshot(gitDir);
+    for (const [ref, forgeSha] of refs) {
+      if (!ref.startsWith(`${FORGE_REFS}/`)) continue;
+      const branch = ref.slice(FORGE_REFS.length + 1);
+      const local = refs.get(`refs/heads/${branch}`);
+      if (local === forgeSha) continue;
+      if (local === undefined) {
+        await gitBare(gitDir, ["update-ref", `refs/heads/${branch}`, forgeSha, ""]);
+        done.created.push(branch);
+      } else if (await isAncestor(gitDir, local, forgeSha)) {
+        await gitBare(gitDir, ["update-ref", `refs/heads/${branch}`, forgeSha, local]);
+        done.advanced.push(branch);
+      } else {
+        done.diverged.push(branch);
+      }
+    }
+  } finally {
+    const leftovers = [...(await refSnapshot(gitDir)).keys()].filter((ref) => ref.startsWith(`${FORGE_REFS}/`));
+    for (const ref of leftovers) await gitBare(gitDir, ["update-ref", "-d", ref]);
+  }
+  return done;
+}
+
+/** Whether `ancestor` is `descendant` or behind it. */
+async function isAncestor(gitDir: string, ancestor: string, descendant: string): Promise<boolean> {
+  return gitBare(gitDir, ["merge-base", "--is-ancestor", ancestor, descendant]).then(
+    () => true,
+    () => false,
+  );
+}
+
 /** Default branch of the staging repository: what `HEAD` points at, or nothing. */
 export async function stagingHeadBranch(gitDir: string): Promise<string | null> {
   const head = await gitBare(gitDir, ["symbolic-ref", "--quiet", "HEAD"]).catch(() => "");

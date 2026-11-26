@@ -9,7 +9,7 @@ import {
   portalMode,
   quotaHolder,
   portalDeadline,
-  weighsLastWriter,
+  hasTwoWritePaths,
   WORK_PLACES,
   distributionReviewRefusal,
   staffReviewRefusal,
@@ -26,6 +26,8 @@ import {
   type WorkModeFacts,
   type WorkSetting,
   type WorkspaceStartFacts,
+  widensAfterLaunch,
+  widensInvitations,
 } from "./workMode.js";
 import { DEVICE_LEVEL_IDS } from "./deviceLevels.js";
 
@@ -51,7 +53,7 @@ describe("what the portal is told and offers (ADR-149 §3, §4)", () => {
   it("has one lab mode predicate, online and hybrid, and weighs the last writer in hybrid only", () => {
     const modes = ["free", "hybrid", "online", "online_seb"] as const;
     expect(modes.map(isLabMode)).toEqual([false, true, true, false]);
-    expect(modes.map(weighsLastWriter)).toEqual([false, true, false, false]);
+    expect(modes.map(hasTwoWritePaths)).toEqual([false, true, false, false]);
   });
 });
 
@@ -95,9 +97,29 @@ describe("workModeRefusal", () => {
     expect(workModeRefusal(launched, ONLINE, SEB)).toBe("work_mode_frozen");
     expect(workModeRefusal(launched, SEB, EITHER)).toBe("work_mode_frozen");
     expect(workModeRefusal(launched, KIOSK, SEB)).toBe("work_mode_frozen");
-    // Hybrid freezes like online (ADR-149 §5): a switch after a launch is a later step.
-    expect(workModeRefusal(launched, ONLINE, HYBRID)).toBe("work_mode_frozen");
+    // Hybrid freezes like online (ADR-149 §5): nothing narrows it after a launch.
     expect(workModeRefusal(launched, HYBRID, FREE)).toBe("work_mode_frozen");
+    expect(workModeRefusal(launched, HYBRID, ONLINE)).toBe("work_mode_frozen");
+    expect(workModeRefusal(launched, SEB, HYBRID)).toBe("work_mode_frozen");
+  });
+
+  it("leaves one change open after a launch, online to hybrid: it only widens (ADR-149 §7)", () => {
+    const launched = { ...OWNER, launched: true };
+    expect(workModeRefusal(launched, ONLINE, HYBRID)).toBeNull();
+    // Still an owner's, with the grant.
+    expect(workModeRefusal({ ...launched, owner: false }, ONLINE, HYBRID)).toBe("owner_required");
+    expect(workModeRefusal({ ...launched, granted: false }, ONLINE, HYBRID)).toBe("codespace_not_granted");
+    expect(widensAfterLaunch("online", "hybrid")).toBe(true);
+    for (const [from, to] of [["hybrid", "online"], ["online", "free"], ["free", "hybrid"], ["online_seb", "hybrid"]] as const) expect(widensAfterLaunch(from, to)).toBe(false);
+  });
+
+  it("widens the invitations already sent when the new mode invites with push and the old with less (ADR-149 §7)", () => {
+    expect(widensInvitations("online", "hybrid")).toBe(true);
+    expect(widensInvitations("online", "free")).toBe(true);
+    expect(widensInvitations("online_seb", "hybrid")).toBe(true);
+    expect(widensInvitations("free", "hybrid")).toBe(false);
+    expect(widensInvitations("hybrid", "online")).toBe(false);
+    expect(widensInvitations("free", "online")).toBe(false);
   });
 
   it("keeps a group project in the students' own tools", () => {
@@ -130,6 +152,8 @@ describe("workModeChoices", () => {
     // A Kiosk only project with the flag off: its own pair passes, SEB from it passes too.
     expect(workModeChoices({ ...OWNER, kioskOffered: false }, KIOSK)).toEqual({ allowed: ["free", "hybrid", "online", "online_seb"], refusal: null });
     expect(workModeChoices({ ...OWNER, launched: true }, HYBRID)).toEqual({ allowed: ["hybrid"], refusal: "work_mode_frozen" });
+    // A launched online project may still go to Either, and nowhere else (ADR-149 §7).
+    expect(workModeChoices({ ...OWNER, launched: true }, ONLINE)).toEqual({ allowed: ["hybrid", "online"], refusal: "work_mode_frozen" });
     expect(workModeChoices({ ...OWNER, launched: true }, EITHER)).toEqual({ allowed: ["online_seb"], refusal: "work_mode_frozen" });
   });
 });

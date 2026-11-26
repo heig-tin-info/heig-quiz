@@ -372,6 +372,8 @@ async function classroomRoutesImpl(
           beks: mode === "exam" ? body.browserExamKeys : [],
           // The teacher's update (ADR-132 §11), `lab` only: an exam's staging is the template's.
           workspaceUpdate: mode === "lab" ? body.workspaceUpdate : null,
+          // ADR-149 §7: its students may also push from their own machines; `lab` only.
+          refreshOnOpen: mode === "lab" && body.refreshOnOpen,
           createdAt: new Date(),
         };
         upsertAssignment(db, row);

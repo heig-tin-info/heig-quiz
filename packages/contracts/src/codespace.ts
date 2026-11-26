@@ -179,6 +179,15 @@ export const CodespaceAssignmentSync = z.object({
    * commit out (ADR-132 §11); null otherwise, and absent from an older platform.
    */
   workspaceUpdate: CodespaceWorkspaceUpdate.nullable().default(null),
+  /**
+   * The students may also push from their own machines (a `hybrid`
+   * project, sent as `online`: `hasTwoWritePaths`, ADR-149 §7): when a lab
+   * session opens and nothing of its workspace waits for the relay, the
+   * portal brings its staging repository up to GitHub, fast-forward only.
+   * Optional, false when absent: an older platform sends none, and an older
+   * portal ignores it (the object is not strict), whatever the deploy order.
+   */
+  refreshOnOpen: z.boolean().default(false),
 });
 export type CodespaceAssignmentSync = z.infer<typeof CodespaceAssignmentSync>;
 

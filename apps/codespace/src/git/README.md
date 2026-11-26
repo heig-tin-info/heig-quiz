@@ -17,7 +17,7 @@ container ──push──▶ portal 10.77.0.254:9418/git/<session>  (auth = sou
 | ----------------- | ---- |
 | `httpBackend.ts`  | Fastify plugin, IP check, upload-pack policy, CGI to `git http-backend` |
 | `cgi.ts`          | reading the CGI headers (`Status:` included) without buffering the body |
-| `staging.ts`      | creation and seeding of the bare staging repository (lab, exam, empty modes); `receive.maxInputSize` caps one push (audit M11) |
+| `staging.ts`      | creation and seeding of the bare staging repository (lab, exam, empty modes); `receive.maxInputSize` caps one push (audit M11); the refresh of a lab one from the forge, fast-forward only, for an assignment whose students also push from their machines (ADR-149 §7) |
 | `pushEvents.ts`   | `diffRefs`, `recordPush` (invariant 7), Drizzle store |
 | `relay.ts`        | background job, retry on error, never forced, `rejected` refs, token out of argv and off the disk |
 | `forge.ts`        | the `Forge` interface, the `forgejo` forge and the unconfigured `github` one |
@@ -183,6 +183,7 @@ It serves both directions of the channel:
 | --- | --- | --- |
 | `push` to the forge | `relay.ts` (`buildPushEnv`) | `Forge.authorization(repo, owner)` |
 | seeding `fetch` | `staging.ts` (`ensureStagingRepo({ authorization })`) | the same |
+| refresh `fetch` at an opening (ADR-149 §7) | `staging.ts` (`refreshStagingRepo`), fast-forward only, never relayed | the same |
 
 The second one was missing until 2026-09-17: a student repository provisioned
 by classroom is **private**, the anonymous `fetch` was refused, the failure

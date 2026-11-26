@@ -144,6 +144,9 @@ export function WorkModeSetting({
   // A level is a choice of the workspace's two modes: open only while both are the caller's to set.
   const levelsOpen = changeable && ws.allowed.includes("online") && ws.allowed.includes("online_seb");
   const pick = (next: ProjectWorkModeBody) => setMode.mutate(next);
+  // ADR-149 §7: frozen, the server still allows the mode in force and Either, and nothing else.
+  const eitherLeft =
+    ws.refusal === "work_mode_frozen" && ws.mode !== "hybrid" && ws.allowed.includes("hybrid") && ws.allowed.every((m) => m === ws.mode || m === "hybrid");
   // ADR-089 amendment point 7: a station sitting takes a workspace per student, the holder's quota caps them.
   const quota = place === "online" && ws.quota && ws.quota.seats > ws.quota.max && acceptsKiosk(shown.devices) ? ws.quota : null;
 
@@ -158,7 +161,7 @@ export function WorkModeSetting({
             {shown.mode === "online_seb" ? <span className="block">{t("project.workspace.mode.desc.supervised")}</span> : null}
             {ws.refusal && !archived ? (
               <span className="mt-1 block text-fg-faint" data-testid="workspace-refusal">
-                {t(`project.workspace.refusal.${ws.refusal}`)}
+                {t(eitherLeft ? "project.workspace.refusal.work_mode_frozen.either" : `project.workspace.refusal.${ws.refusal}`)}
               </span>
             ) : null}
           </>

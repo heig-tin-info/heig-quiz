@@ -59,7 +59,9 @@ import {
   userEmails,
   users,
 } from "../../db/schema.js";
-import { orgsRoute } from "../../github/testing.js";
+import { json, orgsRoute, type Route } from "../../github/testing.js";
+import { loadConfig } from "../../config.js";
+import { claimReposAccessWork, runReposAccessJob } from "../project/reposAccess.js";
 import { sessionOf } from "../../test/http.js";
 import { grantOf, workspaceUpdateOf, runCodespaceSync, syncPayload } from "./service.js";
 import {
@@ -76,6 +78,7 @@ import {
 } from "./testing.js";
 import {
   accounts,
+  APP_ENV,
   call,
   freshAccountId,
   newStudent,
@@ -167,7 +170,10 @@ let logLines: string[] = [];
 /** The role rule's administrator, for the grant row of their own address (ADR-047, amendment 2026-11-16). */
 const SUPER_ADMIN_EMAIL = "boss@heig.test";
 
-useProjectWorld({ routes: [orgsRoute(() => []), usersRoute, world.route], env: { ...CODESPACE_ENV, SUPER_ADMIN_EMAIL }, fetch: portal.fetch, teacher: false });
+/** A test's hand on GitHub, before the fake answers (a failure once). */
+let intercept: Route | null = null;
+const interceptRoute: Route = (url, req) => intercept?.(url, req);
+useProjectWorld({ routes: [interceptRoute, orgsRoute(() => []), usersRoute, world.route], env: { ...CODESPACE_ENV, SUPER_ADMIN_EMAIL }, fetch: portal.fetch, teacher: false });
 
 beforeAll(async () => {
   logLines = captureLog(server.app);
@@ -264,7 +270,7 @@ describe("the work mode (ADR-047 as amended 2026-10-07)", () => {
     expect(set.statusCode, set.body).toBe(200);
     expect(ProjectWorkspace.parse(set.json())).toMatchObject({ mode: "hybrid", devices: "any", refusal: null });
     // The portal knows two modes: a hybrid project is its lab mode, `online` (ADR-149 §3).
-    expect(CodespaceAssignmentSync.parse(portal.calls.at(-1)!.body)).toMatchObject({ id: lab.id, mode: "online" });
+    expect(CodespaceAssignmentSync.parse(portal.calls.at(-1)!.body)).toMatchObject({ id: lab.id, mode: "online", refreshOnOpen: true });
     await accept(lab.id, student);
     const repo = await repoOf(lab.id, student.id);
     expect(world.collaborators.get(repo.fullName!)?.get(student.login)).toBe("push");
@@ -274,6 +280,83 @@ describe("the work mode (ADR-047 as amended 2026-10-07)", () => {
     expect(ProjectWorkspace.parse((await call("GET", `/app/api/projects/${lab.id}/workspace`, owner.headers)).json())).toMatchObject({
       allowed: ["hybrid"],
       refusal: "work_mode_frozen",
+    });
+  });
+
+  describe("online to Either after a launch (ADR-149 §7)", () => {
+    const FULL = loadConfig({ NODE_ENV: "test", ...APP_ENV, ...CODESPACE_ENV });
+    /** An online project whose students accepted, one of them launched; `admin` held by the last. */
+    async function launchedOnline(name: string) {
+      const [a, b, c] = [await newStudent(), await newStudent(), await newStudent()];
+      const room = await connected([a, b, c]);
+      const lab = await project(room, name);
+      expect((await setMode(lab.id, "online")).statusCode).toBe(200);
+      for (const s of [a, b, c]) await accept(lab.id, s);
+      const repos = { a: await repoOf(lab.id, a.id), b: await repoOf(lab.id, b.id), c: await repoOf(lab.id, c.id) };
+      // a and c accepted on GitHub, b's invitation still pending; c is an owner of the organization.
+      for (const [s, repo] of [[a, repos.a], [c, repos.c]] as const) {
+        const pending = world.invitations.get(repo.fullName!)!;
+        for (const [id, login] of pending) if (login === s.login) pending.delete(id);
+      }
+      world.collaborators.get(repos.c.fullName!)!.set(c.login, "admin");
+      await launchUrl(lab.id, a.headers);
+      return { lab, students: { a, b, c }, repos };
+    }
+    const widened = async (projectId: string) =>
+      (await server.app.db.select().from(auditLog).where(eq(auditLog.action, "project_repo.access_widened"))).filter(
+        (row) => (row.payload as { projectId: string }).projectId === projectId,
+      );
+
+    it("is the one change left, and raises every access already given to push on GitHub, never lowering one", async () => {
+      const { lab, students, repos } = await launchedOnline("Either after launch");
+      const read = ProjectWorkspace.parse((await call("GET", `/app/api/projects/${lab.id}/workspace`, owner.headers)).json());
+      expect(read).toMatchObject({ mode: "online", allowed: ["hybrid", "online"], refusal: "work_mode_frozen" });
+
+      const set = await setMode(lab.id, "hybrid");
+      expect(set.statusCode, set.body).toBe(200);
+      expect(world.collaborators.get(repos.a.fullName!)?.get(students.a.login)).toBe("push");
+      // The pending invitation changed, still pending.
+      expect(world.collaborators.get(repos.b.fullName!)?.get(students.b.login)).toBe("push");
+      expect([...world.invitations.get(repos.b.fullName!)!.values()]).toContain(students.b.login);
+      expect(world.collaborators.get(repos.c.fullName!)?.get(students.c.login)).toBe("admin");
+      const rows = await widened(lab.id);
+      expect(rows.map((r) => [r.subjectId, r.payload]).sort()).toEqual(
+        [
+          [repos.a.id, { projectId: lab.id, collaborators: 1, invitations: 0 }],
+          [repos.b.id, { projectId: lab.id, collaborators: 0, invitations: 1 }],
+        ].sort(),
+      );
+      expect(JSON.stringify(rows)).not.toMatch(/token|ghs_/);
+
+      // Nothing narrows it again, and nothing else is open.
+      for (const mode of ["online", "free"]) {
+        const refused = await setMode(lab.id, mode);
+        expect([refused.statusCode, refused.json().error], mode).toEqual([409, "work_mode_frozen"]);
+      }
+    });
+
+    it("retries a repository GitHub failed, the others left as they are", async () => {
+      const { lab, students, repos } = await launchedOnline("Either retried");
+      // GitHub down for that repository's invitations for the whole first run (the client's own retries included).
+      let down = true;
+      intercept = (url, req) =>
+        down && req.method === "PATCH" && url.pathname.startsWith(`/repos/${repos.b.fullName}/invitations/`) ? json({ message: "Server Error" }, 500) : undefined;
+      try {
+        expect((await setMode(lab.id, "hybrid")).statusCode).toBe(200);
+        expect(world.collaborators.get(repos.a.fullName!)?.get(students.a.login)).toBe("push");
+        expect(world.collaborators.get(repos.b.fullName!)?.get(students.b.login)).toBe("pull");
+        down = false;
+        // The lease backdated: the ticker claims the work again once it expires.
+        server.clock.set(new Date(Date.parse(NOW) + 60 * 60_000));
+        const jobs = (await claimReposAccessWork(server.app.db, server.clock.now())).filter((j) => j.projectId === lab.id);
+        expect(jobs).toHaveLength(1);
+        for (const job of jobs) await runReposAccessJob(server.app, FULL, job);
+      } finally {
+        intercept = null;
+      }
+      expect(world.collaborators.get(repos.b.fullName!)?.get(students.b.login)).toBe("push");
+      // Each repository audited once: the retry found a already done.
+      expect((await widened(lab.id)).map((r) => r.subjectId).sort()).toEqual([repos.a.id, repos.b.id].sort());
     });
   });
 
@@ -344,6 +427,7 @@ describe("the sync (codespace.sync)", () => {
     expect(body).toMatchObject({
       id: lab.id,
       mode: "online",
+      refreshOnOpen: false,
       classroomId: room.classroomId,
       browserExamKeys: [],
       teacher: { id: owner.id },
@@ -736,7 +820,7 @@ describe("POST /app/api/projects/:id/workspace/start", () => {
     const frozen = await setMode(lab.id, "free");
     expect([frozen.statusCode, frozen.json().error]).toEqual([409, "work_mode_frozen"]);
     const ws = ProjectWorkspace.parse((await call("GET", `/app/api/projects/${lab.id}/workspace`, owner.headers)).json());
-    expect(ws).toMatchObject({ allowed: ["online"], refusal: "work_mode_frozen" });
+    expect(ws).toMatchObject({ allowed: ["hybrid", "online"], refusal: "work_mode_frozen" });
   });
 });
 

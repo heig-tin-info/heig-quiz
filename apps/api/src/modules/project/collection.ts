@@ -47,7 +47,7 @@ import {
   effectiveDeadline,
   headWriter,
   ONLINE_MODES,
-  weighsLastWriter,
+  hasTwoWritePaths,
   zonedIso,
   type HeadWriter,
   type CollectionFailureReason,
@@ -221,7 +221,7 @@ async function collectRepository(app: FastifyInstance, config: AppConfig, octoki
   const { owner, repo: name } = ownerRepo(repo.fullName!);
 
   // ADR-149 §2: in `hybrid` the last writer wins, judged on the branch's head now; elsewhere nothing is read.
-  const weigh = weighsLastWriter(project.workMode);
+  const weigh = hasTwoWritePaths(project.workMode);
   const machine = (top: { sha: string; branch: string } | null) => machineHead(db, octokit, repo, project.workMode, top);
   const local = (head: Head) => settle({ outcome: "last_push_local" }, head.branch, head.sha);
   let weighed: string | null = null;

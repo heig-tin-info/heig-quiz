@@ -121,7 +121,7 @@ export async function codespacePlugin(app: FastifyInstance, opts: { config: AppC
       const granted = await hasGrant(app.db, callerOf(req).id);
       const to = workSettingOf(body);
       const caller = { owner: true, granted, kioskOffered: kioskProjectsOn(config) };
-      const row = await project.setWorkMode(app.db, scope.project.id, to, caller, actorOf(req));
+      const row = await project.setWorkMode(app, config, scope.project.id, to, caller, actorOf(req));
       await requestCodespaceSync(app, config, row.id);
       project.projectsChanged([scope.course.id]);
       return projectWorkspace(app.db, config, row, scope.course.id, { userId: callerOf(req).id, owner: true });

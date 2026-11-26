@@ -416,6 +416,15 @@ describe("PUT /api/assignments/:id", () => {
     expect(row?.beks).toEqual([]);
   });
 
+  it("stores whether a lab's workspaces refresh from GitHub when they open; absent is false, an exam never does (ADR-149 §7)", async () => {
+    expect((await put(syncBody({ refreshOnOpen: true }))).statusCode).toBe(200);
+    expect(findAssignment(h.db, "a-lab")?.refreshOnOpen).toBe(true);
+    expect((await put(syncBody())).statusCode).toBe(200);
+    expect(findAssignment(h.db, "a-lab")?.refreshOnOpen).toBe(false);
+    expect((await put(syncBody({ mode: "online_seb", refreshOnOpen: true }))).statusCode).toBe(200);
+    expect(findAssignment(h.db, "a-lab")?.refreshOnOpen).toBe(false);
+  });
+
   it("stores the teacher's update of a lab and asks the running workspaces to fetch it; an exam keeps none, a sync without one clears it (ADR-132 §11)", async () => {
     const update = { heads: [{ branch: "main", sha: "c".repeat(40) }], message: { text: "Test fixed.", at: "2026-11-17T20:00:00.000Z" } };
     expect((await put(syncBody({ workspaceUpdate: update }))).statusCode).toBe(200);

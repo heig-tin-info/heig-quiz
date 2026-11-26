@@ -32,6 +32,7 @@ export {
 export { createRelayWorker, credentialRefused, stagingTargets, type RelayWorker } from "./relay.js";
 export {
   ensureStagingRepo,
+  refreshStagingRepo,
   refSnapshot,
   seededRefCount,
   stagingHeadBranch,

@@ -37,6 +37,7 @@ import {
   ensureStagingRepo,
   fetchProjectUpdate,
   redactSecrets,
+  refreshStagingRepo,
   seededRefCount,
   stagingPaths,
   type ForgeOwner,
@@ -345,6 +346,12 @@ export interface ManagerDeps extends ManagerOptions {
   /** GitHub refused the credential of a fetch: the forge forgets it (`Forge.invalidate`). */
   forgeInvalidate?: (repo: RepoRef, owner: ForgeOwner) => void;
   /**
+   * Whether a push of (student, assignment) still waits for the relay
+   * (`PushEventStore.hasPending`). Without it, a staging repository is
+   * never refreshed from the forge: the safe side.
+   */
+  pendingRelay?: (student: string, assignment: string) => Promise<boolean>;
+  /**
    * A session closed: the forge may forget its credentials when nothing of
    * the workspace waits for the relay (ADR-078 §3).
    */
@@ -544,7 +551,11 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
    *    the staging repository has no ref. Redoing it at every opening would
    *    bring the forge's refs back on top of those the student has pushed but
    *    that the relay has not yet passed on. In exam mode it always is: that is
-   *    how a fix to the statement propagates (invariant 6).
+   *    how a fix to the statement propagates (invariant 6). An assignment
+   *    whose students may also push from their own machines
+   *    (`refreshOnOpen`, ADR-149 §7) is then brought up to the forge,
+   *    fast-forward only and only when nothing waits for the relay
+   *    (`refreshFromForge`).
    */
   async function seedStaging(
     session: SessionRow,
@@ -598,6 +609,8 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
           "target repository with no branch at all: empty workspace, which is normal in lab mode",
         );
       }
+      // Seeded before: the forge's branches may be ahead, pushed from the student's machine (ADR-149 §7).
+      if (wanted.mode === "lab" && source.mode === "empty") await refreshFromForge(session, assignment);
       return result;
     } catch (err) {
       if (err instanceof WorkspaceBootstrapError) {
@@ -659,6 +672,47 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         { sessionId: session.id, assignment: assignment.id, err: redactSecrets(String((err as Error).message ?? err)) },
         "teacher's update not fetched: tried again at the next opening or sync",
       );
+    }
+  }
+
+  /**
+   * A seeded `lab` staging repository brought up to the student's forge
+   * repository when its students may also push from their own machines
+   * (`assignment.refreshOnOpen`, ADR-149 §7) and nothing of the workspace
+   * waits for the relay — a pending push is the student's newest work, and
+   * the forge would be behind it. Fast-forward only (`refreshStagingRepo`):
+   * a branch that diverged stays as it is, and the relay's rejection path
+   * (ADR-078 §6) handles it at the next push. With the grant the seeding
+   * uses; a forge with no credentials at all fetches anonymously. Nothing is
+   * relayed. **Never throws**: a refresh that fails leaves the workspace as
+   * it was, and the next opening tries again.
+   */
+  async function refreshFromForge(session: SessionRow, assignment: AssignmentRow): Promise<void> {
+    if (assignment.mode !== "lab" || !assignment.refreshOnOpen || isReview(assignment) || !opts.pendingRelay) return;
+    const repo = targetRepoOfSession(session, assignment);
+    const url = repo && opts.forgeUrlOf ? opts.forgeUrlOf(repo) : undefined;
+    if (!repo || !url) return;
+    const owner = forgeOwnerOf(session, assignment);
+    let authorization: string | undefined;
+    try {
+      if (await opts.pendingRelay(session.student, assignment.id)) return;
+      authorization = await opts.forgeAuthorization?.(repo, owner, url).catch((err: unknown) => {
+        if (err instanceof ForgeUnconfiguredError && err.constructor === ForgeUnconfiguredError) return undefined;
+        throw err;
+      });
+      const gitDir = stagingPaths(opts.volumesRoot, session.student, assignment.id).gitDir;
+      const done = await refreshStagingRepo(gitDir, url, authorization);
+      if (done.created.length + done.advanced.length + done.diverged.length > 0) {
+        log.info({ sessionId: session.id, assignment: assignment.id, ...done }, "staging repository brought up to the forge");
+      }
+    } catch (err) {
+      if (err instanceof GitError && credentialRefused(err.message)) opts.forgeInvalidate?.(repo, owner);
+      log.warn(
+        { sessionId: session.id, assignment: assignment.id, err: redactSecrets(String((err as Error).message ?? err)) },
+        "staging repository not refreshed from the forge: tried again at the next opening",
+      );
+    } finally {
+      if (authorization) opts.forgeSettle?.(authorization);
     }
   }
 
@@ -845,7 +899,9 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         // set at `podman run` — but `work/.git/config` can still be repaired,
         // and that is what `git config user.name` reads.
         await ensureIdentityInContainer(existing, identity);
-        void refreshUpdate(existing, assignment);
+        // A resume is an opening too (ADR-149 §7): the student pulls what their machine pushed. Then the
+        // teacher's update: one git at a time on the staging repository, neither throws, the start awaits neither.
+        void refreshFromForge(existing, assignment).then(() => refreshUpdate(existing, assignment));
         // L3: a resume is a new opening, so it is a new token.
         const touched = updateSession(db, existing.id, {
           ...patch,

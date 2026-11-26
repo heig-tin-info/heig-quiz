@@ -5,6 +5,9 @@
 Proposed (2026-11-24). The nine decisions below are the product owner's
 (2026-11-24); the frozen-repository reading of decisions 1 and 8, the
 data, the job and the exposure rule are the orchestrator's, within them.
+Extended 2026-11-26 by [ADR-149](ADR-149-mode-de-travail-au-choix.md) §7:
+the `project.repos_access` job also raises a project's grants to `push`
+when its work mode widens them; this record's rules are unchanged.
 
 Scope: who reads an `online_seb` project's repositories on GitHub once the
 lab test is over, and how that access is given and taken back.
