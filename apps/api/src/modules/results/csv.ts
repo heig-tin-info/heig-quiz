@@ -5,7 +5,7 @@
  */
 import type { ItemCounting, ResultsView } from "@quiz/contracts";
 
-import { csvFile, grade, HEADER_MAX, line, points } from "../../csv.js";
+import { csvFile, grade, headerLabel, line, points } from "../../csv.js";
 
 export { BOM, csvField, csvFilename } from "../../csv.js";
 
@@ -40,7 +40,7 @@ export function resultsCsv(view: ResultsView): string {
     "email",
     "last_name",
     "first_name",
-    ...view.items.map((i) => `${i.internalName.slice(0, HEADER_MAX)}${COUNTING_SUFFIX[i.counting]}`),
+    ...view.items.map((i) => `${headerLabel(i.internalName)}${COUNTING_SUFFIX[i.counting]}`),
     "total",
     "grade",
   ];

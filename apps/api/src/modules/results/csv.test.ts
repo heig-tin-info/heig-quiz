@@ -1,6 +1,8 @@
+import type { ResultsView } from "@quiz/contracts";
 import { describe, expect, it } from "vitest";
 
-import { csvField, csvFilename } from "./csv.js";
+import { headerLabel } from "../../csv.js";
+import { csvField, csvFilename, resultsCsv } from "./csv.js";
 
 describe("csvFilename", () => {
   it("is the title's slug: accents folded, lower case, single dashes, capped", () => {
@@ -32,5 +34,31 @@ describe("csvField", () => {
     expect(csvField('=a;b"c')).toBe(`"'=a;b""c"`);
     // An ordinary field is untouched: the export stays diff-readable.
     expect(csvField("Dupond")).toBe("Dupond");
+  });
+});
+
+describe("headerLabel", () => {
+  it("drops the commas of a name, then cuts it at 30 characters", () => {
+    expect(headerLabel("Pb2e QCM — portée, résolution et fausses détections")).toBe("Pb2e QCM — portée résolution e");
+    expect(headerLabel("a,b , c")).toBe("a b c");
+    expect(headerLabel("Pointeurs")).toBe("Pointeurs");
+  });
+});
+
+describe("resultsCsv", () => {
+  /**
+   * #1224: a spreadsheet whose list separator is the comma cuts a `;` line at
+   * its commas, so a comma in a question's name split the header and no other
+   * line. The header holds none, and still one field per column.
+   */
+  it("writes a header with no comma for an item whose name has one", () => {
+    const view = {
+      items: [
+        { id: "a", internalName: "Portée, résolution", counting: "normal" },
+        { id: "b", internalName: "Chirp, temps", counting: "bonus" },
+      ],
+      rows: [],
+    } as unknown as ResultsView;
+    expect(resultsCsv(view)).toBe("\uFEFFemail;last_name;first_name;Portée résolution;Chirp temps (bonus);total;grade\r\n");
   });
 });
