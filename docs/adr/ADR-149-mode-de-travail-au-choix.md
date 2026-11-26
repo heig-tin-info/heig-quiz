@@ -72,25 +72,30 @@ writability, as `online` does (ADR-078 §11).
 
 At the effective deadline, a repository otherwise due for collection
 (ADR-130 §2: a workspace launched, the deadline applied, no lock) is
-collected **unless a head written outside stands between the workspace and
-the branch**: the student's last push by the deadline, the branch's head
-when the order leaves — a push received after the deadline, its receipt in
-or not — or a head the signed commit meets after a 422. The push is the
-work handed in, and a workspace left behind never overwrites it, whether
-the push came before or after the deadline. Without any push, the head is
-the handout and the workspace is collected. The rule is
-`collectsWorkspace` (`@quiz/domain`), the weighing `weighsLastWriter`
-(`hybrid` only).
+weighed: **the last writer wins**. The heads are read newest first — the
+branch's head now, then every push received, after the deadline too — and
+each one's writer is one of three:
 
-A head is **written outside** when a person pushed it from a machine. It
-is not when it came from the workspace (`workspaceHead` of the `codespace`
-module: a head the portal declared before relaying it, ADR-078 §6, or an
-earlier collection's commit), when it is one of the App's own commits
-(`bot_commits`), when it was received as a bot's push (the App's, a
-workflow's), or when it was made on **GitHub's web interface** — its
-committer `web-flow`: an edit there, or a pull request merged there, the
-teacher's sync (§4) among them. A student who only works in the workspace
-and merges the sync on GitHub is therefore still collected.
+- **the workspace**: a head the portal declared before relaying it
+  (ADR-078 §6), or an earlier collection's commit;
+- **neutral**: a bot's push (the App's, a workflow's), one of the App's
+  own commits (`bot_commits`), or a commit made on **GitHub's web
+  interface** — its committer `web-flow`: an edit there, or a pull request
+  merged there, the teacher's sync (§4) among them;
+- **a machine**: any other head a person pushed.
+
+The neutral heads are skipped; the first other one decides. The
+workspace's: the workspace is collected. A machine's: it is not — the push
+is the work handed in, and a workspace left behind never overwrites it,
+whether the push came before or after the deadline. None left (no push at
+all): collected. A pull request merged on GitHub therefore changes nothing
+by itself: over a push from the workspace the workspace is collected, over
+a push from a machine it is not. The rule is `headWriter` and
+`collectsWorkspace` (`@quiz/domain`), the weighing `weighsLastWriter`
+(`hybrid` only). A branch's head no receipt names yet is a push whose
+receipt is not in, weighed like any; without any person's push it is the
+handout, left out. The head the signed commit meets after a 422 is weighed
+again the same way.
 
 A skipped repository is recorded and audited like any outcome, as
 `last_push_local`, with the head it stood on: before the order nothing is
@@ -129,7 +134,8 @@ with `pull` under `online` keep `pull` until §7.
   the deadline hands in. The project's card keeps GitHub's action.
 - **The staff**: the setting's sentence says the collection rule; a skipped
   repository's row says "Not collected: the last push came from a personal
-  machine", without the `not collected` flag (nothing is missing); the
+  machine" — the last that counts, a commit made on GitHub skipped —,
+  without the `not collected` flag (nothing is missing); the
   workspace section (Resync, open workspaces) is shown as for `online`.
 
 ### 7. Later, in a second delivery
@@ -149,18 +155,19 @@ with `pull` under `online` keep `pull` until §7.
 - A student who pushes from their machine and then edits in the workspace
   without pushing from it hands in the push, not the edits. The page says
   so; the rule keeps a deliberate push from being overwritten.
-- A commit made on GitHub's web interface does not stop the collection: a
-  student who edits a file there and then leaves a stale workspace has the
-  workspace collected over the edit (ADR-130 §1 decision 3, "the latest
-  state wins"). The sync's pull request merged there is the case this
-  serves.
+- A commit made on GitHub's web interface decides nothing: the push under
+  it does. A student whose last push came from the workspace and who then
+  edits a file on GitHub has the workspace collected over the edit
+  (ADR-130 §1 decision 3, "the latest state wins"); one whose last push
+  came from a machine keeps the edit. The sync's pull request merged there
+  is the case this serves.
 - One residual window: a student's first push ever, made after the
   deadline and whose receipt is not in when the order leaves, reads as the
   handout, and the workspace is collected over it. Webhooks arrive within
   seconds, and the order leaves some twenty seconds after the deadline.
-- The weighing reads GitHub once per weighed head that is not the
-  workspace's nor the App's (its committer), for `hybrid` repositories
-  only.
+- The weighing reads the receipts once, and GitHub once per head a person
+  pushed until the first that decides (its committer), for `hybrid`
+  repositories only.
 - The content of a `hybrid` repository is no more defensible than a `free`
   one's: `hybrid` is never offered under supervision.
 - The staff's review session (ADR-129) and the distribution's (ADR-147) are

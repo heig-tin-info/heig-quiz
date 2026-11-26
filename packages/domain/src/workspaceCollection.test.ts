@@ -7,6 +7,7 @@ import {
   collectionTooLate,
   collectsWorkspace,
   composeCollectionTree,
+  headWriter,
   indexInfo,
   keptEntriesMatch,
   overlayTree,
@@ -28,23 +29,33 @@ describe("collectionRef", () => {
   });
 });
 
-describe("collectsWorkspace (ADR-130 §2 as amended by ADR-149 §2)", () => {
-  const INSIDE = { outside: false };
-  const OUTSIDE = { outside: true };
+describe("headWriter (ADR-149 §2)", () => {
+  const none = { collected: false, bot: false, relayed: false, web: false };
+  it("reads a collection's commit as the workspace's, a bot's or the web's as neutral, a relayed head as the workspace's, the rest as a machine's", () => {
+    expect(headWriter({ ...none, collected: true, bot: true })).toBe("workspace");
+    // An App's own commit the portal declared is still the App's (ADR-078 §6).
+    expect(headWriter({ ...none, bot: true, relayed: true })).toBe("neutral");
+    expect(headWriter({ ...none, relayed: true })).toBe("workspace");
+    expect(headWriter({ ...none, web: true })).toBe("neutral");
+    expect(headWriter(none)).toBe("machine");
+  });
+});
 
+describe("collectsWorkspace (ADR-130 §2 as amended by ADR-149 §2)", () => {
   it("always collects where only the workspace writes", () => {
     for (const mode of ["online", "online_seb"] as const) {
-      for (const writes of [[], [INSIDE], [OUTSIDE], [INSIDE, OUTSIDE]]) expect(collectsWorkspace(mode, writes)).toBe(true);
+      for (const writers of [[], ["machine"], ["neutral", "machine"]] as const) expect(collectsWorkspace(mode, writers)).toBe(true);
     }
   });
 
-  it("lets the last writer win in hybrid: no push or only heads written inside collect, any head written outside does not", () => {
+  it("lets the last writer win in hybrid: neutral heads skipped, the first other decides, none collects", () => {
     expect(collectsWorkspace("hybrid", [])).toBe(true);
-    expect(collectsWorkspace("hybrid", [INSIDE])).toBe(true);
-    expect(collectsWorkspace("hybrid", [INSIDE, INSIDE])).toBe(true);
-    expect(collectsWorkspace("hybrid", [OUTSIDE])).toBe(false);
-    // The head moved after the deadline by a push from a machine: the last push before it does not save the workspace.
-    expect(collectsWorkspace("hybrid", [INSIDE, OUTSIDE])).toBe(false);
+    expect(collectsWorkspace("hybrid", ["neutral", "neutral"])).toBe(true);
+    expect(collectsWorkspace("hybrid", ["workspace", "machine"])).toBe(true);
+    expect(collectsWorkspace("hybrid", ["machine", "workspace"])).toBe(false);
+    // A pull request merged on GitHub over a push from a machine: the machine's push decides.
+    expect(collectsWorkspace("hybrid", ["neutral", "machine", "workspace"])).toBe(false);
+    expect(collectsWorkspace("hybrid", ["neutral", "workspace", "machine"])).toBe(true);
   });
 });
 

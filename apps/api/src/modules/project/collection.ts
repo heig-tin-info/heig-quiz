@@ -10,12 +10,11 @@
  * The rules it holds, in order:
  *
  *  - in a `hybrid` project the last writer wins (ADR-149 §2,
- *    `collectsWorkspace`): nothing is collected over a head written outside
- *    the workspace and the platform ({@link writtenOutside}) — the
- *    student's last push by the deadline, the branch's head when the order
- *    leaves (a push received after the deadline), or a head the commit
- *    meets after a 422 — but `last_push_local`, nothing ordered or nothing
- *    signed;
+ *    `collectsWorkspace`): the branch's head and every push received,
+ *    newest first, the neutral ones skipped (a bot's, GitHub's web
+ *    interface's); when the first other one is a machine's
+ *    ({@link machineHead}) — before the order, or as the head the commit
+ *    meets after a 422 — nothing is collected but `last_push_local`;
  *  - an order leaves only within `COLLECTION_ORDER_WINDOW_MS` of the
  *    effective deadline, judged on Quiz's clock right before it is sent,
  *    which also dates its token (§5): later, `too_late`;
@@ -35,7 +34,7 @@
  *  - the temporary ref is deleted after every order, whatever its outcome.
  */
 import type { FastifyInstance } from "fastify";
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { Octokit } from "octokit";
 
 import type { CodespaceCollectionResult } from "@quiz/contracts";
@@ -46,17 +45,18 @@ import {
   collectionTooLate,
   collectsWorkspace,
   effectiveDeadline,
+  headWriter,
   ONLINE_MODES,
   weighsLastWriter,
-  type CollectionWrite,
   zonedIso,
+  type HeadWriter,
   type CollectionFailureReason,
 } from "@quiz/domain";
 
 import { audit, SYSTEM_ACTOR } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import type { Db } from "../../db/client.js";
-import { botCommits, codespaceCollections, codespaceLaunches, projectRepos, projects, pushReceipts } from "../../db/schema.js";
+import { botCommits, codespaceCollections, codespaceLaunches, codespaceRelays, projectRepos, projects, pushReceipts } from "../../db/schema.js";
 import { branchHead, githubStatus, ownerRepo } from "../../github/app.js";
 import { collectionLanded, deleteCollectionRef, keptEntriesHold, madeOnGitHub, pushedCommitIs } from "../../github/collection.js";
 import { commitOnBranch } from "../../github/commit.js";
@@ -66,7 +66,6 @@ import {
   recordCollectionCommit,
   settleCollection,
   unsettledCollections,
-  workspaceHead,
   type CollectionSettlement,
 } from "../codespace/service.js";
 import { dropCollectedReceipt, recordCollectedReceipt } from "../github/service.js";
@@ -98,39 +97,74 @@ export const COLLECTION_DUE = and(
   sql`NOT EXISTS (SELECT 1 FROM ${codespaceCollections} WHERE ${codespaceCollections.repoId} = ${projectRepos.id} AND ${codespaceCollections.deadlineAt} = ${EFFECTIVE_DEADLINE})`,
 )!;
 
-/**
- * Whether the head `sha` of `repo` was written outside the workspace and
- * the platform (ADR-149 §2, `CollectionWrite`): a person's push from a
- * machine. Not when it came from the workspace (`workspaceHead`: relayed,
- * or an earlier collection's commit), is one of the App's own commits
- * (`bot_commits`), was received as a bot's push (the App's, a workflow's),
- * or was made on GitHub's web interface (an edit, a pull request merged
- * there — the teacher's sync among them, ADR-073). Cheapest first; the
- * GitHub read last, which throws on an outage.
- */
-async function writtenOutside(db: Db, octokit: Octokit, repo: RepoRow, sha: string): Promise<boolean> {
-  const githubRepoId = repo.githubRepoId!;
-  if ((await workspaceHead(db, githubRepoId, sha)) !== null) return false;
-  const [own] = await db.select({ sha: botCommits.sha }).from(botCommits).where(and(eq(botCommits.repoId, repo.id), eq(botCommits.sha, sha))).limit(1);
-  if (own) return false;
-  const [receipt] = await db
-    .select({ isBot: pushReceipts.isBot })
-    .from(pushReceipts)
-    .where(and(eq(pushReceipts.githubRepoId, githubRepoId), eq(pushReceipts.headSha, sha)))
-    .limit(1);
-  if (receipt?.isBot) return false;
-  const { owner, repo: name } = ownerRepo(repo.fullName!);
-  return !(await madeOnGitHub(octokit, owner, name, sha));
+/** A head of a student's repository, with what the database knows of who wrote it (ADR-149 §2). */
+interface Head {
+  sha: string;
+  branch: string;
+  /** An earlier collection's commit. */
+  collected: boolean;
+  /** Received as a bot's push (the App's, a workflow's), or one of the App's own commits. */
+  bot: boolean;
+  /** Declared by the portal before it relayed it (ADR-078 §6). */
+  relayed: boolean;
 }
 
-/** Whether any push of `sha` was received on the repository, a bot's included. */
-async function received(db: Db, githubRepoId: number, sha: string): Promise<boolean> {
-  const [receipt] = await db
-    .select({ id: pushReceipts.id })
+/**
+ * The heads of `repo` newest first: `top` — the branch's head now — first,
+ * unless the newest receipt names it already; then every push received, a
+ * bot's included, newest first. One read of the receipts with their facts.
+ * A `top` no receipt names yet is a push whose receipt is not in, read on
+ * its own; without any person's push it is the handout, left out.
+ */
+async function headsOf(db: Db, repo: RepoRow, top: { sha: string; branch: string } | null): Promise<Head[]> {
+  const githubRepoId = repo.githubRepoId!;
+  const own = (sha: AnyColumn | SQL) =>
+    sql<boolean>`EXISTS (SELECT 1 FROM ${botCommits} WHERE ${botCommits.repoId} = ${repo.id} AND ${botCommits.sha} = ${sha})`.mapWith(Boolean);
+  const relayed = (sha: AnyColumn | SQL) =>
+    sql<boolean>`EXISTS (SELECT 1 FROM ${codespaceRelays} WHERE ${codespaceRelays.githubRepoId} = ${githubRepoId} AND ${codespaceRelays.sha} = ${sha})`.mapWith(Boolean);
+  const receipts = await db
+    .select({
+      sha: pushReceipts.headSha,
+      branch: pushReceipts.branch,
+      collected: pushReceipts.collected,
+      isBot: pushReceipts.isBot,
+      own: own(pushReceipts.headSha),
+      relayed: relayed(pushReceipts.headSha),
+    })
     .from(pushReceipts)
-    .where(and(eq(pushReceipts.githubRepoId, githubRepoId), eq(pushReceipts.headSha, sha)))
-    .limit(1);
-  return receipt !== undefined;
+    .where(eq(pushReceipts.githubRepoId, githubRepoId))
+    .orderBy(desc(pushReceipts.receivedAt), desc(pushReceipts.collected));
+  const heads: Head[] = receipts.map(({ isBot, own: ownCommit, ...head }) => ({ ...head, bot: isBot || ownCommit }));
+  if (top === null || heads[0]?.sha === top.sha) return heads;
+  const known = heads.find((head) => head.sha === top.sha);
+  if (known) return [known, ...heads];
+  if (!heads.some((head) => !head.bot)) return heads;
+  const [facts] = await db
+    .select({ own: own(sql`${top.sha}`), relayed: relayed(sql`${top.sha}`) })
+    .from(projectRepos)
+    .where(eq(projectRepos.id, repo.id));
+  return [{ ...top, collected: false, bot: facts?.own ?? false, relayed: facts?.relayed ?? false }, ...heads];
+}
+
+/**
+ * The head a machine wrote that the workspace may not be collected over
+ * (ADR-149 §2), or null: the writer of each head ({@link headsOf}, newest
+ * first) read up to the first that is not neutral, GitHub's committer read
+ * only for a head a person pushed (`madeOnGitHub`: an edit or a merge made
+ * there is neutral), and `collectsWorkspace` decides. Throws when GitHub
+ * cannot be read.
+ */
+async function machineHead(db: Db, octokit: Octokit, repo: RepoRow, mode: ProjectRow["workMode"], top: { sha: string; branch: string } | null): Promise<Head | null> {
+  const { owner, repo: name } = ownerRepo(repo.fullName!);
+  const heads = await headsOf(db, repo, top);
+  const writers: HeadWriter[] = [];
+  for (const head of heads) {
+    const facts = { ...head, web: false };
+    if (headWriter(facts) === "machine") facts.web = await madeOnGitHub(octokit, owner, name, head.sha);
+    writers.push(headWriter(facts));
+    if (writers.at(-1) !== "neutral") break;
+  }
+  return collectsWorkspace(mode, writers) ? null : heads[writers.length - 1]!;
 }
 
 /** What the portal's answer records when it is not `pushed`: its outcome, a failure with its reason. Exhaustive by type. */
@@ -182,38 +216,35 @@ async function collectRepository(app: FastifyInstance, config: AppConfig, octoki
   const claim = await claimCollection(db, repo.id, deadline, app.clock.now());
   if (claim === null) return null;
   const settle = settler(app, repo, project, claim, deadline);
-  // ADR-149 §2: in `hybrid`, the heads between the workspace and the branch are weighed; elsewhere none is read.
-  const weigh = weighsLastWriter(project.workMode);
-  const write = async (sha: string): Promise<CollectionWrite> => ({ outside: await writtenOutside(db, octokit, repo, sha) });
-  const local = (branch: string, sha: string) => settle({ outcome: "last_push_local" }, branch, sha);
-
   const last = await lastStudentPush(db, repo.githubRepoId!, null, deadline);
-  if (weigh && last) {
-    let writes: CollectionWrite[];
+  const branch = collectionBranch(project.branches, last?.branch ?? null);
+  const { owner, repo: name } = ownerRepo(repo.fullName!);
+
+  // ADR-149 §2: in `hybrid` the last writer wins, judged on the branch's head now; elsewhere nothing is read.
+  const weigh = weighsLastWriter(project.workMode);
+  const machine = (top: { sha: string; branch: string } | null) => machineHead(db, octokit, repo, project.workMode, top);
+  const local = (head: Head) => settle({ outcome: "last_push_local" }, head.branch, head.sha);
+  let weighed: string | null = null;
+  if (weigh) {
     try {
-      writes = [await write(last.sha)];
+      if (branch !== null) weighed = await branchHead(octokit, owner, name, branch);
+      const written = await machine(branch !== null && weighed !== null ? { sha: weighed, branch } : null);
+      if (written !== null) return local(written);
     } catch (err) {
-      app.log.warn({ repo: repo.id, status: githubStatus(err) }, "the last push could not be read on GitHub");
-      return settle({ outcome: "failed", reason: "github_failed" }, last.branch);
+      app.log.warn({ repo: repo.id, status: githubStatus(err) }, "the last writer could not be read on GitHub");
+      return settle({ outcome: "failed", reason: "github_failed" }, branch);
     }
-    if (!collectsWorkspace(project.workMode, writes)) return local(last.branch, last.sha);
   }
   if (collectionTooLate(deadline, app.clock.now())) return settle({ outcome: "too_late" });
-  const branch = collectionBranch(project.branches, last?.branch ?? null);
   if (branch === null) return settle({ outcome: "branch_not_handed_out" });
   await recordCollectionCommit(db, claim, branch, null);
 
-  const { owner, repo: name } = ownerRepo(repo.fullName!);
   const ref = collectionRef(repo.id, deadline);
   let unreadable: number | null = null;
   const failed = (reason: CollectionFailureReason) => settle({ outcome: "failed", reason, unreadable }, branch);
   try {
     const base = await branchHead(octokit, owner, name, branch);
     if (base === null) return failed("github_failed");
-    // A head that moved since the last push by the deadline (a push received after it, its receipt perhaps
-    // not in yet); without any push, a head nobody pushed is the handout itself.
-    const moved = base !== last?.sha && (last !== null || (await received(db, repo.githubRepoId!, base)));
-    if (weigh && moved && !collectsWorkspace(project.workMode, [await write(base)])) return local(branch, base);
     // The bound again, right before the order, on the clock that dates its token (§5).
     const now = app.clock.now();
     if (collectionTooLate(deadline, now)) return settle({ outcome: "too_late" }, branch);
@@ -230,8 +261,8 @@ async function collectRepository(app: FastifyInstance, config: AppConfig, octoki
     unreadable = answer.unreadable;
 
     const kept = collectionKeptPaths(project.protectedFiles);
-    // A head written outside the commit met after a 422 (an object: the callback writes it).
-    const refused = { outside: null as string | null };
+    // The machine's head the commit met (an object: the callback writes it).
+    const refused = { by: null as Head | null };
     if (!(await pushedCommitIs(octokit, owner, name, ref, base, answer.tree))) return failed("check_refused");
     const outcome = await commitOnBranch({
       octokit,
@@ -239,12 +270,12 @@ async function collectRepository(app: FastifyInstance, config: AppConfig, octoki
       repo: name,
       branch,
       message: `Collected from the online workspace at the deadline — ${project.name} (${zonedIso(deadline)})`,
-      // Checked against the head it goes on, every try: the base first, a new head after a 422 — which,
-      // in `hybrid`, must not be a head written outside (ADR-149 §2): then nothing is signed, `last_push_local`.
+      // Checked against the head it goes on, every try: the base first, a new head after a 422 — which, in
+      // `hybrid`, is weighed again when it is not the one weighed (ADR-149 §2): a machine's, and nothing is signed.
       treeFor: async (head) => {
-        if (weigh && head !== base && !collectsWorkspace(project.workMode, [await write(head)])) {
-          refused.outside = head;
-          return null;
+        if (weigh && head !== weighed) {
+          refused.by = await machine({ sha: head, branch });
+          if (refused.by !== null) return null;
         }
         return (await keptEntriesHold(octokit, owner, name, answer.tree, head, kept)) ? answer.tree : null;
       },
@@ -263,7 +294,7 @@ async function collectRepository(app: FastifyInstance, config: AppConfig, octoki
       },
       tries: MOVE_TRIES,
     });
-    if (outcome === "refused") return refused.outside === null ? failed("check_refused") : local(branch, refused.outside);
+    if (outcome === "refused") return refused.by === null ? failed("check_refused") : local(refused.by);
     if (outcome === null) return failed("github_failed");
     const settled = await settle({ outcome: "collected", unreadable }, branch, outcome);
     if (settled === null) {

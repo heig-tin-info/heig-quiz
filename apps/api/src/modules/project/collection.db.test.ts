@@ -437,6 +437,12 @@ describe("what the collection refuses, and what a crash leaves", () => {
     await relayedHere(merged, await pushed(merged, { "main.c": "workspace\n" }, -7_200_000));
     await pushed(merged, { "README.md": "# Lab, fixed" }, -60_000, GITHUB_COMMITTER);
 
+    // The teacher's sync merged on GitHub over a push from a machine: the merge is no one's, the machine's push decides.
+    const mergedOverLocal = await launched("lock", [], {}, "hybrid");
+    await relayedHere(mergedOverLocal, await pushed(mergedOverLocal, { "main.c": "workspace\n" }, -7_200_000));
+    const underMerge = await pushed(mergedOverLocal, { "main.c": "machine\n" }, -3_600_000);
+    await pushed(mergedOverLocal, { "README.md": "# Lab, fixed" }, -60_000, GITHUB_COMMITTER);
+
     // The last push an earlier deadline's collection made: the workspace's.
     const recollected = await launched("lock", [], {}, "hybrid");
     const earlier = await pushed(recollected, { "main.c": "collected\n" }, -86_400_000);
@@ -447,15 +453,18 @@ describe("what the collection refuses, and what a crash leaves", () => {
     await deadlineAt(at(DEADLINE, 20_000));
 
     expect(await rowsOf(local)).toMatchObject([{ outcome: "last_push_local", reason: null, sha: null }]);
+    expect(await rowsOf(mergedOverLocal)).toMatchObject([{ outcome: "last_push_local" }]);
     for (const f of [relayed, merged, recollected, silent]) expect(await rowsOf(f)).toMatchObject([{ outcome: "unchanged" }]);
     // Ordered for all but the local one; the skip is audited with the push it stood on.
     expect(collectionOrders().map((c) => (c.body as { repository: string }).repository).sort()).toEqual(
       [relayed, merged, recollected, silent].map((f) => f.fullName).sort(),
     );
-    const [audit] = await db.select().from(auditLog).where(and(eq(auditLog.action, "project_repo.workspace_collected"), eq(auditLog.subjectId, local.repo.id)));
-    expect(audit!.payload).toMatchObject({ outcome: "last_push_local", branch: "main", sha: localSha });
+    const skipped = async (f: Fixture) =>
+      (await db.select().from(auditLog).where(and(eq(auditLog.action, "project_repo.workspace_collected"), eq(auditLog.subjectId, f.repo.id))))[0]!.payload;
+    expect(await skipped(local)).toMatchObject({ outcome: "last_push_local", branch: "main", sha: localSha });
+    expect(await skipped(mergedOverLocal)).toMatchObject({ outcome: "last_push_local", branch: "main", sha: underMerge });
     // The job locked them all as before.
-    for (const f of [local, relayed, merged, recollected, silent]) expect((await repoRow(f)).lockedAt).not.toBeNull();
+    for (const f of [local, mergedOverLocal, relayed, merged, recollected, silent]) expect((await repoRow(f)).lockedAt).not.toBeNull();
   });
 
   it("at the students' choice, never collects over a head a machine moved after the deadline, before the order or under it (ADR-149 §2)", async () => {
