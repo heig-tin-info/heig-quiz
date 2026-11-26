@@ -585,19 +585,25 @@ jobs:
           else
             echo "digest=${pin#*@}" >> "$GITHUB_OUTPUT"
           fi
-      - if: steps.pin.outputs.digest != ''
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      # The same manifest under `latest`, by digest: no rebuild, no layer
-      # copied.
+      # The same manifest under `latest`, byte for byte, by the registry's
+      # API: no rebuild, no layer copied, and no index wrapped around it
+      # (`buildx imagetools create` makes one, with its own digest).
       - if: steps.pin.outputs.digest != ''
         env:
           DIGEST: ${{ steps.pin.outputs.digest }}
+          ACTOR: ${{ github.actor }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          docker buildx imagetools create --tag ghcr.io/heig-tin-info/quiz-base:latest "ghcr.io/heig-tin-info/quiz-base@$DIGEST"
-          now=$(docker buildx imagetools inspect ghcr.io/heig-tin-info/quiz-base:latest --format '{{json .Manifest.Digest}}' | tr -d '"')
+          set -euo pipefail
+          repo=heig-tin-info/quiz-base
+          api="https://ghcr.io/v2/$repo/manifests"
+          accept='application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json,application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json'
+          bearer=$(curl -fsS -u "$ACTOR:$TOKEN" "https://ghcr.io/token?service=ghcr.io&scope=repository:$repo:pull,push" | jq -r .token)
+          echo "::add-mask::$bearer"
+          curl -fsS -H "Authorization: Bearer $bearer" -H "Accept: $accept" -D headers -o manifest "$api/$DIGEST"
+          [ "sha256:$(sha256sum < manifest | cut -c1-64)" = "$DIGEST" ] || { echo "::error::the registry served other bytes for $DIGEST"; exit 1; }
+          type=$(sed -n 's/^content-type: *//Ip' headers | tr -d '\r' | tail -n 1)
+          curl -fsS -X PUT -H "Authorization: Bearer $bearer" -H "Content-Type: $type" --data-binary @manifest "$api/latest" >/dev/null
+          now=$(curl -fsSI -H "Authorization: Bearer $bearer" -H "Accept: $accept" "$api/latest" | sed -n 's/^docker-content-digest: *//Ip' | tr -d '\r')
           [ "$now" = "$DIGEST" ] || { echo "::error::latest names $now, not $DIGEST"; exit 1; }
           echo "quiz-base: latest -> $DIGEST" >> "$GITHUB_STEP_SUMMARY"
