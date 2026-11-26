@@ -964,6 +964,29 @@ describe("a workspace its students may also push to from their own machines (ADR
     await vi.waitFor(async () => expect([...(await refSnapshot(staging)).keys()].filter((ref) => ref.startsWith("refs/quiz/"))).toEqual([]));
   });
 
+  it("resumed live with the teacher's update too, runs both, one after the other: the forge's branch and the update ref land", async () => {
+    const { assignment, staging } = await seeded({ refreshOnOpen: true });
+    const second = await pushedFromMachine();
+    // The teacher's update, on the forge's `sync/main` as the platform's sync pushes it (ADR-132 §11).
+    const teacher = join(root, "teacher");
+    await git(["clone", "-q", "-b", "main", forgePath("org", "tp-student"), teacher], { env: FIXTURE_ENV });
+    await writeFile(join(teacher, "README.md"), "fixed\n", "utf8");
+    await git(["-C", teacher, "add", "README.md"], { env: FIXTURE_ENV });
+    await git(["-C", teacher, "commit", "-qm", "Project update"], { env: FIXTURE_ENV });
+    await git(["-C", teacher, "push", "-q", "origin", "HEAD:refs/heads/sync/main"], { env: FIXTURE_ENV });
+    const update = (await git(["-C", teacher, "rev-parse", "HEAD"], { env: FIXTURE_ENV })).trim();
+    const withUpdate = { ...assignment, workspaceUpdate: { heads: [{ branch: "main", sha: update }], message: null } };
+    db.update(assignments).set({ workspaceUpdate: withUpdate.workspaceUpdate }).run();
+
+    const again = await makeManager({ forgeUrlOf: localForgeUrl, pendingRelay: async () => false }).start(user, withUpdate);
+    expect(again.launched).toBe(false);
+    await vi.waitFor(async () => {
+      const refs = await refSnapshot(staging);
+      expect(refs.get("refs/heads/main")).toBe(second);
+      expect(refs.get("refs/quiz/update/main")).toBe(update);
+    });
+  });
+
   it("leaves the staging repository as it is while a push waits for the relay, or when the project is not at the students' choice", async () => {
     const { assignment, sessionId, staging, first } = await seeded({ refreshOnOpen: true });
     await pushedFromMachine();

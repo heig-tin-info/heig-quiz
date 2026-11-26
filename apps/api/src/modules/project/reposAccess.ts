@@ -254,7 +254,9 @@ async function revokePass(app: FastifyInstance, run: LeasedRun, moved: () => Pro
  * collaborator's seat, a pending invitation, never lowering a higher one,
  * never inviting anyone), one repository at a time, each one where
  * something changed audited (`project_repo.access_widened`). A repository
- * deleted, not live or archived is skipped; a locked one is not — its lock
+ * deleted, not live or archived is skipped — one archived as its lock (H8)
+ * is not widened when it is unarchived later, a limit ADR-149 §7 states —;
+ * a locked one is not — its lock
  * is a ruleset nobody bypasses, whatever the permission (F-PROJ-09, ADR-130
  * §9), so `push` changes nothing there until it is lifted. A GitHub failure
  * fails the repository and the job: the ticker runs the pass again, which

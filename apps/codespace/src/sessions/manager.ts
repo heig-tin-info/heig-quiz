@@ -899,9 +899,9 @@ export function createSessionManager(opts: ManagerDeps): SessionManager {
         // set at `podman run` — but `work/.git/config` can still be repaired,
         // and that is what `git config user.name` reads.
         await ensureIdentityInContainer(existing, identity);
-        void refreshUpdate(existing, assignment);
-        // A resume is an opening too (ADR-149 §7): the student pulls what their machine pushed.
-        void refreshFromForge(existing, assignment);
+        // A resume is an opening too (ADR-149 §7): the student pulls what their machine pushed. Then the
+        // teacher's update: one git at a time on the staging repository, neither throws, the start awaits neither.
+        void refreshFromForge(existing, assignment).then(() => refreshUpdate(existing, assignment));
         // L3: a resume is a new opening, so it is a new token.
         const touched = updateSession(db, existing.id, {
           ...patch,

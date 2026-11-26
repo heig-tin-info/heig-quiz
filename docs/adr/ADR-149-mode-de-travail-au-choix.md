@@ -160,7 +160,8 @@ every other change; `free → hybrid` has no launch to freeze it;
 keeps the permission it had" is amended: a change of mode to one that
 invites with `push` from one that invited with less (`widensInvitations`:
 `online → hybrid` above all, before or after a launch, and `online → free`
-before one) raises what was already given. In the mode's transaction the
+before one — the same widening, so it raises the `pull` invitations too)
+raises what was already given. In the mode's transaction the
 project's access revision is bumped and its `repos_access_job_at` lease
 claimed — ADR-145's `project.repos_access` job, the project's one runner
 of access on GitHub —, and the job, sent after the commit, brings every
@@ -177,7 +178,11 @@ is audited (`project_repo.access_widened`: how many seats and invitations),
 never a token. A repository deleted, not live or archived is skipped. A
 locked one is not: its lock is a ruleset nobody bypasses (F-PROJ-09,
 ADR-130 §9), independent of the permission, so `push` changes nothing on
-it until the lock is lifted. A narrowing never takes an access back.
+it until the lock is lifted. **A stated limit**: a repository locked by
+archiving it on GitHub (H8, the fallback where rulesets cannot exist) is
+skipped, and nothing widens it when it is unarchived later — its student
+keeps `pull` until the staff resend the invitation. A narrowing never takes
+an access back.
 
 **The portal's refresh.** The portal is told that a project's students may
 also push from their own machines: `CodespaceAssignmentSync.refreshOnOpen`
@@ -193,7 +198,12 @@ own refs (`refs/quiz/forge/*`, hidden from every push, deleted afterwards),
 each staging branch created when missing, moved when it is behind
 (fast-forward, a compare-and-swap a student's push wins), left as it is
 when it diverged — **never forced**, never deleted, no tag, nothing
-relayed. With the token the seeding uses (ADR-078), in the environment
+relayed. Every branch of the repository comes, the teacher's `sync/<branch>`
+ones included (ADR-073): harmless — the student's workspace sees them as
+remote branches, as on GitHub, and the teacher's update keeps its own ref
+(ADR-132 §11). At a resumed live session the refresh and the teacher's
+update run one after the other, never two gits at once on the staging
+repository. With the token the seeding uses (ADR-078), in the environment
 only; a failure leaves the workspace as it was and never refuses the
 session. The host runs git on `staging.git`, its own repository, never on
 the student's `work/.git` (the portal's invariant 13): the student's work

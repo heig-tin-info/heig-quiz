@@ -200,7 +200,7 @@ export function workModeRefusal(facts: WorkModeFacts, from: WorkSetting, to: Wor
   if (from.mode === to.mode && from.devices === to.devices) return null;
   if (!facts.owner) return "owner_required";
   if (isOnlineMode(to.mode) && !facts.granted) return "codespace_not_granted";
-  if (facts.launched && !widensAfterLaunch(from, to)) return "work_mode_frozen";
+  if (facts.launched && !widensAfterLaunch(from.mode, to.mode)) return "work_mode_frozen";
   if (isOnlineMode(to.mode) && facts.groupMode) return "work_mode_group";
   if (acceptsKiosk(to.devices) && !facts.kioskOffered) return "kiosk_unavailable";
   return null;
@@ -213,8 +213,8 @@ export function workModeRefusal(facts: WorkModeFacts, from: WorkSetting, to: Wor
  * Every other change after a launch narrows or swaps a write path, and is
  * frozen.
  */
-export function widensAfterLaunch(from: WorkSetting, to: WorkSetting): boolean {
-  return from.mode === "online" && to.mode === "hybrid";
+export function widensAfterLaunch(from: WorkModeName, to: WorkModeName): boolean {
+  return from === "online" && to === "hybrid";
 }
 
 /**

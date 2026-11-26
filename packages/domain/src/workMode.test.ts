@@ -109,8 +109,8 @@ describe("workModeRefusal", () => {
     // Still an owner's, with the grant.
     expect(workModeRefusal({ ...launched, owner: false }, ONLINE, HYBRID)).toBe("owner_required");
     expect(workModeRefusal({ ...launched, granted: false }, ONLINE, HYBRID)).toBe("codespace_not_granted");
-    expect(widensAfterLaunch(ONLINE, HYBRID)).toBe(true);
-    for (const [from, to] of [[HYBRID, ONLINE], [ONLINE, FREE], [FREE, HYBRID], [SEB, HYBRID]] as const) expect(widensAfterLaunch(from, to)).toBe(false);
+    expect(widensAfterLaunch("online", "hybrid")).toBe(true);
+    for (const [from, to] of [["hybrid", "online"], ["online", "free"], ["free", "hybrid"], ["online_seb", "hybrid"]] as const) expect(widensAfterLaunch(from, to)).toBe(false);
   });
 
   it("widens the invitations already sent when the new mode invites with push and the old with less (ADR-149 §7)", () => {
