@@ -24,9 +24,25 @@ const exercise = (retakes?: EvaluationDetail["evaluation"]["settings"]["retakes"
   };
 };
 
-function Harness({ detail, disabled = false }: { detail: EvaluationDetail; disabled?: boolean }) {
+function Harness({
+  detail,
+  disabled = false,
+  widenOnly = false,
+}: {
+  detail: EvaluationDetail;
+  disabled?: boolean;
+  widenOnly?: boolean;
+}) {
   const patch = useConfigPatch(evaluationTarget(EVALUATION_ID));
-  return <RetakesSetting mode="exercise" settings={detail.evaluation.settings} patch={patch} disabled={disabled} />;
+  return (
+    <RetakesSetting
+      mode="exercise"
+      settings={detail.evaluation.settings}
+      patch={patch}
+      disabled={disabled}
+      widenOnly={widenOnly}
+    />
+  );
 }
 
 const PATCH = `PATCH /app/api/evaluations/${EVALUATION_ID}`;
@@ -101,5 +117,78 @@ describe("RetakesSetting", () => {
     );
     expect(screen.getByRole("switch", { name: "Several attempts" })).toBeDisabled();
     expect(screen.getByRole("spinbutton", { name: "Maximum" })).toBeDisabled();
+  });
+
+  describe("while the exercise runs (ADR-025 §2, amended 2026-11-27)", () => {
+    it("switches the rule on as a draft, its details chosen before Save", async () => {
+      const detail = exercise();
+      const { calls } = mockFetch({ [PATCH]: ok(detail) });
+      renderWithProviders(<Harness detail={detail} disabled widenOnly />);
+      expect(screen.getByText(/attempts can only be widened/)).toBeInTheDocument();
+      await userEvent.click(screen.getByRole("switch", { name: "Several attempts" }));
+      // Nothing sent yet: the kept attempt and the scope are chosen now or never.
+      expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+      await userEvent.click(screen.getByRole("radio", { name: "Last" }));
+      await userEvent.type(screen.getByRole("spinbutton", { name: "Maximum" }), "3");
+      await userEvent.tab();
+      await userEvent.click(screen.getByRole("radio", { name: "To review" }));
+      expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+      await userEvent.click(screen.getByRole("button", { name: "Save" }));
+      await waitFor(() =>
+        expect(calls.filter((c) => c.method === "PATCH")).toEqual([
+          expect.objectContaining({
+            body: { settings: { retakes: { enabled: true, keep: "last", maxAttempts: 3, scope: "to_review" } } },
+          }),
+        ]),
+      );
+    });
+
+    it("discards the draft when switched off again", async () => {
+      const detail = exercise();
+      const { calls } = mockFetch({ [PATCH]: ok(detail) });
+      renderWithProviders(<Harness detail={detail} disabled widenOnly />);
+      const toggle = screen.getByRole("switch", { name: "Several attempts" });
+      await userEvent.click(toggle);
+      expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+      await userEvent.click(toggle);
+      expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+      expect(screen.queryByText("Attempt kept")).toBeNull();
+      expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+    });
+
+    it("once on, keeps the switch, the kept attempt and the scope, and only raises the maximum", async () => {
+      const detail = exercise({ enabled: true, keep: "best", maxAttempts: 3 });
+      const { calls } = mockFetch({ [PATCH]: ok(detail) });
+      renderWithProviders(<Harness detail={detail} disabled widenOnly />);
+      expect(screen.getByRole("switch", { name: "Several attempts" })).toBeDisabled();
+      expect(screen.getByRole("radio", { name: "Last" })).toBeDisabled();
+      expect(screen.getByRole("radio", { name: "To review" })).toBeDisabled();
+      expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
+
+      const max = screen.getByRole("spinbutton", { name: "Maximum" });
+      expect(max).toBeEnabled();
+      await userEvent.clear(max);
+      await userEvent.type(max, "2");
+      await userEvent.tab();
+      // A lower maximum is put back, never sent.
+      expect(max).toHaveValue(3);
+      expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+
+      await userEvent.clear(max);
+      await userEvent.type(max, "5");
+      await userEvent.tab();
+      await waitFor(() =>
+        expect(calls.filter((c) => c.method === "PATCH").at(-1)?.body).toEqual({
+          settings: { retakes: { enabled: true, keep: "best", maxAttempts: 5 } },
+        }),
+      );
+    });
+
+    it("has nothing to widen past no limit", () => {
+      renderWithProviders(
+        <Harness detail={exercise({ enabled: true, keep: "best", maxAttempts: null })} disabled widenOnly />,
+      );
+      expect(screen.getByRole("spinbutton", { name: "Maximum" })).toBeDisabled();
+    });
   });
 });

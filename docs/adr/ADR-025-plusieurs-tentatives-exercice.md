@@ -35,6 +35,10 @@ Amended 2026-11-02 by [ADR-124](ADR-124-un-exercice-montre-toujours-sa-correctio
 
 Amended 2026-11-23 by [ADR-142](ADR-142-entrainement-sur-un-examen-publie.md) (issue #1037): an exam keeps one OFFICIAL attempt per student; once its results are released, and if its teacher allows it, a student who handed it in may start practice attempts on it, which count nowhere (ADR-122 §4) and are never a retake (§2's `422 retakes_not_allowed` on an exam is unchanged).
 
+Amended 2026-11-27 (§2, §5, Consequences; product owner): while an exercise
+is `running` or `paused`, its retake rule is no longer wholly frozen — it may
+be WIDENED, and only widened. See the amendment in §2.
+
 ## Context
 
 F-EVAL-15 asks that an `exercise` may allow several attempts, keeping the
@@ -81,6 +85,43 @@ dropped last, in the same transaction.
 structural setting: frozen once an attempt exists and while the evaluation
 runs, like the rest of `settings`. The server refuses `enabled` on an exam
 (`422 retakes_not_allowed`).
+
+*Amended 2026-11-27 (product owner): while an EXERCISE runs (`configLock`
+`running`: `running` or `paused`), the rule may be widened, and nothing else
+of `settings` moves. A case met in class: an exercise launched without
+retakes, its students handed in their one attempt and could not redo it.
+One pure rule, `retakesWidening(stored, next)` (`@quiz/domain`), read by the
+`evaluation` service and by the configuration screen alike, with
+`retakesWidenableUnder(lock, mode)` saying where it applies:*
+
+- *a rule switched off is one attempt, whatever it still stores of an
+  earlier choice;*
+- *allowed: switching it on, with any maximum (2 or more, or none), and the
+  kept attempt (`best` by default) and the scope (`all` or `to_review`,
+  ADR-091) chosen at that moment — the only moment they are chosen under
+  the lock; once on, a higher maximum, no limit being the highest;*
+- *refused: switching it off, a lower maximum, another kept attempt or
+  another scope once on (`409 running_locked`, as any other change under
+  the lock). A patch's settings are merged over the stored ones; every
+  other setting the merge leaves must equal the stored one, so a client
+  that sends the whole settings back passes, and one carrying any other
+  change is refused whole;*
+- *`to_review` still needs free navigation (`422 retake_scope_navigation`);
+  an exam stays one sitting: under the lock its settings are refused
+  whole, retakes included, and outside it `422 retakes_not_allowed`
+  stands;*
+- *the `attempts` lock (closed, grading, released with attempts) is
+  unchanged: after the close, practice after the due date (ADR-122) is the
+  way back in;*
+- *no notification to the students, nothing written back to the template
+  the exercise came from; the write is audited `evaluation.retakes_widened`
+  with the rule before and after, beside its `evaluation.update`.*
+
+*Students who handed in before the widening read the correction of their
+attempt at its hand-in (ADR-124): that this key may help their retake is
+accepted, as it is for every retake of an exercise. On the screen, switching
+the rule on under the lock opens an unsaved draft of the whole rule, sent
+by Save; once on, only the maximum moves, upwards.*
 
 `retakeRefusal` (`@quiz/domain`) says whether a student may start another
 attempt now: the exercise allows retakes, the evaluation is `running` (not
@@ -175,7 +216,9 @@ attempt; a student with several is labelled `· #n` (a number, readable in
 both languages). Reopening an attempt is refused on an exercise with
 retakes (`409 retakes_enabled`) and not offered in the grid: the student
 retakes instead, and a reopened attempt that was already graded would keep
-its first grades. The staff attempt of ADR-018 is unchanged: its reset
+its first grades. *Amended 2026-11-27: once a running exercise's rule is
+widened on (§2), the refusal applies from then on, with no special case; an
+attempt reopened before is handed in normally.* The staff attempt of ADR-018 is unchanged: its reset
 deletes every attempt of the teacher's own seat.
 
 Closing ONE attempt from the grid (F-LIVE-11) stays available, and on such
@@ -201,8 +244,8 @@ through (`scoreVisible`).
   longer a HOT update; physical row order moves more. One test that relied
   on it (two attempts created on the same instant) now spaces them.
 - A student who used their last attempt, or whose laptop died mid-attempt,
-  cannot be reopened on such an exercise; the teacher raises nothing today
-  (settings are frozen). Acceptable for exercises; revisit if asked.
+  cannot be reopened on such an exercise. *Amended 2026-11-27: the teacher
+  may now raise or lift the maximum while it runs (§2).*
 - The home card, not the end-of-attempt screen, carries the Retake action:
   the player (`Player.tsx`, `ClosedScreen.tsx`) is unchanged. *Superseded
   by the addendum below (issues #120, #121).*

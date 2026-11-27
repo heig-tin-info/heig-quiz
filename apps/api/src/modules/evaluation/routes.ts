@@ -9,6 +9,8 @@
  * every entity is loaded by a guard that answers 404 (invariant 6), and every
  * write is audited (invariant 9).
  */
+import { isDeepStrictEqual } from "node:util";
+
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { z } from "zod";
 
@@ -41,7 +43,7 @@ import {
   type TemplatePullResult,
 } from "@quiz/contracts";
 import type { Document } from "@quiz/docexport";
-import type { Locale } from "@quiz/domain";
+import { isLiveState, type Locale } from "@quiz/domain";
 
 import type { AppConfig } from "../../config.js";
 import { actorOf, tracer, type AuditAction } from "../../audit.js";
@@ -358,6 +360,14 @@ export async function evaluationPlugin(app: FastifyInstance, opts: { config: App
             // A transaction: a change of mode locks the row and decides on it (ADR-092).
             app.db.transaction((tx) => service.patchEvaluation(tx, scope.evaluation, body, { ...ctx, now, kioskAvailable })),
         );
+        // ADR-025 §2 (amended 2026-11-27): a retake rule widened while
+        // students sit the exercise has an entry of its own — the update's
+        // `fields` say only that the settings moved.
+        const from = service.retakePolicyOf(scope.evaluation);
+        const to = service.retakePolicyOf(row);
+        if (isLiveState(scope.evaluation.state) && !isDeepStrictEqual(from, to)) {
+          await trace(req, "evaluation.retakes_widened", "evaluation", row.id, { from, to });
+        }
         // ADR-092: a scheduled exam that becomes an exercise is announced as
         // the move to scheduled would have, once (the marker claims it);
         // `announceMove` itself keeps to a scheduled exercise.

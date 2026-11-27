@@ -12,6 +12,8 @@ import { countsAsCompleted, providedDocumentsAllowedFor,
   missingTimingFields,
   modeChangeable,
   retakesAllowedFor,
+  retakesWidenableUnder,
+  retakesWidening,
   feedbackWhenFor,
   drillAllowedOn,
   afterDueOpen,
@@ -45,6 +47,8 @@ import type {
 import {
   FeedbackPolicy,
   TemplatePatch,
+  retakesOf,
+  type RetakeSettings,
   type DashboardAccess,
   type DocumentUse,
   type EvaluationExports,
@@ -1442,7 +1446,12 @@ on("PATCH", "/app/api/evaluations/:id", (m, body) => {
   if (body.mode !== undefined && body.mode !== e.mode && !modeChangeable(e.mode, e.state, attemptCountOf(e))) {
     throw new MockPayload(409, { error: "mode_frozen", message: "the mode can no longer change (ADR-092)" });
   }
-  if (Object.keys(body).some((k) => k !== "mode" && !isConfigFieldWritable(lock, k))) {
+  // ADR-025 §2 (amended 2026-11-27): a running exercise's settings may carry
+  // a widened retake rule, and nothing else changed, as on the server.
+  const writable = (k: string) =>
+    isConfigFieldWritable(lock, k) ||
+    (k === "settings" && retakesWidenableUnder(lock, e.mode) && widensRetakesOnlyMock(e, body.settings as Record<string, unknown>));
+  if (Object.keys(body).some((k) => k !== "mode" && !writable(k))) {
     throw new MockPayload(
       409,
       lock === "running"
@@ -1467,6 +1476,16 @@ on("PATCH", "/app/api/evaluations/:id", (m, body) => {
   if ("closesAt" in body) e.closesAt = body.closesAt as string | null;
   return evaluationDetail(e);
 });
+
+/** The server's `widensRetakesOnly`: every other setting sent equals the stored one, the rule widens. */
+function widensRetakesOnlyMock(e: MockEvaluation, patch: Record<string, unknown>): boolean {
+  const stored = e.settings as Record<string, unknown>;
+  const same = Object.entries(patch).every(
+    ([key, value]) => key === "retakes" || JSON.stringify(value) === JSON.stringify(stored[key]),
+  );
+  const rule = (settings: Record<string, unknown>) => retakesOf(settings as { retakes?: RetakeSettings });
+  return same && retakesWidening(rule(stored), rule({ ...stored, ...patch }));
+}
 
 /**
  * The server's refusals of a configuration patch that do not depend on a run

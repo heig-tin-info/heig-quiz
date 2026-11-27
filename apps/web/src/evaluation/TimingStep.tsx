@@ -19,6 +19,7 @@ import {
   isConfigFieldWritable,
   modeChangeable,
   retakesAllowedFor,
+  retakesWidenableUnder,
   type ClockChoice,
   type ClockMode,
   type EvaluationTiming,
@@ -227,6 +228,7 @@ export function ConfigSettings({
   summary,
   disabled = false,
   feedbackDisabled = disabled,
+  retakesWidenOnly = false,
   missing = new Set(),
   dates,
   closesAt = null,
@@ -244,6 +246,8 @@ export function ConfigSettings({
   summary: string;
   disabled?: boolean;
   feedbackDisabled?: boolean;
+  /** Students are sitting the exercise: its retake rule may only widen (ADR-025 §2, amended 2026-11-27). */
+  retakesWidenOnly?: boolean;
   /** The timing fields the launch still needs (#76); none on arrival. */
   missing?: ReadonlySet<TimingField>;
   dates: (choice: ClockChoice) => ReactNode;
@@ -362,7 +366,13 @@ export function ConfigSettings({
 
       {/* F-EVAL-15: an exercise only; an exam is one sitting. */}
       {retakesAllowedFor(mode) ? (
-        <RetakesSetting mode={mode} settings={settings} patch={patch} disabled={disabled} />
+        <RetakesSetting
+          mode={mode}
+          settings={settings}
+          patch={patch}
+          disabled={disabled}
+          widenOnly={retakesWidenOnly}
+        />
       ) : null}
 
       {gradebook ? <Card className="px-4">{gradebook}</Card> : null}
@@ -550,6 +560,7 @@ export function TimingStep({
         summary={summary}
         disabled={locked}
         feedbackDisabled={!isConfigFieldWritable(lock, "feedbackPolicy")}
+        retakesWidenOnly={retakesWidenableUnder(lock, mode)}
         holdsCategorize={detail.items.some((i) => i.type === "categorize")}
         windowSet={detail.evaluation.contestationClosesAt !== null}
         missing={missing}

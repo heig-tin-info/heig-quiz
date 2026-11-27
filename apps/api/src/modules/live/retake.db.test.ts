@@ -14,7 +14,7 @@ import type { RetakeSettings } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
-import { attempts, evaluations, gradings } from "../../db/schema.js";
+import { attempts, auditLog, evaluations, gradings } from "../../db/schema.js";
 import { testApp } from "../../test/db.js";
 import { type Payload, type TestServer, testServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
@@ -22,9 +22,12 @@ import { evaluationRows } from "../../test/grades.js";
 import { enterStarted, reload, seedLive } from "../../test/live.js";
 import {
   applyState,
+  attemptCount,
   joinedItems,
   listEvaluations,
   patchEvaluation,
+  retakePolicyOf,
+  settingsOf,
   type EvaluationRecord,
 } from "../evaluation/service.js";
 import { gradingQueue } from "../grading/service.js";
@@ -356,6 +359,111 @@ describe("the settings (F-EVAL-15)", () => {
     await expect(
       patchEvaluation(db, next, { settings: { retakes: { enabled: false, keep: "best", maxAttempts: null } } }, { attemptCount: 1, now: SETTINGS_NOW }),
     ).rejects.toMatchObject({ code: "locked" });
+  });
+});
+
+describe("widening the rule while the exercise runs (ADR-025 §2, amended 2026-11-27)", () => {
+  const OFF = { enabled: false, keep: "best", maxAttempts: null } as const;
+  const patchRunning = async (evaluation: EvaluationRecord, patch: Parameters<typeof patchEvaluation>[2]) => {
+    const row = await reload(db, evaluation.id);
+    return patchEvaluation(db, row, patch, { attemptCount: await attemptCount(db, row.id), now: row.updatedAt });
+  };
+
+  it("switches retakes on: a student who handed in their one attempt starts a second", async () => {
+    const { app, seed, evaluation, items } = await exercise(OFF);
+    const student = seed.studentIds[0]!;
+    await sit(app, evaluation, items, student, [true, false]);
+    expect(await refusal(retake(app, evaluation, student))).toBe("not_allowed");
+
+    const widened = await patchRunning(evaluation, {
+      settings: { retakes: { enabled: true, keep: "last", maxAttempts: 2, scope: "to_review" } },
+    });
+    expect(widened.state).toBe("running");
+    expect((widened.settings as { retakes: RetakeSettings }).retakes).toEqual({
+      enabled: true,
+      keep: "last",
+      maxAttempts: 2,
+      scope: "to_review",
+    });
+    const second = await retake(app, evaluation, student);
+    expect(second.attemptNumber).toBe(2);
+    await sit(app, evaluation, items, student, [true, true], second);
+    expect(await refusal(retake(app, evaluation, student))).toBe("max_attempts");
+
+    // Raised once on, then lifted: each a widening.
+    await patchRunning(evaluation, { settings: { retakes: { enabled: true, keep: "last", maxAttempts: 3, scope: "to_review" } } });
+    await patchRunning(evaluation, { settings: { retakes: { enabled: true, keep: "last", maxAttempts: null, scope: "to_review" } } });
+    expect(await refusal(retake(app, evaluation, student))).toBeNull();
+  });
+
+  it("accepts the whole settings sent back, as long as only the rule widens", async () => {
+    const { evaluation } = await exercise(OFF);
+    const stored = settingsOf(await reload(db, evaluation.id));
+    const next = await patchRunning(evaluation, {
+      settings: { ...stored, retakes: { enabled: true, keep: "best", maxAttempts: null } },
+    });
+    expect(retakePolicyOf(next).enabled).toBe(true);
+  });
+
+  it("refuses anything but a widening: off, lower, another kept attempt or scope, another setting", async () => {
+    const { evaluation } = await exercise({ maxAttempts: 3 });
+    const on = { enabled: true, keep: "best", maxAttempts: 3 } as const;
+    const refused = [
+      { settings: { retakes: OFF } },
+      { settings: { retakes: { ...on, maxAttempts: 2 } } },
+      { settings: { retakes: { ...on, keep: "last" as const } } },
+      { settings: { retakes: { ...on, maxAttempts: 4, scope: "to_review" as const } } },
+      // A widening does not carry another setting through the lock.
+      { settings: { retakes: { ...on, maxAttempts: 4 }, shuffleItems: true } },
+      { settings: { retakes: { ...on, maxAttempts: 4 } }, durationS: 60 },
+    ];
+    for (const patch of refused) {
+      await expect(patchRunning(evaluation, patch), JSON.stringify(patch)).rejects.toMatchObject({
+        code: "running_locked",
+        status: 409,
+      });
+    }
+    expect(retakePolicyOf(await reload(db, evaluation.id))).toEqual(on);
+  });
+
+  it("still pairs the scope with free navigation", async () => {
+    const { evaluation } = await exercise(OFF, { settings: { timing: "manual", lobby: "skip", navigation: "milestones", retakes: OFF } });
+    await expect(
+      patchRunning(evaluation, { settings: { retakes: { enabled: true, keep: "best", maxAttempts: null, scope: "to_review" } } }),
+    ).rejects.toMatchObject({ code: "retake_scope_navigation", status: 422 });
+  });
+
+  it("never opens retakes on a running exam, and never once the exercise is over", async () => {
+    const exam = await exercise({}, { mode: "exam", settings: { retakes: OFF } });
+    await expect(
+      patchRunning(exam.evaluation, { settings: { retakes: { enabled: true, keep: "best", maxAttempts: null } } }),
+    ).rejects.toMatchObject({ code: "running_locked", status: 409 });
+    expect(retakePolicyOf(await reload(db, exam.evaluation.id)).enabled).toBe(false);
+
+    const { app, seed, evaluation, items } = await exercise(OFF);
+    await sit(app, evaluation, items, seed.studentIds[0]!, [true, true]);
+    await applyState(db, await reload(db, evaluation.id), "closed", app.clock.now());
+    await expect(
+      patchRunning(evaluation, { settings: { retakes: { enabled: true, keep: "best", maxAttempts: null } } }),
+    ).rejects.toMatchObject({ code: "locked", status: 409 });
+  });
+
+  it("is audited with the rule before and after, over HTTP", async () => {
+    const teacher = await server.signIn("teacher");
+    const { evaluation } = await exercise(OFF, { teacherId: teacher.id });
+    const to = { enabled: true, keep: "best", maxAttempts: 4 };
+    const res = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/evaluations/${evaluation.id}`,
+      headers: teacher.headers,
+      payload: { settings: { retakes: to } },
+    });
+    expect(res.statusCode).toBe(200);
+    const entries = await db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.subjectId, evaluation.id), eq(auditLog.action, "evaluation.retakes_widened")));
+    expect(entries.map((e) => e.payload)).toEqual([{ from: OFF, to }]);
   });
 });
 

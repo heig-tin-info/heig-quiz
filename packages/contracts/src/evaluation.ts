@@ -169,7 +169,8 @@ export type RetakeScope = z.infer<typeof RetakeScope>;
  * F-EVAL-15 (ADR-025, #92): several attempts on an `exercise`. Refused on an
  * exam by the server. `maxAttempts` counts every attempt, the first one
  * included; `null` is unlimited. Structural, like the rest of the settings:
- * frozen once an attempt exists and while the evaluation runs.
+ * frozen once an attempt exists and while the evaluation runs, save that a
+ * running exercise's rule may still widen (ADR-025 §2, amended 2026-11-27).
  */
 export const RetakeSettings = z.object({
   enabled: z.boolean().default(false),

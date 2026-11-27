@@ -3,6 +3,7 @@
  * narrow writers the other modules call.
  */
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 
 import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
@@ -41,6 +42,8 @@ import {
   providedDocumentsAllowedFor,
   retakesAllowedFor,
   retakeScopeFits,
+  retakesWidenableUnder,
+  retakesWidening,
   studentWorkOf,
 } from "@quiz/domain";
 
@@ -252,11 +255,27 @@ const MODE_SETTINGS: readonly {
 ];
 
 /**
+ * ADR-025 §2 (amended 2026-11-27): whether a settings patch of a running
+ * exercise only widens its retake rule. The patch is partial and merged
+ * over the stored settings, as the write below does; every other setting
+ * the merge leaves must equal the stored one, field by field — a client
+ * that sends the whole settings back passes as one that sends the rule
+ * alone — and the rule must keep or widen the stored one (`retakesWidening`).
+ */
+function widensRetakesOnly(row: EvaluationRecord, patch: NonNullable<EvaluationPatch["settings"]>): boolean {
+  const { retakes: before, ...storedRest } = settingsOf(row);
+  const { retakes: after, ...nextRest } = EvaluationSettings.parse({ ...settingsOf(row), ...patch });
+  return isDeepStrictEqual(storedRest, nextRest) && retakesWidening(retakesOf({ retakes: before }), retakesOf({ retakes: after }));
+}
+
+/**
  * What a patch may still touch is `configLock`'s to say (`@quiz/domain`):
  * everything while nothing locks the configuration; the title, the access
  * control and the feedback policy once an attempt exists (F-EVAL-03), and
  * while the evaluation runs (#86) — access must stay fixable mid-exam, for a
- * student the allowlist locks out, and a forgotten answer key hideable. The
+ * student the allowlist locks out, and a forgotten answer key hideable —
+ * and, on a running exercise, settings that only widen the retake rule
+ * (`widensRetakesOnly`, ADR-025 §2 amended 2026-11-27). The
  * in-class rule on `immediate` (#78) below applies in every state. A poll's
  * feedback is never patched: it moves with the reveal (`poll_feedback_locked`).
  */
@@ -293,7 +312,10 @@ export async function patchEvaluation(
   if (modeChanged && !modeChangeable(row.mode, row.state, attemptTotal)) throw new EvaluationError("mode_frozen");
   const mode: EvaluationMode = patch.mode ?? row.mode;
   const lock = configLock(row.state, attemptTotal);
-  if (Object.keys(patch).some((k) => k !== "mode" && !isConfigFieldWritable(lock, k))) {
+  const writable = (k: string) =>
+    isConfigFieldWritable(lock, k) ||
+    (k === "settings" && retakesWidenableUnder(lock, mode) && widensRetakesOnly(row, patch.settings ?? {}));
+  if (Object.keys(patch).some((k) => k !== "mode" && !writable(k))) {
     throw new EvaluationError(lock === "running" ? "running_locked" : "locked");
   }
   if (row.mode === "poll" && patch.feedbackPolicy !== undefined) throw new EvaluationError("poll_feedback_locked");

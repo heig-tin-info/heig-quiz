@@ -75,6 +75,7 @@ export const evaluation = {
   "eval.retakes.scope.all": "All",
   "eval.retakes.scope.to_review": "To review",
   "eval.retakes.scope.needsFree": "Only with free navigation (Advanced settings).",
+  "eval.retakes.widenOnly": "While the exercise runs, attempts can only be widened.",
   "conditions.title": "Conditions",
   "conditions.kind.allowed": "Allowed",
   "conditions.kind.forbidden": "Forbidden",
