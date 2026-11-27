@@ -5,15 +5,13 @@ import { countsAsCompleted, providedDocumentsAllowedFor,
   evaluationTotal,
   configLock,
   isConfigEditable,
-  isConfigFieldWritable,
   isFeedbackAllowed,
   itemListDiff,
   itemListLock,
   missingTimingFields,
   modeChangeable,
   retakesAllowedFor,
-  retakesWidenableUnder,
-  retakesWidening,
+  patchFieldWritable,
   feedbackWhenFor,
   drillAllowedOn,
   afterDueOpen,
@@ -47,8 +45,7 @@ import type {
 import {
   FeedbackPolicy,
   TemplatePatch,
-  retakesOf,
-  type RetakeSettings,
+  EvaluationSettings,
   type DashboardAccess,
   type DocumentUse,
   type EvaluationExports,
@@ -1448,10 +1445,9 @@ on("PATCH", "/app/api/evaluations/:id", (m, body) => {
   }
   // ADR-025 §2 (amended 2026-11-27): a running exercise's settings may carry
   // a widened retake rule, and nothing else changed, as on the server.
-  const writable = (k: string) =>
-    isConfigFieldWritable(lock, k) ||
-    (k === "settings" && retakesWidenableUnder(lock, e.mode) && widensRetakesOnlyMock(e, body.settings as Record<string, unknown>));
-  if (Object.keys(body).some((k) => k !== "mode" && !writable(k))) {
+  const stored = () => EvaluationSettings.parse(e.settings);
+  const merged = () => ({ stored: stored(), next: EvaluationSettings.parse({ ...stored(), ...(body.settings as object) }) });
+  if (Object.keys(body).some((k) => k !== "mode" && !patchFieldWritable(lock, e.mode, k, merged))) {
     throw new MockPayload(
       409,
       lock === "running"
@@ -1476,16 +1472,6 @@ on("PATCH", "/app/api/evaluations/:id", (m, body) => {
   if ("closesAt" in body) e.closesAt = body.closesAt as string | null;
   return evaluationDetail(e);
 });
-
-/** The server's `widensRetakesOnly`: every other setting sent equals the stored one, the rule widens. */
-function widensRetakesOnlyMock(e: MockEvaluation, patch: Record<string, unknown>): boolean {
-  const stored = e.settings as Record<string, unknown>;
-  const same = Object.entries(patch).every(
-    ([key, value]) => key === "retakes" || JSON.stringify(value) === JSON.stringify(stored[key]),
-  );
-  const rule = (settings: Record<string, unknown>) => retakesOf(settings as { retakes?: RetakeSettings });
-  return same && retakesWidening(rule(stored), rule({ ...stored, ...patch }));
-}
 
 /**
  * The server's refusals of a configuration patch that do not depend on a run

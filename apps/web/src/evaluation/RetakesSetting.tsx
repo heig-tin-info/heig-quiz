@@ -55,11 +55,13 @@ export function RetakesSetting({
   // a scope already at `to_review` can always be set back to `all`.
   const scopeLocked =
     scope === "all" && !retakeScopeFits(mode, { ...retakes, scope: "to_review" }, settings.navigation);
-  // Whether a change is one the screen may make: anything outside the lock
-  // and inside a draft, a widening of the stored rule otherwise.
-  const allows = (next: Partial<RetakeSettings>) =>
-    !widenOnly || draft !== null || retakesWidening(stored, { ...stored, ...next });
-  const frozen = (next: Partial<RetakeSettings>) => (widenOnly ? !allows(next) : disabled);
+  // Under the lock, the rule saved ON keeps its switch, kept attempt and
+  // scope; a rule saved off may be switched on, its details chosen in the
+  // draft. Outside the lock, the structure's own freeze.
+  const switchFrozen = widenOnly ? draft === null && stored.enabled : disabled;
+  const detailsFrozen = widenOnly ? draft === null : disabled;
+  // No limit is the widest rule: under the lock, nothing is above it.
+  const maxFrozen = widenOnly ? draft === null && stored.maxAttempts === null : disabled;
   const set = (next: Partial<RetakeSettings>) => {
     if (draft !== null) setDraft({ ...draft, ...next });
     else patch.mutate({ settings: { retakes: { ...stored, ...next } } });
@@ -79,7 +81,9 @@ export function RetakesSetting({
     const trimmed = max.trim();
     const n = Math.round(Number(trimmed));
     const next = trimmed === "" ? null : Number.isFinite(n) && n >= 2 ? Math.min(n, 100) : undefined;
-    if (next === undefined || !allows({ maxAttempts: next })) {
+    // Under the lock, outside a draft, the maximum may only go up (`retakesWidening`, the server's rule).
+    const refused = widenOnly && draft === null && next !== undefined && !retakesWidening(stored, { ...stored, maxAttempts: next });
+    if (next === undefined || refused) {
       setMax(shownMax(retakes.maxAttempts));
       return;
     }
@@ -92,7 +96,7 @@ export function RetakesSetting({
       <SettingRow title={t("eval.retakes")} desc={desc}>
         <Switch
           checked={retakes.enabled}
-          disabled={frozen({ enabled: !retakes.enabled })}
+          disabled={switchFrozen}
           label={t("eval.retakes")}
           onChange={toggle}
         />
@@ -103,7 +107,7 @@ export function RetakesSetting({
             <Segmented
               name="retakes-keep"
               value={retakes.keep}
-              disabled={frozen({ keep: retakes.keep === "best" ? "last" : "best" })}
+              disabled={detailsFrozen}
               onChange={(keep) => set({ keep })}
               options={[
                 { value: "best", label: t("eval.retakes.keep.best") },
@@ -112,15 +116,14 @@ export function RetakesSetting({
             />
           </SettingRow>
           <SettingRow title={t("eval.retakes.max")} desc={t("eval.retakes.max.desc")}>
-            {/* The row's title is the label: a Field would repeat it. No
-                limit is the widest rule: under the lock, nothing is above it. */}
+            {/* The row's title is the label: a Field would repeat it. */}
             <TextInput
               aria-label={t("eval.retakes.max")}
               type="number"
               min={widenOnly && draft === null ? (stored.maxAttempts ?? 2) : 2}
               max={100}
               placeholder={t("eval.retakes.max.placeholder")}
-              disabled={widenOnly ? draft === null && stored.maxAttempts === null : disabled}
+              disabled={maxFrozen}
               size="sm"
               className="w-28 text-right tabular-nums"
               value={max}
@@ -139,7 +142,7 @@ export function RetakesSetting({
             <Segmented
               name="retakes-scope"
               value={scope}
-              disabled={frozen({ scope: scope === "all" ? "to_review" : "all" }) || scopeLocked}
+              disabled={detailsFrozen || scopeLocked}
               onChange={(next) => set({ scope: next })}
               options={[
                 { value: "all", label: t("eval.retakes.scope.all") },

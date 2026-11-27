@@ -426,6 +426,26 @@ describe("widening the rule while the exercise runs (ADR-025 §2, amended 2026-1
     expect(retakePolicyOf(await reload(db, evaluation.id))).toEqual(on);
   });
 
+  it("decides on the row as it stands, never on an earlier read", async () => {
+    const { app, evaluation } = await exercise({ maxAttempts: 2 });
+    const stale = await reload(db, evaluation.id);
+    const ctx = { attemptCount: 0, now: app.clock.now() };
+    const rule = (maxAttempts: number) => ({ settings: { retakes: { enabled: true, keep: "best" as const, maxAttempts } } });
+    await patchEvaluation(db, stale, rule(5), ctx);
+    // Built on the same read, 3 widened that read's 2 — but narrows the 5 now stored.
+    await expect(patchEvaluation(db, stale, rule(3), ctx)).rejects.toMatchObject({ code: "running_locked", status: 409 });
+    expect(retakePolicyOf(await reload(db, evaluation.id)).maxAttempts).toBe(5);
+
+    // Closed since that read: the attempts lock, not the run's, decides.
+    const { app: closedApp, seed, evaluation: closing, items } = await exercise(OFF);
+    await sit(closedApp, closing, items, seed.studentIds[0]!, [true, true]);
+    const before = await reload(db, closing.id);
+    await applyState(db, before, "closed", closedApp.clock.now());
+    await expect(
+      patchEvaluation(db, before, { settings: { retakes: { enabled: true, keep: "best", maxAttempts: null } } }, ctx),
+    ).rejects.toMatchObject({ code: "locked", status: 409 });
+  });
+
   it("still pairs the scope with free navigation", async () => {
     const { evaluation } = await exercise(OFF, { settings: { timing: "manual", lobby: "skip", navigation: "milestones", retakes: OFF } });
     await expect(

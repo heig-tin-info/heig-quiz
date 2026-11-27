@@ -13,8 +13,10 @@ import {
   retakeScopeOf,
   retakesAllowedFor,
   retakesOn,
+  patchFieldWritable,
   retakesWidenableUnder,
   retakesWidening,
+  settingsWidenRetakesOnly,
   type RetakeInput,
   type RetakePolicy,
   type ScoredAttempt,
@@ -266,7 +268,10 @@ describe("retakesWidening (ADR-025 §2, amended 2026-11-27)", () => {
     const stale: RetakePolicy = { enabled: false, keep: "last", maxAttempts: 8, scope: "to_review" };
     expect(retakesWidening(stale, on(2))).toBe(true);
     expect(retakesWidening(stale, on(3, { keep: "best", scope: "all" }))).toBe(true);
-    expect(retakesWidening(stale, off)).toBe(true);
+    // Left off, it stays exactly what it stores: no change to call a widening.
+    expect(retakesWidening(stale, stale)).toBe(true);
+    expect(retakesWidening(stale, off)).toBe(false);
+    expect(retakesWidening(off, { ...off, scope: "all" })).toBe(true);
   });
 
   it("raises the maximum, or lifts it", () => {
@@ -297,5 +302,46 @@ describe("retakesWidening (ADR-025 §2, amended 2026-11-27)", () => {
     expect(retakesWidenableUnder("running", "poll")).toBe(false);
     expect(retakesWidenableUnder("attempts", "exercise")).toBe(false);
     expect(retakesWidenableUnder(null, "exercise")).toBe(false);
+  });
+});
+
+describe("settingsWidenRetakesOnly and patchFieldWritable (ADR-025 §2, amended 2026-11-27)", () => {
+  const stored = { navigation: "free", lobby: "skip", retakes: { enabled: false, keep: "best", maxAttempts: null } } as const;
+  const widened = { ...stored, retakes: { enabled: true, keep: "last", maxAttempts: 3 } } as const;
+
+  it("lets the retake rule widen, and nothing else move", () => {
+    expect(settingsWidenRetakesOnly(stored, widened)).toBe(true);
+    expect(settingsWidenRetakesOnly(stored, stored)).toBe(true);
+    expect(settingsWidenRetakesOnly(stored, { ...widened, lobby: "manual" })).toBe(false);
+    expect(settingsWidenRetakesOnly(widened, stored)).toBe(false);
+  });
+
+  it("reads an absent rule as one attempt", () => {
+    const { retakes: _omitted, ...bare } = stored;
+    expect(settingsWidenRetakesOnly(bare, widened)).toBe(true);
+    expect(settingsWidenRetakesOnly(bare, bare)).toBe(true);
+    expect(settingsWidenRetakesOnly(widened, bare)).toBe(false);
+  });
+
+  it("opens the settings under the running lock to an exercise's widening only", () => {
+    const settings = () => ({ stored, next: widened });
+    expect(patchFieldWritable("running", "exercise", "settings", settings)).toBe(true);
+    expect(patchFieldWritable("running", "exam", "settings", settings)).toBe(false);
+    expect(patchFieldWritable("attempts", "exercise", "settings", settings)).toBe(false);
+    expect(patchFieldWritable("running", "exercise", "settings", () => ({ stored: widened, next: stored }))).toBe(false);
+    expect(patchFieldWritable("running", "exercise", "durationS", settings)).toBe(false);
+    expect(patchFieldWritable("running", "exam", "title", settings)).toBe(true);
+    expect(patchFieldWritable(null, "exam", "settings", settings)).toBe(true);
+  });
+
+  it("parses the settings only when they decide", () => {
+    let asked = 0;
+    const settings = () => {
+      asked += 1;
+      return { stored, next: widened };
+    };
+    patchFieldWritable("running", "exercise", "title", settings);
+    patchFieldWritable("running", "exam", "settings", settings);
+    expect(asked).toBe(0);
   });
 });

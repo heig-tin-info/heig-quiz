@@ -92,7 +92,9 @@ of `settings` moves. A case met in class: an exercise launched without
 retakes, its students handed in their one attempt and could not redo it.
 One pure rule, `retakesWidening(stored, next)` (`@quiz/domain`), read by the
 `evaluation` service and by the configuration screen alike, with
-`retakesWidenableUnder(lock, mode)` saying where it applies:*
+`retakesWidenableUnder(lock, mode)` saying where it applies; the service
+and the browser mock judge a patch's settings through `patchFieldWritable`
+and `settingsWidenRetakesOnly`:*
 
 - *a rule switched off is one attempt, whatever it still stores of an
   earlier choice;*
@@ -105,7 +107,10 @@ One pure rule, `retakesWidening(stored, next)` (`@quiz/domain`), read by the
   the lock). A patch's settings are merged over the stored ones; every
   other setting the merge leaves must equal the stored one, so a client
   that sends the whole settings back passes, and one carrying any other
-  change is refused whole;*
+  change is refused whole; a rule left off must stay exactly as stored. The
+  decision, the merge and the write are made on the row read again `FOR
+  UPDATE` (with its attempts counted again), so two widenings in a row, or
+  a widening and the ticker's close, are judged one after the other;*
 - *`to_review` still needs free navigation (`422 retake_scope_navigation`);
   an exam stays one sitting: under the lock its settings are refused
   whole, retakes included, and outside it `422 retakes_not_allowed`
