@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 
 import { retakesOf, type EvaluationSettings, type RetakeSettings } from "@quiz/contracts";
-import { retakeScopeFits, retakeScopeOf, type EvaluationModeName } from "@quiz/domain";
+import { retakeScopeFits, retakeScopeOf, retakesWidening, type EvaluationModeName } from "@quiz/domain";
 
 import { useT } from "../i18n";
-import { Card, Segmented, SettingRow, Switch, TextInput } from "../ui";
+import { Button, Card, Segmented, SettingRow, Switch, TextInput } from "../ui";
 import type { ConfigPatch } from "./editTarget";
 
 /**
@@ -23,57 +23,82 @@ import type { ConfigPatch } from "./editTarget";
  * `422 retake_scope_navigation`): under another navigation the choice is
  * disabled and says why, and once it is on, the navigation row says why it
  * cannot move (`AdvancedDisclosure`).
+ *
+ * ADR-025 §2 (amended 2026-11-27): while the exercise runs (`widenOnly`),
+ * the rule may only widen (`retakesWidening`, the server's rule too). The
+ * switch turns it on, never off; the kept attempt and the scope are chosen
+ * at that moment only, so switching it on opens an unsaved draft of the
+ * whole rule, sent by Save; once on, only the maximum moves, upwards.
  */
 export function RetakesSetting({
   mode,
   settings,
   patch,
   disabled,
+  widenOnly = false,
 }: {
   /** The evaluation's mode: the rules read it (`retakeScopeFits`). */
   mode: EvaluationModeName;
   settings: EvaluationSettings;
   patch: ConfigPatch;
   disabled: boolean;
+  /** Students are sitting the exercise: the rule may only widen (`retakesWidenableUnder`). */
+  widenOnly?: boolean;
 }) {
   const t = useT();
-  const retakes = retakesOf(settings);
+  const stored = retakesOf(settings);
+  // The rule switched on under the lock, not saved yet: its details are chosen now or never.
+  const [draft, setDraft] = useState<RetakeSettings | null>(null);
+  const retakes = draft ?? stored;
   const scope = retakeScopeOf(retakes);
   // The server's pairing rule, asked of `to_review` under this navigation;
   // a scope already at `to_review` can always be set back to `all`.
   const scopeLocked =
     scope === "all" && !retakeScopeFits(mode, { ...retakes, scope: "to_review" }, settings.navigation);
-  const set = (next: Partial<RetakeSettings>) =>
-    patch.mutate({ settings: { retakes: { ...retakes, ...next } } });
+  // Under the lock, the rule saved ON keeps its switch, kept attempt and
+  // scope; a rule saved off may be switched on, its details chosen in the
+  // draft. Outside the lock, the structure's own freeze.
+  const switchFrozen = widenOnly ? draft === null && stored.enabled : disabled;
+  const detailsFrozen = widenOnly ? draft === null : disabled;
+  // No limit is the widest rule: under the lock, nothing is above it.
+  const maxFrozen = widenOnly ? draft === null && stored.maxAttempts === null : disabled;
+  const set = (next: Partial<RetakeSettings>) => {
+    if (draft !== null) setDraft({ ...draft, ...next });
+    else patch.mutate({ settings: { retakes: { ...stored, ...next } } });
+  };
+  const toggle = (enabled: boolean) => {
+    if (widenOnly) setDraft(enabled ? { ...stored, enabled: true } : null);
+    else set({ enabled });
+  };
 
   // The maximum is typed, then committed on blur: empty is "no limit".
-  const [max, setMax] = useState(retakes.maxAttempts === null ? "" : String(retakes.maxAttempts));
+  const shownMax = (value: number | null) => (value === null ? "" : String(value));
+  const [max, setMax] = useState(shownMax(retakes.maxAttempts));
   useEffect(() => {
-    setMax(retakes.maxAttempts === null ? "" : String(retakes.maxAttempts));
+    setMax(shownMax(retakes.maxAttempts));
   }, [retakes.maxAttempts]);
   const commitMax = () => {
     const trimmed = max.trim();
-    if (trimmed === "") {
-      if (retakes.maxAttempts !== null) set({ maxAttempts: null });
-      return;
-    }
     const n = Math.round(Number(trimmed));
-    if (!Number.isFinite(n) || n < 2) {
-      setMax(retakes.maxAttempts === null ? "" : String(retakes.maxAttempts));
+    const next = trimmed === "" ? null : Number.isFinite(n) && n >= 2 ? Math.min(n, 100) : undefined;
+    // Under the lock, outside a draft, the maximum may only go up (`retakesWidening`, the server's rule).
+    const refused = widenOnly && draft === null && next !== undefined && !retakesWidening(stored, { ...stored, maxAttempts: next });
+    if (next === undefined || refused) {
+      setMax(shownMax(retakes.maxAttempts));
       return;
     }
-    const bounded = Math.min(n, 100);
-    if (bounded !== retakes.maxAttempts) set({ maxAttempts: bounded });
+    if (next !== retakes.maxAttempts) set({ maxAttempts: next });
   };
 
+  const desc = widenOnly ? `${t("eval.retakes.desc")} ${t("eval.retakes.widenOnly")}` : t("eval.retakes.desc");
   return (
     <Card className="divide-y divide-line px-4">
-      <SettingRow title={t("eval.retakes")} desc={t("eval.retakes.desc")}>
+      <SettingRow title={t("eval.retakes")} desc={desc}>
         <Switch
           checked={retakes.enabled}
-          disabled={disabled}
+          disabled={switchFrozen}
           label={t("eval.retakes")}
-          onChange={(enabled) => set({ enabled })}
+          onChange={toggle}
         />
       </SettingRow>
       {retakes.enabled ? (
@@ -82,7 +107,7 @@ export function RetakesSetting({
             <Segmented
               name="retakes-keep"
               value={retakes.keep}
-              disabled={disabled}
+              disabled={detailsFrozen}
               onChange={(keep) => set({ keep })}
               options={[
                 { value: "best", label: t("eval.retakes.keep.best") },
@@ -95,10 +120,10 @@ export function RetakesSetting({
             <TextInput
               aria-label={t("eval.retakes.max")}
               type="number"
-              min={2}
+              min={widenOnly && draft === null ? (stored.maxAttempts ?? 2) : 2}
               max={100}
               placeholder={t("eval.retakes.max.placeholder")}
-              disabled={disabled}
+              disabled={maxFrozen}
               size="sm"
               className="w-28 text-right tabular-nums"
               value={max}
@@ -117,7 +142,7 @@ export function RetakesSetting({
             <Segmented
               name="retakes-scope"
               value={scope}
-              disabled={disabled || scopeLocked}
+              disabled={detailsFrozen || scopeLocked}
               onChange={(next) => set({ scope: next })}
               options={[
                 { value: "all", label: t("eval.retakes.scope.all") },
@@ -125,6 +150,17 @@ export function RetakesSetting({
               ]}
             />
           </SettingRow>
+          {draft !== null ? (
+            <div className="flex justify-end py-3">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => patch.mutate({ settings: { retakes: draft } }, { onSuccess: () => setDraft(null) })}
+              >
+                {t("common.save")}
+              </Button>
+            </div>
+          ) : null}
         </>
       ) : null}
     </Card>

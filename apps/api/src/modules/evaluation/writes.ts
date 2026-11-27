@@ -15,6 +15,7 @@ import {
   type EvaluationMode,
   type EvaluationPatch,
   type EvaluationPreset,
+  type RetakeSettings,
   ReleasedGrades,
   negativeMarkingOf,
   conditionsOf,
@@ -30,7 +31,6 @@ import {
   configLock,
   courseRoleAllows,
   type CourseRoleName,
-  isConfigFieldWritable,
   isFeedbackAllowed,
   logVisibilityDefault,
   drillAllowedOn,
@@ -41,6 +41,9 @@ import {
   providedDocumentsAllowedFor,
   retakesAllowedFor,
   retakeScopeFits,
+  isLiveState,
+  patchFieldWritable,
+  sameRetakeRule,
   studentWorkOf,
 } from "@quiz/domain";
 
@@ -256,7 +259,9 @@ const MODE_SETTINGS: readonly {
  * everything while nothing locks the configuration; the title, the access
  * control and the feedback policy once an attempt exists (F-EVAL-03), and
  * while the evaluation runs (#86) — access must stay fixable mid-exam, for a
- * student the allowlist locks out, and a forgotten answer key hideable. The
+ * student the allowlist locks out, and a forgotten answer key hideable —
+ * and, on a running exercise, settings that only widen the retake rule
+ * (`patchFieldWritable`, ADR-025 §2 amended 2026-11-27). The
  * in-class rule on `immediate` (#78) below applies in every state. A poll's
  * feedback is never patched: it moves with the reveal (`poll_feedback_locked`).
  */
@@ -264,16 +269,33 @@ export async function patchEvaluation(
   db: DbOrTx,
   loaded: EvaluationRecord,
   patch: EvaluationPatch,
-  ctx: {
-    attemptCount: number;
-    now: Date;
-    /**
-     * ADR-051 §2: the kiosk path exists (`KIOSK_ATTESTATION` is not `off`),
-     * as the route knows from the configuration. Absent: it does not.
-     */
-    kioskAvailable?: boolean;
-  },
+  ctx: PatchContext,
 ): Promise<EvaluationRecord> {
+  return (await applyEvaluationPatch(db, loaded, patch, ctx)).row;
+}
+
+type PatchContext = {
+  attemptCount: number;
+  now: Date;
+  /**
+   * ADR-051 §2: the kiosk path exists (`KIOSK_ATTESTATION` is not `off`),
+   * as the route knows from the configuration. Absent: it does not.
+   */
+  kioskAvailable?: boolean;
+};
+
+/**
+ * {@link patchEvaluation}, with what the audit needs beside the row: the
+ * retake rule a running exercise held and the one the patch left
+ * (ADR-025 §2, amended 2026-11-27), both read on the row the decision was
+ * made on; null when the rule did not move under the lock.
+ */
+export async function applyEvaluationPatch(
+  db: DbOrTx,
+  loaded: EvaluationRecord,
+  patch: EvaluationPatch,
+  ctx: PatchContext,
+): Promise<{ row: EvaluationRecord; retakesWidened: { from: RetakeSettings; to: RetakeSettings } | null }> {
   // ADR-092: a change of mode is decided on the row LOCKED, its state and
   // its attempts read again under the lock (as `pullTemplate` does): a
   // ticker move to the lobby or a first attempt between the load and this
@@ -281,9 +303,13 @@ export async function patchEvaluation(
   // a transaction for an evaluation (the template path already holds one).
   // The ONE place of the exemption: sending the mode the row already has is
   // no change (an MCP client may), so it is neither locked nor refused.
+  // ADR-025 §2 (amended 2026-11-27): the settings of an evaluation students
+  // are sitting are judged on the locked row too, so two widenings, or a
+  // widening and the ticker's close, are decided one after the other: each
+  // on what the other wrote, never on the route's earlier read.
   let row = loaded;
   let attemptTotal = ctx.attemptCount;
-  if (patch.mode !== undefined && patch.mode !== loaded.mode) {
+  if ((patch.mode !== undefined && patch.mode !== loaded.mode) || (patch.settings !== undefined && isLiveState(loaded.state))) {
     const [locked] = await db.select().from(evaluations).where(eq(evaluations.id, loaded.id)).for("update");
     if (!locked) throw new EvaluationError("not_found");
     row = locked;
@@ -293,7 +319,8 @@ export async function patchEvaluation(
   if (modeChanged && !modeChangeable(row.mode, row.state, attemptTotal)) throw new EvaluationError("mode_frozen");
   const mode: EvaluationMode = patch.mode ?? row.mode;
   const lock = configLock(row.state, attemptTotal);
-  if (Object.keys(patch).some((k) => k !== "mode" && !isConfigFieldWritable(lock, k))) {
+  const merged = () => ({ stored: settingsOf(row), next: EvaluationSettings.parse({ ...settingsOf(row), ...patch.settings }) });
+  if (Object.keys(patch).some((k) => k !== "mode" && !patchFieldWritable(lock, row.mode, k, merged))) {
     throw new EvaluationError(lock === "running" ? "running_locked" : "locked");
   }
   if (row.mode === "poll" && patch.feedbackPolicy !== undefined) throw new EvaluationError("poll_feedback_locked");
@@ -389,7 +416,10 @@ export async function patchEvaluation(
 
   if (patch.documents !== undefined) await setProvidedDocuments(db, row, patch.documents);
   await db.update(evaluations).set(next).where(eq(evaluations.id, row.id));
-  return (await byId(db, row.id))!;
+  const written = (await byId(db, row.id))!;
+  const from = retakesOf(settingsOf(row));
+  const to = retakesOf(settingsOf(written));
+  return { row: written, retakesWidened: lock === "running" && !sameRetakeRule(from, to) ? { from, to } : null };
 }
 
 /**

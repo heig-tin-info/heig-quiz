@@ -5,13 +5,13 @@ import { countsAsCompleted, providedDocumentsAllowedFor,
   evaluationTotal,
   configLock,
   isConfigEditable,
-  isConfigFieldWritable,
   isFeedbackAllowed,
   itemListDiff,
   itemListLock,
   missingTimingFields,
   modeChangeable,
   retakesAllowedFor,
+  patchFieldWritable,
   feedbackWhenFor,
   drillAllowedOn,
   afterDueOpen,
@@ -45,6 +45,7 @@ import type {
 import {
   FeedbackPolicy,
   TemplatePatch,
+  EvaluationSettings,
   type DashboardAccess,
   type DocumentUse,
   type EvaluationExports,
@@ -1442,7 +1443,11 @@ on("PATCH", "/app/api/evaluations/:id", (m, body) => {
   if (body.mode !== undefined && body.mode !== e.mode && !modeChangeable(e.mode, e.state, attemptCountOf(e))) {
     throw new MockPayload(409, { error: "mode_frozen", message: "the mode can no longer change (ADR-092)" });
   }
-  if (Object.keys(body).some((k) => k !== "mode" && !isConfigFieldWritable(lock, k))) {
+  // ADR-025 §2 (amended 2026-11-27): a running exercise's settings may carry
+  // a widened retake rule, and nothing else changed, as on the server.
+  const stored = () => EvaluationSettings.parse(e.settings);
+  const merged = () => ({ stored: stored(), next: EvaluationSettings.parse({ ...stored(), ...(body.settings as object) }) });
+  if (Object.keys(body).some((k) => k !== "mode" && !patchFieldWritable(lock, e.mode, k, merged))) {
     throw new MockPayload(
       409,
       lock === "running"

@@ -100,6 +100,7 @@ export {
   createEvaluation,
   createPollEvaluation,
   patchEvaluation,
+  applyEvaluationPatch,
   deleteEvaluation,
   studentWorkRefusal,
   extendClosesAt,

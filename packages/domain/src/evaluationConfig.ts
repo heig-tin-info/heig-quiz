@@ -157,7 +157,10 @@ export function feedbackWhenFor(ctx: FeedbackContext, wanted: FeedbackWhen): Fee
  *   allowlist stays open — a student locked out by a mistyped prefix must be
  *   let in mid-exam — and so do the title and the feedback policy: a
  *   forgotten answer key must be hideable during the run (#86). An exam still
- *   never switches to `immediate` (`isFeedbackAllowed`).
+ *   never switches to `immediate` (`isFeedbackAllowed`). An exercise's
+ *   retake rule may still be WIDENED, nothing else of its settings moving
+ *   (`retakesWidenableUnder`, `retakesWidening`; ADR-025 §2, amended
+ *   2026-11-27).
  * - `attempts`: at least one attempt exists and the evaluation is not running
  *   (a closed one waiting for its release, typically). The feedback policy is
  *   still the teacher's to choose until the results are released.

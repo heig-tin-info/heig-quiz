@@ -17,7 +17,12 @@
  * Pure: the current instant is injected, nothing is read from a database.
  */
 import { checkAllowed } from "./correction.js";
-import { isLiveState, type EvaluationModeName } from "./evaluationConfig.js";
+import {
+  isConfigFieldWritable,
+  isLiveState,
+  type ConfigLock,
+  type EvaluationModeName,
+} from "./evaluationConfig.js";
 import type { EvaluationStateName } from "./itemList.js";
 import type { NavigationMode } from "./questionProgress.js";
 
@@ -186,6 +191,100 @@ export function retakesAllowedFor(mode: EvaluationModeName): boolean {
 /** Whether an evaluation of this mode, with these settings, takes retakes at all. */
 export function retakesOn(mode: EvaluationModeName, policy: RetakePolicy): boolean {
   return retakesAllowedFor(mode) && policy.enabled;
+}
+
+// --- Widening the rule while the exercise runs (ADR-025 §2, amended 2026-11-27)
+
+/**
+ * Whether the retake rule may still move under `lock`, by widening only
+ * ({@link retakesWidening}): an exercise that students are sitting
+ * (`running`). Every other lock keeps it frozen with the rest of the
+ * settings — after the close, practice after the due date (ADR-122) is the
+ * way back in. Read by the `evaluation` service, which lets such a patch
+ * through the lock, and by the configuration screen, which enables the
+ * controls it allows.
+ */
+export function retakesWidenableUnder(lock: ConfigLock | null, mode: EvaluationModeName): boolean {
+  return lock === "running" && retakesAllowedFor(mode);
+}
+
+/**
+ * Whether `next` keeps or widens `stored`, the rule a running exercise
+ * holds (ADR-025 §2, amended 2026-11-27). A rule switched off is one
+ * attempt, whatever it still stores of an earlier choice — which a rule
+ * switched on may therefore choose afresh. Allowed:
+ *
+ * - no change ({@link sameRetakeRule}); a rule left off stays exactly what
+ *   it stores;
+ * - switching it on, with any maximum, kept attempt and scope — the only
+ *   moment the last two are chosen under the lock;
+ * - once on, a higher maximum, no limit (`null`) being the highest.
+ *
+ * Never switching it off, never a lower maximum, never another kept attempt
+ * or another scope once it is on: students already hold the rule they were
+ * given. Whether `to_review` fits the navigation is
+ * {@link retakeScopeFits}'s, checked beside this one.
+ */
+export function retakesWidening(stored: RetakePolicy, next: RetakePolicy): boolean {
+  if (!next.enabled) return sameRetakeRule(stored, next);
+  if (!stored.enabled) return true;
+  if (next.keep !== stored.keep || retakeScopeOf(next) !== retakeScopeOf(stored)) return false;
+  if (next.maxAttempts === null) return true;
+  return stored.maxAttempts !== null && next.maxAttempts >= stored.maxAttempts;
+}
+
+/** Two rules that say the same, the scope read through {@link retakeScopeOf}. */
+export function sameRetakeRule(a: RetakePolicy, b: RetakePolicy): boolean {
+  return (
+    a.enabled === b.enabled &&
+    a.keep === b.keep &&
+    a.maxAttempts === b.maxAttempts &&
+    retakeScopeOf(a) === retakeScopeOf(b)
+  );
+}
+
+/** A stored evaluation without a rule: one attempt (`retakesOf` of `@quiz/contracts`). */
+const ONE_ATTEMPT: RetakePolicy = { enabled: false, keep: "best", maxAttempts: null };
+
+/** The settings as the rules below read them: any object, its retake rule optional. */
+type WithRetakes = { readonly [key: string]: unknown; retakes?: RetakePolicy | undefined };
+
+/**
+ * Whether `next` differs from `stored` by a widened retake rule at most
+ * (ADR-025 §2, amended 2026-11-27): every other setting equal, and the rule
+ * {@link retakesWidening}. Both are PARSED settings — the stored ones, and
+ * the stored ones with the patch merged over them — so their keys come in
+ * the schema's order and a JSON comparison is an equality: a client that
+ * sends the whole settings back passes like one that sends the rule alone.
+ */
+export function settingsWidenRetakesOnly(stored: WithRetakes, next: WithRetakes): boolean {
+  const { retakes: before, ...storedRest } = stored;
+  const { retakes: after, ...nextRest } = next;
+  return (
+    JSON.stringify(storedRest) === JSON.stringify(nextRest) &&
+    retakesWidening(before ?? ONE_ATTEMPT, after ?? ONE_ATTEMPT)
+  );
+}
+
+/**
+ * Whether a patch may write `field` (a key of `EvaluationPatch`) under
+ * `lock`: what {@link isConfigFieldWritable} leaves open, and the settings of
+ * an exercise students are sitting when they only widen its retake rule
+ * ({@link retakesWidenableUnder}, {@link settingsWidenRetakesOnly}).
+ * `settings` gives the parsed settings before and after the merge, asked
+ * only when the answer depends on them. The API and the browser mock both
+ * decide with it.
+ */
+export function patchFieldWritable(
+  lock: ConfigLock | null,
+  mode: EvaluationModeName,
+  field: string,
+  settings: () => { stored: WithRetakes; next: WithRetakes },
+): boolean {
+  if (isConfigFieldWritable(lock, field)) return true;
+  if (field !== "settings" || !retakesWidenableUnder(lock, mode)) return false;
+  const { stored, next } = settings();
+  return settingsWidenRetakesOnly(stored, next);
 }
 
 /**

@@ -77,6 +77,7 @@ export const evaluation: Record<keyof typeof en, string> = {
   "eval.retakes.scope.all": "Toutes",
   "eval.retakes.scope.to_review": "À revoir",
   "eval.retakes.scope.needsFree": "Seulement avec la navigation libre (réglages avancés).",
+  "eval.retakes.widenOnly": "Exercice en cours : le nombre de tentatives peut seulement augmenter.",
   "conditions.title": "Conditions",
   "conditions.kind.allowed": "Autorisé",
   "conditions.kind.forbidden": "Interdit",

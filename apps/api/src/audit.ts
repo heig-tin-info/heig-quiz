@@ -291,6 +291,13 @@ export type AuditAction =
   | "evaluation.paper_variants"
   | "evaluation.paper_redraw"
   | "evaluation.resume"
+  /**
+   * ADR-025 §2 (amended 2026-11-27): the retake rule of an exercise widened
+   * while students sit it; subject the evaluation, `payload.from` and
+   * `payload.to` (the whole rule before and after). Beside the
+   * `evaluation.update` of the same patch, whose `fields` do not say how.
+   */
+  | "evaluation.retakes_widened"
   | "evaluation.start"
   | "evaluation.state"
   | "evaluation.update"
